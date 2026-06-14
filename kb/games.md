@@ -39,6 +39,7 @@ No npm deps (React only). All art in-code (CSP). Logical view **384×224** (24×
 - Canvas backing = integer multiple of 384×224 device px (`fit()` + `ctx.setTransform(scale)`); CSS-stretching blurs on Retina.
 - **Layout fills the viewport when `filled` (= `isFullscreen || isDesktopApp`)**; otherwise it sits in a centered `max-w-[1000px]` box. `isDesktopApp` = Tauri shell detected via `'__TAURI_INTERNALS__' in window`. The desktop/native window launches OS-fullscreen (`tauri.conf.json` `fullscreen: true`), where `document.fullscreenElement` is null, so `isDesktopApp` (not `isFullscreen`) is what makes the native app fill its window and integer-upscale the canvas.
 - **In-page fullscreen buttons (HUD ⛶ + title GO FULLSCREEN) are hidden when `isDesktopApp`** — the OS window owns fullscreen there. They stay for web/mobile.
+- **Title screen shows ✕ QUIT GAME only when `isDesktopApp`** — closes the window via `__TAURI_INTERNALS__.invoke('plugin:window|close', {label:'main'})` (dependency-free; keeps `src/game/` React-only). Needs `core:window:allow-close` in `src-tauri/capabilities/default.json`.
 - Warp targets land beside doors, not on them.
 - Save shape changes: loader merges over `newSave()`; only migrations need the `v` check.
 - **`src/game/` imports only `react` + sibling game files** — keep it dependency-free.

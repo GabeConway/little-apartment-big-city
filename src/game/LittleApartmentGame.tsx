@@ -1503,6 +1503,15 @@ const LittleApartmentGame: React.FC = () => {
     }
   }, [fsSupported]);
 
+  // Desktop app only: close the Tauri window. Dependency-free (the game stays
+  // React-only) — call the core window plugin through the injected internals.
+  const quitDesktopApp = useCallback(() => {
+    const internals = (window as unknown as {
+      __TAURI_INTERNALS__?: { invoke?: (cmd: string, args?: unknown) => Promise<unknown> };
+    }).__TAURI_INTERNALS__;
+    internals?.invoke?.('plugin:window|close', { label: 'main' }).catch(() => {});
+  }, []);
+
   // One tap: go fullscreen, then try to lock landscape (Android Chrome only).
   const goFullscreenLandscape = useCallback(async () => {
     if (!fsSupported) { setFsGuideOpen(true); return; }
@@ -2514,6 +2523,15 @@ const LittleApartmentGame: React.FC = () => {
                     onClick={() => { if (!fsSupported) setFsGuideOpen(true); else if (isFullscreen) toggleFullscreen(); else goFullscreenLandscape(); }}
                   >
                     {isFullscreen ? '🗗 EXIT FULLSCREEN' : '⛶ GO FULLSCREEN'}
+                  </button>
+                )}
+                {/* desktop app: explicit quit (no browser tab to close) */}
+                {isDesktopApp && (
+                  <button
+                    className="font-pixel text-base px-5 py-1.5 border-2 border-[#e0552e]/70 text-[#e0552e] bg-black/40 hover:bg-[#e0552e] hover:text-black transition-colors"
+                    onClick={quitDesktopApp}
+                  >
+                    ✕ QUIT GAME
                   </button>
                 )}
               </div>
