@@ -1,9 +1,11 @@
 name: Release
 
 # Builds desktop installers for all OSes on every merge to main and
-# attaches them to a DRAFT GitHub Release. Bump `version` in
-# src-tauri/tauri.conf.json to cut a new release tag (app-v<version>);
-# pushes with an unchanged version add assets to the existing draft.
+# attaches them to a DRAFT GitHub Release tagged app-v<version> (version from
+# src-tauri/tauri.conf.json). The `prepare` job RESETS that draft each run
+# (delete + recreate) so re-running at an unchanged version starts from a clean
+# release — otherwise tauri-action's asset upload fails with
+# "ReleaseAsset already_exists". Bump `version` to keep a release permanently.
 #
 # Web (Cloudflare Pages) deploys via its own git integration, not here.
 # Mobile (iOS/Android) is intentionally omitted: it needs signing secrets
@@ -26,7 +28,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Reset the draft release once per run so the matrix uploads into a clean
+  # release (no stale same-named assets). Runs before the build matrix.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: echo "version=$(node -p "require('./src-tauri/tauri.conf.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Reset draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="app-v${{ steps.meta.outputs.version }}"
+          gh release delete "$tag" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "$tag" --draft \
+            --title "Little Apartment, Big City v${{ steps.meta.outputs.version }}" \
+            --notes "Automated build from main (commit ${GITHUB_SHA:0:7})." \
+            --target "$GITHUB_SHA"
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
