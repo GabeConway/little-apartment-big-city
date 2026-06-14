@@ -14,7 +14,8 @@ npm run dev          # http://localhost:5173
 ## Build
 ```sh
 npm run build        # web → dist/ (deploy to Cloudflare Pages)
-npm run desktop:build  # Windows/macOS/Linux  (needs Rust)
+npm run desktop:build      # host platform        (needs Rust)
+npm run desktop:build:mac  # Apple-Silicon .app + .dmg  (macOS host)
 npm run android:build  # Android              (needs Rust + Android Studio)
 npm run ios:build      # iOS                  (needs Rust + Xcode, macOS host)
 ```

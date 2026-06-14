@@ -13,11 +13,16 @@ src/ (React + Vite)  ──vite build──►  dist/
 | Target | Dev | Build |
 |---|---|---|
 | Web | `npm run dev` | `npm run build` → deploy `dist/` to Cloudflare Pages |
-| Desktop | `npm run desktop:dev` | `npm run desktop:build` |
+| Desktop | `npm run desktop:dev` | `npm run desktop:build` (host platform) · **`npm run desktop:build:mac`** (Apple-Silicon app **+ dmg**) |
 | Android | `npm run android:dev` | `npm run android:build` |
 | iOS (macOS host) | `npm run ios:dev` | `npm run ios:build` |
 
 `start-dev.sh` / `start-dev.ps1` / `start-dev.cmd` are thin launchers: `./start-dev.sh [web|desktop|android|ios]` (default `web`).
+
+### macOS = Apple Silicon only
+- Builds target **`aarch64-apple-darwin`** only (no Intel/universal). `tauri.conf.json` `bundle.macOS.minimumSystemVersion: 11.0`.
+- **dmg is NOT a Tauri bundle target** (`bundle.targets` = `["app","deb","appimage","nsis"]`). Tauri's `bundle_dmg.sh` styles the image window via Finder/AppleScript and fails in headless/SSH/CI shells. Instead **`scripts/make-dmg.mjs`** builds the dmg with `hdiutil` (app + `/Applications` symlink, UDZO) — same result locally and in CI, no GUI needed.
+- `npm run desktop:build:mac` = build aarch64 app → run make-dmg. `npm run dmg:mac` = make-dmg only (app must already be built). dmg lands in `src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/`. Optional `node scripts/make-dmg.mjs <outDir>` to drop it elsewhere (e.g. `~/Desktop`).
 
 ## Toolchain prerequisites
 - **Web only**: Node + npm. Nothing else.
@@ -43,10 +48,10 @@ src/ (React + Vite)  ──vite build──►  dist/
 ## Current status (2026-06-14)
 - **Web: working & verified.** `tsc --noEmit` + `npm run build` clean; preview serves all assets.
 - **Icons: generated** (`src-tauri/icons/` populated). Don't re-run unless the logo changes.
-- **macOS desktop: built & verified.** Rust (cargo 1.96, Homebrew) is installed; `npm run desktop:build` produces `.app` + `.dmg` in `src-tauri/target/release/bundle/`. App launches OS-fullscreen and fills the window. (DMG styling step's `bundle_dmg.sh` AppleScript can error in a headless/SSH session but the `.app` still bundles.)
+- **macOS desktop: built & verified (Apple Silicon).** Rust (cargo 1.96, Homebrew) installed; `npm run desktop:build:mac` produces an arm64 `.app` + `.dmg` (via `scripts/make-dmg.mjs`); `hdiutil verify` passes, `lipo -archs` = `arm64`. App launches OS-fullscreen and fills the window.
 - **Windows/Linux desktop: not built locally** (need their own hosts) — covered by CI instead.
 - **Mobile: scaffolded, not built** — platform projects (`src-tauri/gen/`) not yet init'd; needs signing secrets.
-- **Committed to `main`.** CI builds desktop installers on every merge: `.github/workflows/release.yml` (matrix macOS/Windows/Linux → draft GitHub Release). Cloudflare Pages project not wired yet; mobile not in CI (no signing secrets).
+- **Committed to `main`.** CI builds desktop installers on every merge: `.github/workflows/release.yml` (matrix macOS-aarch64/Windows/Linux → draft GitHub Release). macOS dmg is built by a dedicated step (`make-dmg.mjs`) and `gh release upload`ed to the same draft. Cloudflare Pages project not wired yet; mobile not in CI (no signing secrets).
 
 ### Next steps to ship native
 1. Mobile: `npm run tauri android init` then `npm run android:dev`; `npm run tauri ios init` then `npm run ios:dev` (macOS only).

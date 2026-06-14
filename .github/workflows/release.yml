@@ -24,9 +24,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest      # universal binary (Apple Silicon + Intel)
-            args: "--target universal-apple-darwin"
-            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - platform: macos-latest      # Apple Silicon only (aarch64)
+            args: "--target aarch64-apple-darwin"
+            rust-targets: "aarch64-apple-darwin"
           - platform: ubuntu-22.04      # 22.04 has the webkit2gtk-4.1 packages Tauri v2 needs
             args: ""
             rust-targets: ""
@@ -71,7 +71,10 @@ jobs:
 
       # tauri-action runs `beforeBuildCommand` (npm run build) then `tauri build`,
       # bundles the installers, and uploads them to the release named below.
+      # macOS dmg is intentionally NOT in bundle.targets (Tauri's bundle_dmg.sh
+      # is flaky headless) — built + uploaded by the next step instead.
       - name: Build & release
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,3 +85,15 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Build the macOS dmg deterministically (hdiutil, no AppleScript) and add
+      # it to the same draft release that tauri-action just created.
+      - name: Build & upload macOS dmg
+        if: matrix.platform == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/make-dmg.mjs
+          gh release upload "app-v${{ steps.tauri.outputs.appVersion }}" \
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg \
+            --clobber
