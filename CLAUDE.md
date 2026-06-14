@@ -24,6 +24,7 @@ Read before editing the matching area:
 - [kb/build-targets.md](kb/build-targets.md) — web/desktop/mobile pipeline + toolchain prerequisites.
 - [kb/conventions.md](kb/conventions.md) — coding conventions.
 - [kb/dependencies.md](kb/dependencies.md) — versions, security policy.
+- [kb/testing.md](kb/testing.md) — Vitest setup, CI, pre-commit hook.
 
 ## Commands
 - `npm run dev` — web dev server (browser). No Rust needed.
@@ -39,4 +40,7 @@ Read before editing the matching area:
 - Fonts are self-hosted (`@fontsource`), not the Google Fonts CDN — required for offline native.
 
 ## Validate every change
-`npx tsc --noEmit` clean, then `npm run build` clean. Then smoke-test via `npm run preview`.
+`npx tsc --noEmit` clean, then `npm test` (Vitest) clean, then `npm run build` clean. Then smoke-test via `npm run preview`. CI runs all three on every PR; a Claude pre-commit hook runs `npm test` before commits (see [kb/testing.md](kb/testing.md)).
+
+## Commands (test)
+- `npm test` — run unit tests once. `npm run test:watch` — watch mode.
