@@ -329,6 +329,9 @@ const LittleApartmentGame: React.FC = () => {
     window.matchMedia('(display-mode: standalone)').matches ||
     (navigator as unknown as { standalone?: boolean }).standalone === true
   ));
+  // Running inside the Tauri desktop/native shell (not a browser tab). The OS
+  // window already owns fullscreen, so we fill it and drop the in-page FS UI.
+  const [isDesktopApp] = useState(() => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
   const [confirmMode, setConfirmMode] = useState<null | 'new' | 'delete'>(null);
   const [saveTick, setSaveTick] = useState(0); // bump to re-read the save after new/delete
   const [overlay, setOverlay] = useState<Overlay | null>(null);
@@ -2306,6 +2309,11 @@ const LittleApartmentGame: React.FC = () => {
 
   // ---- render tree --------------------------------------------------------------
 
+  // Fill the whole viewport when in browser fullscreen OR in the desktop app
+  // shell (its OS window is already fullscreen). The canvas fit() effect then
+  // integer-upscales the art to fill the frame instead of sitting in a 1000px box.
+  const filled = isFullscreen || isDesktopApp;
+
   return (
     <div
       ref={rootRef}
@@ -2315,7 +2323,7 @@ const LittleApartmentGame: React.FC = () => {
         const btn = (e.target as HTMLElement).closest('button');
         if (btn && !btn.hasAttribute('data-nosfx')) sfxUiClick();
       }}
-      className={isFullscreen
+      className={filled
         ? 'w-full h-full flex flex-col bg-black select-none'
         : 'w-full max-w-[1000px] mx-auto select-none'}
     >
@@ -2367,22 +2375,25 @@ const LittleApartmentGame: React.FC = () => {
           >
             {musicMuted ? '🔇' : '🔊'}
           </button>
-          <button
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            className="shrink-0 flex items-center gap-1 border-2 border-[#ffd24a]/70 text-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base hover:bg-[#ffd24a] hover:text-black transition-colors"
-          >
-            {isFullscreen ? '🗗' : '⛶'} <span className="hidden sm:inline">{isFullscreen ? 'EXIT' : 'FULL'}</span>
-          </button>
+          {/* Desktop app is already OS-fullscreen — no in-page FS toggle. */}
+          {!isDesktopApp && (
+            <button
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              className="shrink-0 flex items-center gap-1 border-2 border-[#ffd24a]/70 text-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base hover:bg-[#ffd24a] hover:text-black transition-colors"
+            >
+              {isFullscreen ? '🗗' : '⛶'} <span className="hidden sm:inline">{isFullscreen ? 'EXIT' : 'FULL'}</span>
+            </button>
+          )}
         </div>
       )}
 
       {/* Canvas + overlays */}
       <div
         ref={frameRef}
-        className={`relative bg-black flex items-center justify-center ${isFullscreen ? 'flex-1 min-h-0 border-0' : 'border-2 border-[#ffd24a]/40'}`}
-        style={isFullscreen ? undefined : { aspectRatio: `${VIEW_PW} / ${VIEW_PH}` }}
+        className={`relative bg-black flex items-center justify-center ${filled ? 'flex-1 min-h-0 border-0' : 'border-2 border-[#ffd24a]/40'}`}
+        style={filled ? undefined : { aspectRatio: `${VIEW_PW} / ${VIEW_PH}` }}
       >
         <canvas
           ref={canvasRef}
@@ -2496,8 +2507,8 @@ const LittleApartmentGame: React.FC = () => {
                     MANAGE SAVE
                   </button>
                 )}
-                {/* desktop / mobile-landscape get the fullscreen button here; portrait uses the checklist above */}
-                {(!isCoarse || !isPortrait) && (
+                {/* desktop / mobile-landscape get the fullscreen button here; portrait uses the checklist above. Native app is already fullscreen. */}
+                {!isDesktopApp && (!isCoarse || !isPortrait) && (
                   <button
                     className="font-pixel text-base px-5 py-1.5 border-2 border-[#9fc4e8]/70 text-[#9fc4e8] bg-black/40 hover:bg-[#9fc4e8] hover:text-black transition-colors"
                     onClick={() => { if (!fsSupported) setFsGuideOpen(true); else if (isFullscreen) toggleFullscreen(); else goFullscreenLandscape(); }}

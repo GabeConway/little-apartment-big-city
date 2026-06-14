@@ -31,7 +31,7 @@ src/ (React + Vite)  ──vite build──►  dist/
 2. `npm run tauri android init` and/or `npm run tauri ios init` — scaffolds `src-tauri/gen/` platform projects (gitignored).
 
 ## Tauri config notes (`src-tauri/`)
-- `tauri.conf.json`: `frontendDist: ../dist`, `devUrl: http://localhost:5173`, `beforeDevCommand: npm run dev`, `beforeBuildCommand: npm run build`. Window label `main` (matches `capabilities/default.json`). Default window 1152×672 = exactly 3× the 384×224 logical view.
+- `tauri.conf.json`: `frontendDist: ../dist`, `devUrl: http://localhost:5173`, `beforeDevCommand: npm run dev`, `beforeBuildCommand: npm run build`. Window label `main` (matches `capabilities/default.json`). `fullscreen: true` — desktop (macOS/Windows) launches OS-fullscreen; the game detects the Tauri shell (`__TAURI_INTERNALS__`) and fills the window + hides its in-page FS buttons (see kb/games.md). The 1152×672 width/height (= 3× the 384×224 view) only applies if fullscreen is turned off.
 - `identifier`: `com.gabeconway.lilapt`.
 - `app.security.csp`: self-only + `style-src 'unsafe-inline'` (the game injects scoped `<style>` keyframes). Webview serves `dist/` at the app root, so the game's absolute asset paths (`/images`, `/music`, `/sfx`) resolve unchanged.
 - `Cargo.toml` lib name `little_apartment_lib`; `src/lib.rs` holds the shared desktop+mobile `run()` entry (`#[cfg_attr(mobile, tauri::mobile_entry_point)]`).
@@ -43,15 +43,15 @@ src/ (React + Vite)  ──vite build──►  dist/
 ## Current status (2026-06-14)
 - **Web: working & verified.** `tsc --noEmit` + `npm run build` clean; preview serves all assets.
 - **Icons: generated** (`src-tauri/icons/` populated). Don't re-run unless the logo changes.
-- **Desktop/mobile: scaffolded but never built** — Rust is **not installed** on this machine.
-  Mobile platform projects (`src-tauri/gen/`) not yet init'd.
-- **Not committed yet**; no Cloudflare Pages project wired yet.
+- **macOS desktop: built & verified.** Rust (cargo 1.96, Homebrew) is installed; `npm run desktop:build` produces `.app` + `.dmg` in `src-tauri/target/release/bundle/`. App launches OS-fullscreen and fills the window. (DMG styling step's `bundle_dmg.sh` AppleScript can error in a headless/SSH session but the `.app` still bundles.)
+- **Windows/Linux desktop: not built locally** (need their own hosts) — covered by CI instead.
+- **Mobile: scaffolded, not built** — platform projects (`src-tauri/gen/`) not yet init'd; needs signing secrets.
+- **Committed to `main`.** CI builds desktop installers on every merge: `.github/workflows/release.yml` (matrix macOS/Windows/Linux → draft GitHub Release). Cloudflare Pages project not wired yet; mobile not in CI (no signing secrets).
 
 ### Next steps to ship native
-1. Install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-2. `npm run desktop:dev` — first run compiles the Rust shell (slow); opens a native window.
-3. `npm run tauri android init` then `npm run android:dev` (emulator/device).
-4. `npm run tauri ios init` then `npm run ios:dev` (macOS only).
+1. Mobile: `npm run tauri android init` then `npm run android:dev`; `npm run tauri ios init` then `npm run ios:dev` (macOS only).
+2. Add code-signing/notarization secrets so CI installers aren't flagged by Gatekeeper/SmartScreen; then add a signed mobile workflow.
+3. Wire the Cloudflare Pages project (`npm run build` → `dist/`).
 
 ### Gotcha — `tsc` is a real gate here
 This repo has `@types/react`, so `tsc --noEmit` type-checks React calls for real. The source
