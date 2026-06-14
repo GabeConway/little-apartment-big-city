@@ -18,6 +18,13 @@ on:
 permissions:
   contents: write
 
+# Serialize runs so two quick merges can't race to create duplicate draft
+# releases for the same tag. Queue (don't cancel) — a cancelled mid-release
+# run would leave a half-populated draft.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -87,13 +94,17 @@ jobs:
           args: ${{ matrix.args }}
 
       # Build the macOS dmg deterministically (hdiutil, no AppleScript) and add
-      # it to the same draft release that tauri-action just created.
+      # it to the exact release this job just populated. Upload by releaseId
+      # (not by tag) so a duplicate draft sharing the tag can't divert the asset.
       - name: Build & upload macOS dmg
         if: matrix.platform == 'macos-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node scripts/make-dmg.mjs
-          gh release upload "app-v${{ steps.tauri.outputs.appVersion }}" \
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg \
-            --clobber
+          dmg="$(ls src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg)"
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/octet-stream" \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.tauri.outputs.releaseId }}/assets?name=$(basename "$dmg")" \
+            --input "$dmg"
