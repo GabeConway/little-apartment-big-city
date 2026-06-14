@@ -1,0 +1,14 @@
+{
+  "name": "Little Apartment, Big City",
+  "short_name": "Little Apt",
+  "description": "Little Apartment, Big City — a cozy pixel life-sim.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0e1016",
+  "theme_color": "#0e1016",
+  "icons": [
+    { "src": "/images/game-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

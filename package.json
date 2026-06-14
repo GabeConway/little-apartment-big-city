@@ -1,0 +1,36 @@
+{
+  "name": "little-apartment-big-city",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Little Apartment, Big City — standalone cross-platform build (web + Tauri desktop/mobile).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/copy-404.js",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "ios:dev": "tauri ios dev",
+    "ios:build": "tauri ios build",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build"
+  },
+  "dependencies": {
+    "@fontsource/press-start-2p": "^5.1.0",
+    "@fontsource/vt323": "^5.1.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.3"
+  }
+}

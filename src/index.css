@@ -1,0 +1,18 @@
+/* Self-hosted fonts (bundled — work offline in native webviews, no CDN). */
+@import "@fontsource/press-start-2p/index.css";
+@import "@fontsource/vt323/index.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: #0e1016;
+}
+
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}

@@ -1,0 +1,84 @@
+name: Release
+
+# Builds desktop installers for all OSes on every merge to main and
+# attaches them to a DRAFT GitHub Release. Bump `version` in
+# src-tauri/tauri.conf.json to cut a new release tag (app-v<version>);
+# pushes with an unchanged version add assets to the existing draft.
+#
+# Web (Cloudflare Pages) deploys via its own git integration, not here.
+# Mobile (iOS/Android) is intentionally omitted: it needs signing secrets
+# (Apple cert + provisioning profile / Android keystore) — add a separate
+# workflow once those are configured.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest      # universal binary (Apple Silicon + Intel)
+            args: "--target universal-apple-darwin"
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - platform: ubuntu-22.04      # 22.04 has the webkit2gtk-4.1 packages Tauri v2 needs
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # tauri-action runs `beforeBuildCommand` (npm run build) then `tauri build`,
+      # bundles the installers, and uploads them to the release named below.
+      - name: Build & release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__         # __VERSION__ <- src-tauri/tauri.conf.json
+          releaseName: "Little Apartment, Big City v__VERSION__"
+          releaseBody: "Automated build from main."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

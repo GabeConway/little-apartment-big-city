@@ -1,0 +1,2896 @@
+// Little Apartment, Big City — main game component.
+// World simulation lives in refs and a fixed-timestep loop; React renders the
+// HUD and modal overlays (title, dialogue, shops, letters, sleep, ending).
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  TILE, VIEW_PW, VIEW_PH, Input, startLoop, tryMove, feetTile, facedTile,
+  cameraFor, sceneSize, isSolid,
+} from './engine';
+import type { Dir, Vec, SceneDef, Interactable } from './engine';
+import { buildAtlas } from './sprites';
+import type { Atlas } from './sprites';
+import { SCENES, SCENE_SIGNS, MANEKI_SLOT, ORE_SPOTS, CRAWLER_SPAWNS } from './maps';
+import {
+  FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
+  fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
+  GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
+  MINERALS, mineralById, MINE_COST, WAND_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
+} from './data';
+import type { StoryBeat, Fish } from './data';
+import {
+  newSave, loadSave, hasSave, persistSave, clearSave,
+  maxEnergy, energyCost, sleep as passNight, pawnStockFor, buyFurniture, allFurnished,
+  sketchyOfferFor, gachaComplete,
+  clockLabel, nightT, COLLAPSE_MIN,
+  freeSpotsFor, placeItem, unplaceItem, spotLabelAt, unlockGameAch,
+  oreNodesFor, shrineLuck,
+} from './state';
+import type { OreNode } from './state';
+import type { GameSave } from './state';
+import { startFishing, updateFishing, ZONE_H } from './fishing';
+import type { FishingState } from './fishing';
+
+// ---- tiny sfx -------------------------------------------------------------
+
+// One mute switch for the whole game — music AND sfx. Read at call time so the
+// 🔊 toggle takes effect immediately, no React state threading required.
+const MUSIC_MUTE_KEY = 'lab-music-muted';
+const readMuted = (): boolean => {
+  try { return localStorage.getItem(MUSIC_MUTE_KEY) === '1'; } catch { return false; }
+};
+
+let audioCtx: AudioContext | null = null;
+const blip = (freqs: number[], dur = 0.09, vol = 0.05) => {
+  if (readMuted()) return;
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    const ctx = audioCtx;
+    freqs.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = f;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const t = ctx.currentTime + i * dur;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc.start(t); osc.stop(t + dur + 0.02);
+    });
+  } catch { /* no audio */ }
+};
+const sfxCoin = () => blip([880, 1320], 0.07);
+const sfxBuy = () => blip([523, 659, 784], 0.08);
+const sfxCatch = () => blip([659, 880, 1175], 0.09);
+const sfxMiss = () => blip([330, 220], 0.12);
+const sfxBite = () => blip([1175, 1175], 0.06, 0.07);
+const sfxLetter = () => blip([784, 988], 0.12, 0.04);
+
+// One-shot sampled SFX (mp3). Cached + rewound so they can re-fire rapidly.
+// Independent of the music mute toggle, matching the blip SFX above.
+const sfxCache = new Map<string, HTMLAudioElement>();
+const playSfx = (src: string, vol = 0.5) => {
+  if (readMuted()) return;
+  try {
+    let a = sfxCache.get(src);
+    if (!a) { a = new Audio(src); sfxCache.set(src, a); }
+    a.volume = vol;
+    a.currentTime = 0;
+    a.play().catch(() => { /* autoplay blocked or file missing */ });
+  } catch { /* private mode / no Audio */ }
+};
+const sfxAchievement = () => playSfx('/sfx/achievement-unlocked.mp3');
+const sfxBackroomsWarp = () => playSfx('/sfx/backrooms-teleport.mp3');
+const sfxUiClick = () => playSfx('/sfx/ui-click.mp3', 0.4);
+const sfxGameStart = () => playSfx('/sfx/game-start.mp3');
+
+// ---- background music -------------------------------------------------------
+// Per-scene tracks; everywhere unlisted (city, badtown, gacha) falls back to the
+// default street theme. Each track keeps its own Audio element so it resumes
+// where it left off when the player ducks in and out of a shop. Scene changes
+// crossfade rather than hard-cut.
+
+const DEFAULT_MUSIC = '/music/tokyo-apt-drift.mp3';
+const TITLE_BG = '/images/title-bg.png';
+const SCENE_MUSIC: Record<string, string> = {
+  title: '/music/title.mp3',
+  endofday: '/music/end-of-day.mp3',
+  apartment: '/music/apartment.mp3',
+  konbini: '/music/konbini.mp3',
+  denden: '/music/big-box-store.mp3',
+  shore: '/music/fishing.mp3',
+  pawn: '/music/pawn-shop.mp3',
+  nightclub: '/music/the-club.mp3',
+  garage: '/music/garage-theme.mp3',
+  badtown: '/music/badside.mp3',
+  backrooms: '/music/backrooms.mp3',
+  mines: '/music/backrooms.mp3',
+  gacha: '/music/gacha.mp3',
+  island: '/music/island.mp3',
+  deepsea: '/music/deep-sea.mp3',
+  shrine: '/music/shrine.mp3',
+};
+
+// What the DJ can spin — places you've actually been.
+const DJ_SETLIST: { scene: string; label: string }[] = [
+  { scene: 'nightclub', label: "the tanuki's own set" },
+  { scene: 'apartment', label: 'home (apartment theme)' },
+  { scene: 'city', label: 'Kawamachi St. (city theme)' },
+  { scene: 'konbini', label: 'konbini muzak' },
+  { scene: 'denden', label: 'Doki Doki Discount jingle' },
+  { scene: 'shore', label: 'Sumikawa Shore' },
+  { scene: 'pawn', label: 'pawn shop pixels' },
+  { scene: 'garage', label: 'Kojima Motors theme' },
+  { scene: 'badtown', label: 'Downtown neon (badside)' },
+  { scene: 'shrine', label: 'Yoshi Shrine bells' },
+  { scene: 'island', label: 'Kiwami Island breeze' },
+  { scene: 'gacha', label: 'Gacha Gacha hall' },
+  { scene: 'backrooms', label: 'the yellow hum (???)' },
+];
+const MUSIC_VOL = 0.35;
+const MUSIC_FADE_MS = 700;
+
+// ---- overlay model ----------------------------------------------------------
+
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki';
+
+interface Crawler { x: number; y: number; hp: number; stepT: number; hurtT: number; dir: Dir }
+
+interface DayRecap {
+  day: number;            // the day that just ended
+  net: number;            // money change over the day
+  fish: number;
+  minerals: number;
+  shifts: number;
+  furniture: string[];    // furniture ids acquired today
+  collapsed: boolean;     // ended by passing out
+}
+
+type Overlay =
+  | { type: 'dialog'; lines: string[]; idx: number; speaker?: string }
+  | { type: 'shop'; shop: ShopId }
+  | { type: 'letter'; beat: StoryBeat }
+  | { type: 'sleep'; day: number; collapsed?: boolean; awaitClick?: boolean }
+  | { type: 'endday'; recap: DayRecap }
+  | { type: 'menu'; tab: 'inventory' | 'achievements' | 'cheats' }
+  | { type: 'ending' };
+
+const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
+
+type FishTable = 'shallow' | 'deep' | 'tropical';
+type FishMode =
+  | { phase: 'wait'; t: number; tile: Vec; table: FishTable }
+  | { phase: 'bite'; t: number; tile: Vec; table: FishTable }
+  | { phase: 'reel'; st: FishingState; tile: Vec; table: FishTable };
+
+interface Projectile { x: number; y: number; dx: number; dy: number; t: number }
+
+interface Hud {
+  money: number; day: number; time: string; energy: number; max: number;
+  sceneName: string; fish: number; ownedCount: number;
+  late: boolean; // past midnight — 2 AM collapse looms
+}
+
+// Every named character has a voice: several line-sets, picked at random per
+// chat, plus state-aware lines layered in by getNpcTalk().
+const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
+  kid: {
+    speaker: 'Hiro (age 9)',
+    sets: [
+      ['The pawn shop gets different stuff every morning!', 'Yesterday they had a fridge for super cheap. Mom says it probably fell off a truck.'],
+      ['I beat the arcade game in Old Town once. The REAL high score is mine. Tell the machine that.'],
+      ['Do NOT go behind the konbini. Kenta went behind the konbini and now he only draws yellow hallways.'],
+    ],
+  },
+  granny: {
+    speaker: 'Granny Sato',
+    sets: [
+      ['Maison Kawa? I have lived there forty years. Thin walls, good light.', 'A home is not bought in a day, dear. It is bought one small thing at a time.'],
+      ['The man at the pawn shop was a jazz pianist, you know. Ask him about it. Watch his face.'],
+      ['Downtown used to be even louder, if you can believe it. The club is still there. So is everything else, in its way.'],
+    ],
+  },
+  'old-man': {
+    speaker: 'Genji',
+    sets: [
+      ['Hold steady when the fish runs deep. Let the little ones tire themselves out.'],
+      ['They say a golden carp lives off this shore. Forty years, I have never caught it.', 'Sometimes I think it has caught me.'],
+      ['The konbini buys whatever you pull out. City people will eat anything fresh.'],
+    ],
+  },
+  'clerk-denden': {
+    speaker: 'Mimi (Doki Doki Discount)',
+    sets: [
+      ['WELCOME welcome WELCOME to Doki Doki Discount!! Every appliance is my favorite appliance!!'],
+      ['This microwave? 500 watts. FIVE HUNDRED. I get chills. The counter is right there when your heart is ready.'],
+      ['Our slogan is "your heart goes doki doki, our prices go down down." I wrote it. They pay me in enthusiasm.'],
+    ],
+  },
+  'clerk-konbini': {
+    speaker: 'Yuki (night shift)',
+    sets: [
+      ['Irasshaimase. Hot food, cold drinks. We buy fish. We are always hiring. I am always tired.'],
+      ['Third year of a philosophy degree. The register and I have reached an understanding.'],
+      ['Do not ask about the back wall. Corporate says there is no back wall.'],
+    ],
+  },
+  'clerk-pawn': {
+    speaker: 'Mr. Ibu',
+    sets: [
+      ['Everything here had a life before you. Stock changes every morning — early bird gets the bargain.'],
+      ['People think a pawn shop is where things end up. Wrong. It is where they wait.'],
+      ['Jazz? Who told you that. ...Tuesdays, after close. Bring nothing. Tell no one.'],
+    ],
+  },
+  mechanic: {
+    speaker: 'Kojima',
+    sets: [
+      ['Yeah? Counter is there. Car runs, boat floats. That is the whole pitch.'],
+      ['Thirty years fixing engines in Old Town. The neighborhood got quiet. Engines did not.'],
+      ['The kei car is a good machine. Do not let the cigarette smell fool you. That is character.'],
+    ],
+  },
+  dj: {
+    speaker: 'DJ Tanuki',
+    sets: [
+      ['CAN. NOT. TALK. THE DROP IS IN SIXTEEN BARS.'],
+      ['You want a request? The answer is no. The tanuki plays what the tanuki plays.'],
+    ],
+  },
+  dancer: {
+    speaker: 'Mei',
+    sets: [
+      ['I have been dancing since Tuesday. Which Tuesday? Exactly.'],
+      ['The floor lights are off-brand but the vibes are authentic.'],
+    ],
+  },
+  dancer2: {
+    speaker: 'Riko',
+    sets: [
+      ['Mei says she has been here since Tuesday. I AM the Tuesday.'],
+      ['You live near the konbini? The drinks are cheaper there. The lighting is worse. Everything costs something.'],
+    ],
+  },
+  bartender: {
+    speaker: 'Saito',
+    sets: [
+      ['Welcome to Club Kaiju. Highball is ¥500. The bowtie is non-negotiable.'],
+      ['I have poured drinks here for eleven years. The DJ has played the same set for nine of them. It grows on you.'],
+      ['The big guy by the dance floor? Regular. Tips in scales. We frame them.'],
+    ],
+  },
+  kaiju: {
+    speaker: 'The Big Guy',
+    sets: [
+      ['RRRGH. ...Sorry. Inside voice. I am just here to dance, not destroy.'],
+      ['I stepped on a city ONE time. Thirty years ago. You flatten one ward and nobody lets you forget it.'],
+      ['This club is the only place with a ceiling I can almost stand under. Saito waters down nothing. Five stars.'],
+    ],
+  },
+  tourist: {
+    speaker: 'Jean-Pierre (tourist)',
+    sets: [
+      ['Ah! Bonjour! You also find ze... immersive exhibition? Magnifique. Very conceptual. Very yellow.', 'Ze guidebook said "authentic local konbini experience". Five stars. I have been here three days.'],
+      ['I ask ze big monsieur for directions. He is very polite. He sells me a table that whispers. C\'est la vie.'],
+      ['Do not worry for me! In France we also have liminal spaces. We call them "Charles de Gaulle Airport".'],
+    ],
+  },
+  miko: {
+    speaker: 'Aya (shrine maiden)',
+    sets: [
+      ['Welcome to Yoshi Shrine. Bow twice, clap twice, wish once. The order matters more than people think.'],
+      ['The kami here is small but diligent. Fond of fishermen, crows, and exact change.'],
+      ['I sweep the same leaves every morning. The tree drops them again every night. We have an understanding.'],
+    ],
+  },
+  collector: {
+    speaker: 'Mr. Maeda',
+    sets: [
+      ['Ten figures in the series. TEN. I have nine. I have had nine for three years. Do not talk to me about the UFO Catcher.'],
+      ['Each capsule is ¥300 of pure possibility. That is ¥30 per gram of hope. Excellent value.'],
+    ],
+  },
+};
+
+// State-aware extra lines layered onto the random set.
+const npcDynamicLines = (id: string, s: GameSave): string[] => {
+  switch (id) {
+    case 'mechanic':
+      return s.vehicles.includes('car') ? ['...How is she running? Good. Do not thank me. Thank the engine.'] : [];
+    case 'old-man':
+      if (s.fishLog['golden']) return ['You... caught it? The golden carp? Forty years. Ha! HA! Kid, you have made an old man very confused.'];
+      return s.vehicles.includes('boat') ? ['Taking the skiff out? The deep ones fight different. Respect them.'] : [];
+    case 'granny':
+      return allFurnished(s) ? ['I saw your window from the street, dear. It finally looks lived-in. It looks loved.'] : [];
+    case 'collector':
+      return gachaComplete(s) ? ['You... completed the set? All ten? I must sit down. I AM sitting down. I must sit down further.'] : [];
+    case 'kid':
+      return s.hat ? ['WHOA. The cowboy hat. Tex only sells those to people he likes. Or anyone with money. Mostly that one.'] : [];
+    default:
+      return [];
+  }
+};
+
+const PLAYER_SPEED = 72; // px/s
+
+const LittleApartmentGame: React.FC = () => {
+  const [screen, setScreen] = useState<'title' | 'playing'>('title');
+  const [manageOpen, setManageOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
+  const [fsGuideOpen, setFsGuideOpen] = useState(false);
+  const [transition, setTransition] = useState<null | 'start' | 'freezer'>(null);
+  const transTimers = useRef<number[]>([]);
+  // Element fullscreen API exists on Android/desktop but NOT iOS Safari, which
+  // only goes fullscreen via "Add to Home Screen". Used to pick the right CTA.
+  const [fsSupported] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenEnabled));
+  // Launched from a home-screen icon (iOS) or installed PWA — already chromeless.
+  const [isStandalone] = useState(() => typeof window !== 'undefined' && (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true
+  ));
+  const [confirmMode, setConfirmMode] = useState<null | 'new' | 'delete'>(null);
+  const [saveTick, setSaveTick] = useState(0); // bump to re-read the save after new/delete
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false });
+  const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
+  const [isCoarse] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
+  const [isPortrait, setIsPortrait] = useState(() => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches);
+  const [musicMuted, setMusicMuted] = useState(readMuted);
+  const tracksRef = useRef(new Map<string, HTMLAudioElement>());
+  const currentTrackRef = useRef<string | null>(null);
+  const fadeTimersRef = useRef(new Map<HTMLAudioElement, number>());
+
+  // Gradual volume ramp; pauses the element when faded fully out.
+  const fadeAudio = useCallback((audio: HTMLAudioElement, target: number) => {
+    const timers = fadeTimersRef.current;
+    const existing = timers.get(audio);
+    if (existing) window.clearInterval(existing);
+    const STEP_MS = 35;
+    const steps = Math.max(1, Math.round(MUSIC_FADE_MS / STEP_MS));
+    const delta = (target - audio.volume) / steps;
+    let n = 0;
+    const id = window.setInterval(() => {
+      n++;
+      audio.volume = Math.min(1, Math.max(0, audio.volume + delta));
+      if (n >= steps) {
+        audio.volume = target;
+        if (target === 0) audio.pause();
+        window.clearInterval(id);
+        timers.delete(audio);
+      }
+    }, STEP_MS);
+    timers.set(audio, id);
+  }, []);
+
+  const playMusicFor = useCallback((sceneId: string) => {
+    // honor a standing DJ request while in the club
+    const djSrc = sceneId === 'nightclub' && djPickRef.current
+      ? (SCENE_MUSIC[djPickRef.current] ?? DEFAULT_MUSIC)
+      : null;
+    const src = djSrc ?? SCENE_MUSIC[sceneId] ?? DEFAULT_MUSIC;
+    const tracks = tracksRef.current;
+    const prevSrc = currentTrackRef.current;
+    if (prevSrc === src) {
+      const cur = tracks.get(src);
+      if (cur) { cur.muted = readMuted(); cur.play().catch(() => {}); fadeAudio(cur, MUSIC_VOL); }
+    }
+    if (prevSrc && prevSrc !== src) {
+      const old = tracks.get(prevSrc);
+      if (old) fadeAudio(old, 0); // fades out, then pauses
+    }
+    let audio = tracks.get(src);
+    if (!audio) {
+      audio = new Audio(src);
+      audio.loop = true;
+      audio.volume = 0;
+      tracks.set(src, audio);
+    }
+    audio.muted = readMuted();
+    currentTrackRef.current = src;
+    audio.play().catch(() => { /* autoplay blocked or file missing */ });
+    fadeAudio(audio, MUSIC_VOL);
+  }, [fadeAudio]);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const scaleRef = useRef(1);
+  const atlasRef = useRef<Atlas | null>(null);
+  const saveRef = useRef<GameSave>(newSave());
+  const sceneRef = useRef<SceneDef>(SCENES.apartment);
+  const posRef = useRef<Vec>({ x: 0, y: 0 });
+  const dirRef = useRef<Dir>('down');
+  const movingRef = useRef(false);
+  const animRef = useRef(0);
+  const inputRef = useRef(new Input());
+  const solidsRef = useRef(new Set<string>());
+  const overlayRef = useRef<Overlay | null>(null);
+  const fishModeRef = useRef<FishMode | null>(null);
+  const pendingBeatsRef = useRef<StoryBeat[]>([]);
+  const sleepTimerRef = useRef<number | null>(null);
+  const oreNodesRef = useRef<OreNode[]>([]);
+  const crawlersRef = useRef<Crawler[]>([]);
+  const projectilesRef = useRef<Projectile[]>([]);
+  const nursedRef = useRef(false);
+  const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap } | null>(null);
+  const sparkleRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const hurtCooldownRef = useRef(0);
+  const lastSafeTileRef = useRef<Vec | null>(null);
+  const djPickRef = useRef<string | null>(null);
+
+  const setOverlayBoth = useCallback((o: Overlay | null) => {
+    overlayRef.current = o;
+    setOverlay(o);
+  }, []);
+
+  const [achToast, setAchToast] = useState<{ title: string; desc: string } | null>(null);
+  const achTimerRef = useRef<number | null>(null);
+
+  // Cover the screen with a transition overlay, swap underneath while it's
+  // opaque (coverMs), then uncover (totalMs). Timers cleared on unmount.
+  const runTransition = useCallback((kind: 'start' | 'freezer', action: () => void, coverMs: number, totalMs: number) => {
+    transTimers.current.forEach(id => window.clearTimeout(id));
+    transTimers.current = [];
+    setTransition(kind);
+    transTimers.current.push(window.setTimeout(action, coverMs));
+    transTimers.current.push(window.setTimeout(() => setTransition(null), totalMs));
+  }, []);
+
+  const award = useCallback((id: string) => {
+    const s = saveRef.current;
+    if (!unlockGameAch(s, id)) return;
+    persistSave(s);
+    sfxAchievement();
+    const a = GAME_ACHIEVEMENTS.find(x => x.id === id)!;
+    setAchToast({ title: a.title, desc: a.desc });
+    if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
+    achTimerRef.current = window.setTimeout(() => setAchToast(null), 3500);
+  }, []);
+
+  const refreshHud = useCallback(() => {
+    const s = saveRef.current;
+    if (s.money >= 50000) award('rich');
+    if (s.money < 100) award('broke');
+    setHud({
+      money: s.money, day: s.day, time: clockLabel(s), energy: s.energy, max: maxEnergy(s),
+      sceneName: sceneRef.current.name, fish: s.fishInv.length, ownedCount: s.owned.length,
+      late: s.timeMin >= 24 * 60, // midnight or later
+    });
+  }, [award]);
+
+  const showDialog = useCallback((lines: string[], speaker?: string) => {
+    setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker });
+  }, [setOverlayBoth]);
+
+  const computeSolids = useCallback(() => {
+    const set = new Set<string>();
+    const scene = sceneRef.current;
+    const s = saveRef.current;
+    for (const npc of scene.npcs) set.add(`${npc.x},${npc.y}`);
+    if (scene.id === 'apartment') {
+      for (const itemId of Object.keys(s.placed)) {
+        if (itemId === 'ac' || itemId === 'neon') continue; // wall mounts don't block
+        const pos = s.placed[itemId];
+        const w = itemId === 'bed' || itemId === 'sofa' || itemId === 'kotatsu' ? 2 : 1;
+        for (let dx = 0; dx < w; dx++) set.add(`${pos.x + dx},${pos.y}`);
+      }
+    }
+    if (s.carPos && s.carPos.scene === scene.id) {
+      set.add(`${s.carPos.x},${s.carPos.y}`);
+      set.add(`${s.carPos.x + 1},${s.carPos.y}`);
+    }
+    solidsRef.current = set;
+  }, []);
+
+  const checkStory = useCallback(() => {
+    const s = saveRef.current;
+    for (const beat of STORY_BEATS) {
+      if (s.storySeen.includes(beat.id)) continue;
+      if (beat.when(s.owned)) {
+        s.storySeen.push(beat.id);
+        pendingBeatsRef.current.push(beat);
+      }
+    }
+  }, []);
+
+  const enterScene = useCallback((id: string, tx: number, ty: number, dir: Dir) => {
+    const s = saveRef.current;
+    sceneRef.current = SCENES[id];
+    posRef.current = { x: tx * TILE, y: ty * TILE - 4 };
+    dirRef.current = dir;
+    s.scene = id; s.px = posRef.current.x; s.py = posRef.current.y; s.dir = dir;
+    if (!s.visited.includes(id)) s.visited.push(id);
+    if (id !== 'nightclub') djPickRef.current = null; // the set ends when you leave
+    if (id === 'mines') {
+      oreNodesRef.current = oreNodesFor(s, ORE_SPOTS);
+      crawlersRef.current = CRAWLER_SPAWNS.map(c => ({
+        x: c.x * TILE, y: c.y * TILE - 4, hp: 2, stepT: Math.random(), hurtT: 0, dir: 'down' as Dir,
+      }));
+    } else {
+      crawlersRef.current = [];
+    }
+    computeSolids();
+    persistSave(s);
+    refreshHud();
+    playMusicFor(id);
+    if (id === 'nightclub') award('club');
+  }, [computeSolids, refreshHud, playMusicFor, award]);
+
+  // ---- interactions ----------------------------------------------------------
+
+  // Sleep / collapse → end-of-day recap → wake. Three steps so the player can
+  // read the recap (and so an "out cold" screen waits for a click first).
+  const finishSleep = useCallback(() => {
+    const pending = pendingWakeRef.current;
+    if (!pending) return;
+    const s = saveRef.current;
+    if (sleepTimerRef.current) { window.clearTimeout(sleepTimerRef.current); sleepTimerRef.current = null; }
+    passNight(s); // day+1, restore energy, reset today's tally
+    if (pending.collapsed || pending.nursed) {
+      // You wake up next to the bed, however you got there.
+      sceneRef.current = SCENES.apartment;
+      posRef.current = { x: 2 * TILE, y: 2 * TILE - 4 };
+      dirRef.current = 'down';
+      s.scene = 'apartment';
+      computeSolids();
+      if (!pending.nursed) award('night-owl');
+    }
+    checkStory();
+    persistSave(s);
+    refreshHud();
+    setOverlayBoth({ type: 'endday', recap: pending.recap });
+    playMusicFor('endofday'); // dedicated end-of-day theme over the recap
+  }, [setOverlayBoth, checkStory, refreshHud, computeSolids, playMusicFor, award]);
+
+  const closeEndDay = useCallback(() => {
+    const pending = pendingWakeRef.current;
+    pendingWakeRef.current = null;
+    setOverlayBoth(null);
+    playMusicFor(sceneRef.current.id); // back to the world's music
+    if (pending?.nursed) {
+      nursedRef.current = false;
+      showDialog([
+        'You wake in your own bed. There is a damp towel on your forehead, folded with surprising precision.',
+        'Jean-Pierre is sitting backwards on your desk chair. "Bonjour. You were face-down in ze yellow place. Very dramatique."',
+        '"I carry you up ze ladder, through ze freezer, past ze nice monster. He says hello, by ze way."',
+        '"In France we have a saying: do not fight ze crawling things on an empty battery." He pats your head exactly once, and leaves.',
+      ], 'Jean-Pierre');
+    }
+  }, [setOverlayBoth, playMusicFor, showDialog]);
+
+  const doSleep = useCallback((collapsed = false, nursed = false) => {
+    const s = saveRef.current;
+    fishModeRef.current = null;
+    projectilesRef.current = [];
+    // if you go down behind the wheel, the car stays where you left it
+    if (s.driving) {
+      const ft = feetTile(posRef.current);
+      s.carPos = { scene: sceneRef.current.id, x: ft.x, y: ft.y };
+      s.driving = false;
+    }
+    // Snapshot the day's tally BEFORE passNight resets it.
+    const recap: DayRecap = {
+      day: s.day,
+      net: s.money - s.today.startMoney,
+      fish: s.today.fishCaught,
+      minerals: s.today.mineralsMined,
+      shifts: s.today.shifts,
+      furniture: [...s.today.newFurniture],
+      collapsed: collapsed || nursed,
+    };
+    pendingWakeRef.current = { collapsed, nursed, recap };
+    if (collapsed || nursed) {
+      // Passed out — hold on the "out cold" screen until the player clicks.
+      setOverlayBoth({ type: 'sleep', day: s.day + 1, collapsed: true, awaitClick: true });
+    } else {
+      // Ordinary sleep: a brief fade, then the recap.
+      setOverlayBoth({ type: 'sleep', day: s.day + 1, collapsed: false });
+      sleepTimerRef.current = window.setTimeout(() => { sleepTimerRef.current = null; finishSleep(); }, 1500);
+    }
+  }, [setOverlayBoth, finishSleep]);
+
+  // Where can you sleep? Wherever the bed is placed; the default futon until then.
+  const sleepRect = useCallback((): { x: number; y: number; w: number; h: number } => {
+    const bed = saveRef.current.placed['bed'];
+    return bed ? { x: bed.x, y: bed.y, w: 2, h: 1 } : { x: 1, y: 1, w: 2, h: 1 };
+  }, []);
+
+  // Cans go in your pocket — drink them from the menu (I), or share one with
+  // someone parched.
+  const useVending = useCallback(() => {
+    const s = saveRef.current;
+    if (s.money < 150) { showDialog(['The machine hums. You count your coins. Not today.']); return; }
+    s.money -= 150;
+    s.peepis += 1;
+    sfxCoin();
+    persistSave(s); refreshHud();
+    showDialog([`CLUNK. A cold can of "Diet Doctor Peepis". Legally distinct, the can insists. You pocket it. (×${s.peepis})`]);
+  }, [showDialog, refreshHud]);
+
+  const eatCoconut = () => {
+    const s = saveRef.current;
+    if (s.coconuts <= 0 || s.energy >= maxEnergy(s)) return;
+    s.coconuts -= 1;
+    s.energy = Math.min(maxEnergy(s), s.energy + 15);
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const drinkPeepis = () => {
+    const s = saveRef.current;
+    if (s.peepis <= 0 || s.energy >= maxEnergy(s)) return;
+    s.peepis -= 1;
+    s.energy = Math.min(maxEnergy(s), s.energy + 12);
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const feedMonster = () => {
+    const s = saveRef.current;
+    if (s.peepis <= 0 || s.monsterFed) return;
+    s.peepis -= 1;
+    s.monsterFed = true;
+    sfxCatch();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const startCast = useCallback((waterTile: Vec, table: FishTable) => {
+    const s = saveRef.current;
+    if (!s.canFish) {
+      showDialog(["You stare at the water. You have a rod somewhere, probably, but no idea how to use it.", 'Genji — the old fisherman on Sumikawa Shore — looks like the type who could teach you.']);
+      return;
+    }
+    const cost = energyCost(s, CAST_COST);
+    if (s.energy < cost) { showDialog(['You are too tired to cast. Eat something, or sleep.']); return; }
+    s.energy -= cost;
+    persistSave(s); refreshHud();
+    fishModeRef.current = { phase: 'wait', t: 1 + Math.random() * 2.2, tile: waterTile, table };
+  }, [showDialog, refreshHud]);
+
+  const catchFish = useCallback((fish: Fish, deep: boolean) => {
+    const s = saveRef.current;
+    s.fishInv.push(fish.id);
+    s.fishLog[fish.id] = (s.fishLog[fish.id] || 0) + 1;
+    s.today.fishCaught += 1;
+    persistSave(s); refreshHud();
+    sfxCatch();
+    award('first-fish');
+    if (deep) award('deep');
+    if (fish.id === 'golden') award('golden');
+    const flair = fish.id === 'golden' ? ' Genji will not believe this.' : fish.id === 'koi' ? ' Someone must miss it.' : '';
+    showDialog([`You caught a ${fish.name}! (worth ¥${fish.value})${flair}`]);
+  }, [refreshHud, showDialog, award]);
+
+  const rollGacha = useCallback(() => {
+    const s = saveRef.current;
+    if (s.money < GACHA_PRICE) { showDialog(['¥300 a turn. The machine does not do credit. Mr. Maeda checked.']); return; }
+    s.money -= GACHA_PRICE;
+    const wasComplete = gachaComplete(s);
+    const fig = GACHA_FIGURES[Math.floor(Math.random() * GACHA_FIGURES.length)];
+    s.gacha[fig] = (s.gacha[fig] ?? 0) + 1;
+    sfxCoin();
+    const have = GACHA_FIGURES.filter(n => (s.gacha[n] ?? 0) > 0).length;
+    const lines = [
+      `KA-CHUNK. The capsule pops open: "${fig}"${s.gacha[fig] > 1 ? ` (×${s.gacha[fig]} — the shelf grows)` : ' — NEW!'}`,
+      `Collection: ${have}/${GACHA_FIGURES.length}`,
+    ];
+    if (!wasComplete && gachaComplete(s)) {
+      lines.push('That... was the last one. The machine hums approvingly. Something golden has appeared in your apartment.');
+      award('gacha-set');
+    }
+    persistSave(s); refreshHud();
+    showDialog(lines);
+  }, [showDialog, refreshHud]);
+
+  // A legal parking spot: two walkable tiles, neither of them a warp (doors stay clear).
+  const findParkSpot = (scene: typeof SCENES[string], feet: Vec): Vec | null => {
+    const isWarpAt = (x: number, y: number) => scene.warps.some(w => w.x === x && w.y === y);
+    const ok = (x: number, y: number) => {
+      for (const cx of [x, x + 1]) {
+        if (isWarpAt(cx, y)) return false;
+        const row = scene.grid[y];
+        if (!row) return false;
+        const def = scene.legend[row[cx]];
+        if (!def || def.solid) return false;
+      }
+      return true;
+    };
+    const tries: [number, number][] = [[0, 0], [-1, 0], [1, 0], [0, 1], [0, -1], [-2, 0], [2, 0]];
+    for (const [dx, dy] of tries) {
+      if (ok(feet.x + dx, feet.y + dy)) return { x: feet.x + dx, y: feet.y + dy };
+    }
+    return null;
+  };
+
+  const handleInteract = useCallback(() => {
+    const scene = sceneRef.current;
+    const faced = facedTile(posRef.current, dirRef.current);
+    const feet = feetTile(posRef.current);
+    const s = saveRef.current;
+
+    // Behind the wheel, E means one thing: park.
+    if (s.driving) {
+      const spot = findParkSpot(scene, feet);
+      if (!spot) { showDialog(["No room to park here — and Kojima's voice in your head says never block a doorway."]); return; }
+      s.carPos = { scene: scene.id, x: spot.x, y: spot.y };
+      s.driving = false;
+      computeSolids();
+      persistSave(s); refreshHud();
+      sfxCoin();
+      // step out beside the car
+      for (const [dx, dy] of [[0, 18], [0, -18], [-18, 0], [18, 0]]) {
+        const cand = tryMove(scene, posRef.current, dx, dy, solidsRef.current);
+        if (cand.x !== posRef.current.x || cand.y !== posRef.current.y) { posRef.current = cand; break; }
+      }
+      return;
+    }
+
+    // Hop into the parked car
+    if (s.carPos && s.carPos.scene === scene.id) {
+      const onCar = (tt: Vec) => tt.y === s.carPos!.y && (tt.x === s.carPos!.x || tt.x === s.carPos!.x + 1);
+      if (onCar(faced) || onCar(feet)) {
+        posRef.current = { x: s.carPos.x * TILE, y: s.carPos.y * TILE - 4 };
+        s.carPos = null;
+        s.driving = true;
+        computeSolids();
+        persistSave(s); refreshHud();
+        sfxBuy();
+        return;
+      }
+    }
+
+    // Sleeping spot is dynamic: the placed bed, or the default futon.
+    if (scene.id === 'apartment') {
+      const r = sleepRect();
+      const inRect = (tt: Vec) => tt.x >= r.x && tt.x < r.x + r.w && tt.y >= r.y && tt.y < r.y + r.h;
+      if (inRect(faced) || inRect(feet)) { doSleep(); return; }
+      const arc = s.placed['arcade'];
+      if (arc && faced.x === arc.x && faced.y === arc.y) {
+        showDialog(['You play VOID PATROL until your eyes hum pleasantly.', 'New high score: still not yours. The cabinet purrs. Somewhere, The Manager is proud.']);
+        return;
+      }
+    }
+
+    // Mines: mine ore, or let the wand do the talking
+    if (scene.id === 'mines') {
+      const node = oreNodesRef.current.find(n => n.x === faced.x && n.y === faced.y);
+      if (node) {
+        const cost = energyCost(s, MINE_COST);
+        if (s.energy < cost) { showDialog(['Too tired to swing. The rock hums smugly.']); return; }
+        s.energy -= cost;
+        s.minerals[node.mineral.id] = (s.minerals[node.mineral.id] ?? 0) + 1;
+        s.today.mineralsMined += 1;
+        s.minedNodes.push(`${node.x},${node.y}`);
+        oreNodesRef.current = oreNodesRef.current.filter(n => n !== node);
+        sparkleRef.current = { x: node.x * TILE, y: node.y * TILE, t: 0.4 };
+        sfxCoin();
+        award('miner');
+        persistSave(s); refreshHud();
+        return;
+      }
+    }
+
+    const npc = scene.npcs.find(n => n.x === faced.x && n.y === faced.y);
+    if (npc) {
+      // Merchants open their stalls; everyone else just talks.
+      if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
+      if (npc.id === 'monster') { setOverlayBoth({ type: 'shop', shop: 'monster' }); return; }
+      if (npc.id === 'tex') { setOverlayBoth({ type: 'shop', shop: 'hat' }); return; }
+      if (npc.id === 'dj') { setOverlayBoth({ type: 'shop', shop: 'dj' }); return; }
+      if (npc.id === 'tiki') { setOverlayBoth({ type: 'shop', shop: 'tiki' }); return; }
+      if (npc.id === 'old-man' && !s.canFish) {
+        s.canFish = true;
+        persistSave(s); refreshHud();
+        sfxCatch();
+        showDialog([
+          'The old man squints at you. "You have the look of someone who has never caught a thing in their life."',
+          'He presses a worn fishing rod into your hands. "Take it. I have spares, and you have time."',
+          'HOW TO FISH: face the water and press E to cast. Wait for the bobber to dip, then press E to hook it.',
+          'Then a bar appears — HOLD E to raise the green zone, release to drop it. Keep the fish inside the zone until the catch meter fills.',
+          '"The konbini buys whatever you pull out. Now go on. The water is not getting any younger, and neither am I."',
+        ], 'Genji');
+        return;
+      }
+      const voice = NPC_VOICES[npc.id];
+      if (voice) {
+        const set = voice.sets[Math.floor(Math.random() * voice.sets.length)];
+        showDialog([...set, ...npcDynamicLines(npc.id, s)], voice.speaker);
+      }
+      return;
+    }
+
+    const hit = (it: Interactable, t: Vec) =>
+      t.x >= it.x && t.x < it.x + (it.w ?? 1) && t.y >= it.y && t.y < it.y + (it.h ?? 1);
+    let target = scene.interactables.find(it => hit(it, faced) || hit(it, feet));
+    // The skiff's mooring is plain shoreline until you own the skiff
+    if (target?.id === 'boat' && !s.vehicles.includes('boat')) {
+      target = scene.interactables.find(it => it.id === 'fish-spot');
+    }
+    if (!target) {
+      // Open water: every direction is a fishing spot
+      if (scene.id === 'deepsea') { startCast(faced, 'deep'); return; }
+      // Mines: no ladder, no ore, nobody — the wand speaks
+      if (scene.id === 'mines') {
+        if (s.wand) {
+          const d = dirRef.current;
+          const SPD = 190;
+          projectilesRef.current.push({
+            x: posRef.current.x + 4, y: posRef.current.y + 4,
+            dx: d === 'left' ? -SPD : d === 'right' ? SPD : 0,
+            dy: d === 'up' ? -SPD : d === 'down' ? SPD : 0,
+            t: 0.8,
+          });
+          sfxBite();
+          return;
+        }
+        const crNear = crawlersRef.current.some(c => Math.abs(c.x - posRef.current.x) + Math.abs(c.y - posRef.current.y) < 3 * TILE);
+        if (crNear) { showDialog(['You wave your empty hand at it. It waves several of its hands back. This is not working.']); return; }
+      }
+      return;
+    }
+
+    switch (target.id) {
+      case 'window': {
+        const n = s.owned.length;
+        showDialog([
+          n === 0
+            ? 'The city goes on forever out there. Behind you, the apartment is an empty box. For now.'
+            : n < FURNITURE.length
+              ? `Trains, neon, ten million strangers. Behind you: ${n} ${n === 1 ? 'thing' : 'things'} that are yours.`
+              : 'The city glitters. You turn around, and home glitters back.',
+        ]);
+        break;
+      }
+      case 'vending': useVending(); break;
+      case 'vending-dead':
+        showDialog(['OUT OF ORDER, says the sign. Behind the glass, one light still blinks.', 'Something inside hisses softly. You decide you were never thirsty.']);
+        break;
+      case 'bar': {
+        if (s.money < 500) { showDialog(['"Highball is ¥500," Saito says, kindly not looking at your wallet.'], 'Saito'); break; }
+        if (s.energy >= maxEnergy(s)) { showDialog(['"You look plenty awake already," Saito says. "Come back when the city has had its way with you."'], 'Saito'); break; }
+        s.money -= 500;
+        s.energy = Math.min(maxEnergy(s), s.energy + 15);
+        sfxCoin();
+        persistSave(s); refreshHud();
+        showDialog(['One perfect highball, exactly as cold as the glass can bear. (+15 energy)'], 'Saito');
+        break;
+      }
+      case 'gacha': rollGacha(); break;
+      case 'shrine': {
+        if (s.money < 500) { showDialog(['The offering box waits patiently. It has waited longer than you have been broke.']); break; }
+        s.money -= 500;
+        const prevTier = shrineLuck(s);
+        s.donated += 500;
+        const tier = shrineLuck(s);
+        sfxCoin();
+        if (tier === 1) award('blessed');
+        persistSave(s); refreshHud();
+        if (tier > prevTier) {
+          sfxCatch();
+          showDialog([
+            tier === 1
+              ? 'The coin drops. The wind shifts. Somewhere, the water feels friendlier. (Fishing luck up!)'
+              : 'The whole shrine seems to lean toward you approvingly. (Fishing luck way up!)',
+          ]);
+        } else {
+          const lines = [
+            'Clink. You bow twice, clap twice, and ask for nothing in particular.',
+            `Clink. (Total offered: ¥${s.donated.toLocaleString()})`,
+            'Clink. A crow watches you with what might be respect.',
+          ];
+          showDialog([lines[Math.floor(Math.random() * lines.length)]]);
+        }
+        break;
+      }
+      case 'portal': {
+        sfxBackroomsWarp();
+        // Cold-flash teleport: swap to the backrooms while the screen is covered.
+        runTransition('freezer', () => {
+          enterScene('backrooms', 4, 9, 'right');
+          award('backrooms');
+          if (!s.storySeen.includes('backrooms-intro')) {
+            s.storySeen.push('backrooms-intro');
+            persistSave(s);
+            showDialog([
+              'The freezer door sticks, then gives. The cold lasts exactly three steps.',
+              'Then there is no freezer, no cold, no konbini. Just yellow walls and a hum that is not the drink fridges.',
+              'Something large and polite clears its throat in the distance.',
+            ]);
+          }
+        }, 850, 1750);
+        break;
+      }
+      case 'portal-exit':
+        enterScene('konbini', 4, 2, 'down');
+        break;
+      case 'descend':
+        if (!s.wand) {
+          showDialog([
+            'A hand on your shoulder. Jean-Pierre, suddenly very serious.',
+            '"Non non non, mon ami. Down zere? Wizout ze sparkle stick? Zey will EAT you. Conceptually AND literally."',
+            '"Ze big monsieur sells ze magical girl wand. Buy first. Descend second. Zis is ze order of operations."',
+          ], 'Jean-Pierre');
+          break;
+        }
+        enterScene('mines', 2, 1, 'down');
+        if (!s.storySeen.includes('mines-intro')) {
+          s.storySeen.push('mines-intro');
+          persistSave(s);
+          showDialog([
+            'The ladder goes down further than ladders should.',
+            'The walls glitter with something that is not quite mineral and not quite awake.',
+            'Things skitter at the edge of the lamplight. Best to have something sparkly to wave at them.',
+          ]);
+        }
+        break;
+      case 'ascend':
+        enterScene('backrooms', 12, 9, 'down');
+        break;
+      case 'shop-denden': setOverlayBoth({ type: 'shop', shop: 'denden' }); break;
+      case 'shop-konbini': setOverlayBoth({ type: 'shop', shop: 'konbini' }); break;
+      case 'shop-pawn': setOverlayBoth({ type: 'shop', shop: 'pawn' }); break;
+      case 'shop-garage': setOverlayBoth({ type: 'shop', shop: 'garage' }); break;
+      case 'boat': setOverlayBoth({ type: 'shop', shop: 'boat' }); break;
+      case 'boat-island': setOverlayBoth({ type: 'shop', shop: 'boat-island' }); break;
+      case 'coconut': {
+        if (s.palmDay !== s.day) { s.palmDay = s.day; s.palmsShaken = []; }
+        const key = `${target.x},${target.y}`;
+        if (s.palmsShaken.includes(key)) { showDialog(['This palm has given all it intends to give today. It sways, unbothered.']); break; }
+        s.palmsShaken.push(key);
+        s.coconuts += 1;
+        sfxCoin();
+        persistSave(s); refreshHud();
+        showDialog([`THUNK. A coconut rolls to your feet. You bag it. (×${s.coconuts} — eat it from the menu, or sell it at the tiki bar)`]);
+        break;
+      }
+      case 'tiki': setOverlayBoth({ type: 'shop', shop: 'tiki' }); break;
+      case 'fish-tropical': startCast(faced, 'tropical'); break;
+      case 'fish-spot': startCast(faced, 'shallow'); break;
+    }
+  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, enterScene, refreshHud, runTransition, award]);
+
+  // ---- update -----------------------------------------------------------------
+
+  const advanceDialog = useCallback(() => {
+    const ov = overlayRef.current;
+    if (!ov || ov.type !== 'dialog') return;
+    if (ov.idx + 1 < ov.lines.length) setOverlayBoth({ ...ov, idx: ov.idx + 1 });
+    else setOverlayBoth(null);
+  }, [setOverlayBoth]);
+
+  const update = useCallback((dt: number) => {
+    const input = inputRef.current;
+    const ov = overlayRef.current;
+
+    if (ov) {
+      if (ov.type === 'dialog') {
+        if (input.consumeInteract() || input.consumeCancel()) advanceDialog();
+        input.consumeInventory();
+      } else if (ov.type === 'letter') {
+        if (input.consumeInteract() || input.consumeCancel()) setOverlayBoth(null);
+        input.consumeInventory();
+      } else if (ov.type === 'shop') {
+        input.consumeInteract();
+        if (input.consumeCancel()) setOverlayBoth(null);
+        input.consumeInventory();
+      } else if (ov.type === 'menu') {
+        input.consumeInteract();
+        if (input.consumeCancel() || input.consumeInventory()) setOverlayBoth(null);
+      } else if (ov.type === 'sleep') {
+        // "Out cold" waits for a press; the plain fade advances on its own timer.
+        if (ov.awaitClick && (input.consumeInteract() || input.consumeCancel())) finishSleep();
+        input.consumeInventory();
+      } else if (ov.type === 'endday') {
+        if (input.consumeInteract() || input.consumeCancel()) closeEndDay();
+        input.consumeInventory();
+      } else {
+        input.consumeInteract(); input.consumeCancel(); input.consumeInventory();
+      }
+      movingRef.current = false;
+      return;
+    }
+
+    // The day rolls on whenever you're out in the world (incl. fishing).
+    {
+      const s2 = saveRef.current;
+      const beforeChunk = Math.floor(s2.timeMin / 10);
+      s2.timeMin += dt * TIME_RATE;
+      if (Math.floor(s2.timeMin / 10) !== beforeChunk) refreshHud();
+      if (s2.timeMin >= COLLAPSE_MIN) {
+        doSleep(true); // 2 AM: you fade out, the city carries you home
+        return;
+      }
+    }
+
+    if (pendingBeatsRef.current.length > 0) {
+      const beat = pendingBeatsRef.current.shift()!;
+      persistSave(saveRef.current);
+      sfxLetter();
+      setOverlayBoth({ type: 'letter', beat });
+      return;
+    }
+
+    const fm = fishModeRef.current;
+    if (fm) {
+      if (input.consumeCancel()) { fishModeRef.current = null; return; }
+      if (fm.phase === 'wait') {
+        if (input.consumeInteract()) { fishModeRef.current = null; showDialog(['You reel in early. Nothing yet.']); return; }
+        fm.t -= dt;
+        if (fm.t <= 0) { sfxBite(); fishModeRef.current = { phase: 'bite', t: 0.9, tile: fm.tile, table: fm.table }; }
+      } else if (fm.phase === 'bite') {
+        fm.t -= dt;
+        if (input.consumeInteract()) {
+          // shrine favor: the valuable fish bite more often
+          const luck = shrineLuck(saveRef.current);
+          const base = fm.table === 'deep' ? DEEP_FISH : fm.table === 'tropical' ? TROPICAL_FISH : FISH;
+          const table = luck === 0 ? base : base.map(f => (f.value >= 500 ? { ...f, weight: f.weight * (1 + 0.5 * luck) } : f));
+          fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table)), tile: fm.tile, table: fm.table };
+        } else if (fm.t <= 0) {
+          fishModeRef.current = null;
+          sfxMiss();
+          showDialog(['Too slow — it spat the hook and vanished.']);
+        }
+      } else {
+        input.consumeInteract();
+        updateFishing(fm.st, dt, input.actionHeld);
+        if (fm.st.done === 'caught') { fishModeRef.current = null; catchFish(fm.st.fish, fm.table === 'deep'); }
+        else if (fm.st.done === 'escaped') {
+          fishModeRef.current = null;
+          sfxMiss();
+          showDialog([`The ${fm.st.fish.name} fought free. The old man saw everything.`]);
+        }
+      }
+      return;
+    }
+
+    const s = saveRef.current;
+    if (sceneRef.current.id === 'apartment' && allFurnished(s) && !s.ended) {
+      setOverlayBoth({ type: 'ending' });
+      return;
+    }
+
+    // explore
+    const dir = input.currentDir();
+    if (dir) {
+      dirRef.current = dir;
+      movingRef.current = true;
+      animRef.current += dt;
+      // Behind the wheel the city flies by; the skiff glides
+      const speed = s.driving ? PLAYER_SPEED * 2.4 : sceneRef.current.id === 'deepsea' ? PLAYER_SPEED * 1.3 : PLAYER_SPEED;
+      const dist = speed * dt;
+      const dx = dir === 'left' ? -dist : dir === 'right' ? dist : 0;
+      const dy = dir === 'up' ? -dist : dir === 'down' ? dist : 0;
+      posRef.current = tryMove(sceneRef.current, posRef.current, dx, dy, solidsRef.current);
+
+      const ft = feetTile(posRef.current);
+      const warp = sceneRef.current.warps.find(w => w.x === ft.x && w.y === ft.y);
+      if (warp) {
+        // Can't drive indoors: the car auto-parks beside the door, never on it
+        if (s.driving && !SCENES[warp.to].outdoor) {
+          const spot = findParkSpot(sceneRef.current, lastSafeTileRef.current ?? ft);
+          s.carPos = spot
+            ? { scene: sceneRef.current.id, x: spot.x, y: spot.y }
+            : { scene: 'badtown', x: 17, y: 3 }; // worst case: Kojima holds it
+          s.driving = false;
+        }
+        enterScene(warp.to, warp.tx, warp.ty, warp.dir);
+        return;
+      }
+      if (!sceneRef.current.warps.some(w => w.x === ft.x && w.y === ft.y)) lastSafeTileRef.current = ft;
+    } else {
+      movingRef.current = false;
+    }
+
+    // The Down There has residents
+    if (sceneRef.current.id === 'mines' && crawlersRef.current.length > 0) {
+      hurtCooldownRef.current = Math.max(0, hurtCooldownRef.current - dt);
+      const p = posRef.current;
+      for (const c of crawlersRef.current) {
+        c.hurtT = Math.max(0, c.hurtT - dt);
+        c.stepT -= dt;
+        if (c.stepT <= 0) {
+          c.stepT = 0.4 + Math.random() * 0.4;
+          const distX = p.x - c.x, distY = p.y - c.y;
+          const near = Math.abs(distX) + Math.abs(distY) < 6 * TILE;
+          if (near) c.dir = Math.abs(distX) > Math.abs(distY) ? (distX > 0 ? 'right' : 'left') : (distY > 0 ? 'down' : 'up');
+          else c.dir = (['up', 'down', 'left', 'right'] as Dir[])[Math.floor(Math.random() * 4)];
+        }
+        const near2 = Math.abs(p.x - c.x) + Math.abs(p.y - c.y) < 2.5 * TILE;
+        const sp = (near2 ? 58 : 34) * dt;
+        const dx = c.dir === 'left' ? -sp : c.dir === 'right' ? sp : 0;
+        const dy = c.dir === 'up' ? -sp : c.dir === 'down' ? sp : 0;
+        const next = tryMove(sceneRef.current, { x: c.x, y: c.y }, dx, dy, solidsRef.current);
+        c.x = next.x; c.y = next.y;
+        // bite check
+        if (hurtCooldownRef.current <= 0 && Math.abs(c.x - p.x) < 10 && Math.abs(c.y - p.y) < 10) {
+          hurtCooldownRef.current = 1;
+          s.energy = Math.max(0, s.energy - CRAWLER_HIT_ENERGY);
+          sfxMiss();
+          // knockback away from the crawler
+          const kb = tryMove(sceneRef.current, p, Math.sign(p.x - c.x) * 14, Math.sign(p.y - c.y) * 14, solidsRef.current);
+          posRef.current = kb;
+          persistSave(s); refreshHud();
+          if (s.energy <= 0) {
+            nursedRef.current = true;
+            doSleep(false, true); // grandma protocol
+            return;
+          }
+        }
+      }
+    }
+    if (sparkleRef.current) {
+      sparkleRef.current.t -= dt;
+      if (sparkleRef.current.t <= 0) sparkleRef.current = null;
+    }
+    // sparkle bolts
+    if (projectilesRef.current.length > 0) {
+      const scene2 = sceneRef.current;
+      projectilesRef.current = projectilesRef.current.filter(pr => {
+        pr.t -= dt;
+        if (pr.t <= 0) return false;
+        pr.x += pr.dx * dt; pr.y += pr.dy * dt;
+        const tx = Math.floor((pr.x + 4) / TILE), ty = Math.floor((pr.y + 4) / TILE);
+        if (isSolid(scene2, tx, ty, new Set())) {
+          sparkleRef.current = { x: pr.x - 4, y: pr.y - 4, t: 0.2 };
+          return false;
+        }
+        const hitC = crawlersRef.current.find(c => Math.abs(c.x + 8 - (pr.x + 4)) < 10 && Math.abs(c.y + 8 - (pr.y + 4)) < 10);
+        if (hitC) {
+          hitC.hp -= 1;
+          hitC.hurtT = 0.3;
+          // knock the crawler back along the bolt's path
+          hitC.x += Math.sign(pr.dx) * 10; hitC.y += Math.sign(pr.dy) * 10;
+          sparkleRef.current = { x: hitC.x, y: hitC.y, t: 0.35 };
+          if (hitC.hp <= 0) {
+            crawlersRef.current = crawlersRef.current.filter(c => c !== hitC);
+            award('slayer');
+            sfxCatch();
+            if (Math.random() < 0.6) {
+              const m = MINERALS[Math.floor(Math.random() * MINERALS.length)];
+              s.minerals[m.id] = (s.minerals[m.id] ?? 0) + 1;
+              s.today.mineralsMined += 1;
+              persistSave(s); refreshHud();
+            }
+          }
+          return false;
+        }
+        return true;
+      });
+    }
+
+    if (input.consumeInteract()) handleInteract();
+    if (input.consumeInventory()) setOverlayBoth({ type: 'menu', tab: 'inventory' });
+    input.consumeCancel();
+  }, [advanceDialog, setOverlayBoth, showDialog, catchFish, enterScene, handleInteract, refreshHud, doSleep, finishSleep, closeEndDay]);
+
+  // ---- render ------------------------------------------------------------------
+
+  const render = useCallback((t: number) => {
+    const ctx = canvasRef.current?.getContext('2d');
+    const atlas = atlasRef.current;
+    if (!ctx || !atlas) return;
+    // Integer upscale: the backing store is scale× the logical 320x192 so each
+    // game pixel maps to a whole number of device pixels (crisp on Retina).
+    ctx.setTransform(scaleRef.current, 0, 0, scaleRef.current, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+
+    const scene = sceneRef.current;
+    const cam = cameraFor(scene, posRef.current);
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+
+    // tiles
+    const size = sceneSize(scene);
+    const tx0 = Math.max(0, Math.floor(cam.x / TILE)), ty0 = Math.max(0, Math.floor(cam.y / TILE));
+    const tx1 = Math.min(size.x - 1, Math.ceil((cam.x + VIEW_PW) / TILE)), ty1 = Math.min(size.y - 1, Math.ceil((cam.y + VIEW_PH) / TILE));
+    const waterAlt = Math.floor(t * 1.6) % 2 === 1;
+    const danceAlt = Math.floor(t * 3.2) % 2 === 1;
+    for (let ty = ty0; ty <= ty1; ty++) {
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const def = scene.legend[scene.grid[ty][tx]];
+        if (!def) continue;
+        let key = def.sprite;
+        if (key === 't-water-0' && waterAlt) key = 't-water-1';
+        else if (key === 't-dance-0' && danceAlt) key = 't-dance-1';
+        else if (key === 't-portal-0' && danceAlt) key = 't-portal-1';
+        // scatter detail variants through large grass/sand fields
+        else if ((key === 't-grass' || key === 't-sand') && (tx * 7 + ty * 13) % 5 === 0) key = `${key}-v1`;
+        ctx.drawImage(atlas[key], tx * TILE - cam.x, ty * TILE - cam.y);
+      }
+    }
+
+    // soft shadows where walls meet walkable ground (cheap ambient occlusion)
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let ty = ty0; ty <= ty1; ty++) {
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const def = scene.legend[scene.grid[ty][tx]];
+        const above = ty > 0 ? scene.legend[scene.grid[ty - 1][tx]] : undefined;
+        if (def && !def.solid && above?.solid) {
+          ctx.fillRect(tx * TILE - cam.x, ty * TILE - cam.y, TILE, 4);
+        }
+      }
+    }
+
+    // painted store signs — kanji, neon blink, vertical Kabukicho banners
+    const signs = SCENE_SIGNS[scene.id];
+    if (signs) {
+      ctx.textBaseline = 'top';
+      const neonOn = Math.floor(t * 1.3) % 4 !== 0; // long on, short off
+      for (const sign of signs) {
+        const size = sign.font ?? 6;
+        ctx.font = `bold ${size}px ${sign.font ? 'sans-serif' : 'monospace'}`;
+        const sx = sign.x * TILE - cam.x, sy = sign.y * TILE - cam.y + 4;
+        const color = sign.blink && !neonOn ? 'rgba(255,255,255,0.25)' : sign.color;
+        if (sign.vertical) {
+          const chars = [...sign.text];
+          const w = size + 5, h = chars.length * (size + 1) + 4;
+          ctx.fillStyle = sign.bg ?? 'rgba(0,0,0,0.45)';
+          ctx.fillRect(sx - 2, sy - 2, w, h);
+          if (sign.border) { ctx.strokeStyle = sign.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, h - 1); }
+          ctx.fillStyle = color;
+          chars.forEach((ch, i) => ctx.fillText(ch, sx, sy + i * (size + 1)));
+        } else {
+          const w = Math.ceil(ctx.measureText(sign.text).width) + 5;
+          ctx.fillStyle = sign.bg ?? 'rgba(0,0,0,0.45)';
+          ctx.fillRect(sx - 2, sy - 2, w, size + 4);
+          if (sign.border) { ctx.strokeStyle = sign.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, size + 3); }
+          ctx.fillStyle = color;
+          ctx.fillText(sign.text, sx, sy);
+        }
+      }
+    }
+
+    // apartment furniture: whatever the player has placed, where they placed it
+    if (scene.id === 'apartment') {
+      const s = saveRef.current;
+      if (!s.placed['bed']) {
+        ctx.drawImage(atlas['f-futon'], 1 * TILE - cam.x, 1 * TILE - cam.y);
+      }
+      for (const itemId of Object.keys(s.placed)) {
+        const pos = s.placed[itemId];
+        ctx.drawImage(atlas[furnitureById(itemId).sprite], pos.x * TILE - cam.x, pos.y * TILE - cam.y);
+      }
+      if (gachaComplete(s)) {
+        ctx.drawImage(atlas['f-maneki'], MANEKI_SLOT.x * TILE - cam.x, MANEKI_SLOT.y * TILE - cam.y);
+      }
+    }
+
+    // the mines: ore nodes, crawlers, sparkle VFX
+    if (scene.id === 'mines') {
+      for (const node of oreNodesRef.current) {
+        ctx.drawImage(atlas[`ore-${node.mineral.id}`], node.x * TILE - cam.x, node.y * TILE - cam.y);
+      }
+      const cFrame = Math.floor(t * 6) % 2;
+      for (const c of crawlersRef.current) {
+        if (c.hurtT > 0 && Math.floor(t * 20) % 2 === 0) continue; // hit flicker
+        ctx.drawImage(atlas['m-shadow'], Math.round(c.x) - cam.x, Math.round(c.y) - cam.y + 2);
+        ctx.drawImage(atlas[`crawler-${cFrame}`], Math.round(c.x) - cam.x, Math.round(c.y) - cam.y);
+      }
+      for (const pr of projectilesRef.current) {
+        ctx.drawImage(atlas['m-sparkle'], Math.round(pr.x) - cam.x, Math.round(pr.y) - cam.y, 9, 9);
+      }
+    }
+    if (sparkleRef.current) {
+      ctx.drawImage(atlas['m-sparkle'], Math.round(sparkleRef.current.x) - cam.x, Math.round(sparkleRef.current.y) - cam.y + 2);
+    }
+
+    // vehicles in the world
+    {
+      const s = saveRef.current;
+      if (s.carPos && s.carPos.scene === scene.id) {
+        ctx.drawImage(atlas['v-car'], s.carPos.x * TILE - cam.x, s.carPos.y * TILE - cam.y);
+      }
+      const bob = Math.round(Math.sin(t * 1.5) * 1.5);
+      if (scene.id === 'shore' && s.vehicles.includes('boat')) {
+        ctx.drawImage(atlas['v-boat'], 2 * TILE - cam.x, 9 * TILE - cam.y + bob);
+      }
+      if (scene.id === 'island') {
+        ctx.drawImage(atlas['v-boat'], 4 * TILE - cam.x, 7 * TILE - cam.y + bob);
+      }
+      if (scene.id === 'garage') { // showroom stock
+        ctx.drawImage(atlas['v-car'], 2 * TILE - cam.x, 2 * TILE - cam.y);
+        ctx.drawImage(atlas['v-boat'], 12 * TILE - cam.x, 3 * TILE - cam.y);
+      }
+    }
+
+    // fishing bobber
+    const fm = fishModeRef.current;
+    if (fm) {
+      const bx = fm.tile.x * TILE - cam.x + 6, by = fm.tile.y * TILE - cam.y + 5 + Math.round(Math.sin(t * 4) * 1.5);
+      ctx.drawImage(atlas['m-bobber'], bx, by);
+      if (fm.phase === 'bite') ctx.drawImage(atlas['m-bang'], bx - 1, by - 9);
+    }
+
+    // entities, y-sorted
+    const ents: { y: number; draw: () => void }[] = [];
+    for (const npc of scene.npcs) {
+      ents.push({
+        y: npc.y * TILE,
+        draw: () => {
+          ctx.drawImage(atlas['m-shadow'], npc.x * TILE - cam.x, npc.y * TILE - cam.y + 2);
+          ctx.drawImage(atlas[`${npc.sprite}-${npc.dir}-0`], npc.x * TILE - cam.x, npc.y * TILE - cam.y);
+        },
+      });
+    }
+    const p = posRef.current;
+    const frame = movingRef.current ? (Math.floor(animRef.current * 7) % 2) : 0;
+    const playerKey = saveRef.current.hat ? 'player-hat' : 'player';
+    ents.push({
+      y: p.y,
+      draw: () => {
+        if (sceneRef.current.id === 'deepsea') {
+          const bob2 = Math.round(Math.sin(t * 2.2) * 1.5);
+          ctx.drawImage(atlas['v-boat'], Math.round(p.x) - cam.x - 8, Math.round(p.y) - cam.y + bob2);
+          return;
+        }
+        if (saveRef.current.driving) {
+          ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x - 8, Math.round(p.y) - cam.y + 2);
+          ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x + 8, Math.round(p.y) - cam.y + 2);
+          ctx.drawImage(atlas['v-car'], Math.round(p.x) - cam.x - 8, Math.round(p.y) - cam.y);
+          return;
+        }
+        ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y + 2);
+        ctx.drawImage(atlas[`${playerKey}-${dirRef.current}-${frame}`], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y);
+      },
+    });
+    ents.sort((a, b) => a.y - b.y).forEach(e => e.draw());
+
+    // evening falls: tint the world (interiors keep their lights on)
+    {
+      const s = saveRef.current;
+      const base = nightT(s);
+      if (base > 0) {
+        const sceneFactor = scene.outdoor ? 0.45 : (scene.id === 'nightclub' || scene.id === 'backrooms' ? 0 : 0.16);
+        const alpha = base * sceneFactor;
+        if (alpha > 0) {
+          ctx.fillStyle = `rgba(10, 16, 42, ${alpha})`;
+          ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+        }
+      }
+    }
+
+    // interact prompt
+    if (!overlayRef.current && !fm) {
+      const faced = facedTile(p, dirRef.current);
+      const feet = feetTile(p);
+      const npcT = scene.npcs.find(n => n.x === faced.x && n.y === faced.y);
+      const hit = (it: Interactable, tt: Vec) =>
+        tt.x >= it.x && tt.x < it.x + (it.w ?? 1) && tt.y >= it.y && tt.y < it.y + (it.h ?? 1);
+      const it = scene.interactables.find(i => hit(i, faced) || hit(i, feet));
+      let label = npcT ? 'Talk' : it?.label;
+      const sv = saveRef.current;
+      if (sv.driving) label = 'Park here';
+      else if (sv.carPos && sv.carPos.scene === scene.id) {
+        const onCar = (tt: Vec) => tt.y === sv.carPos!.y && (tt.x === sv.carPos!.x || tt.x === sv.carPos!.x + 1);
+        if (onCar(faced) || onCar(feet)) label = 'Drive';
+      }
+      if (it?.id === 'boat' && !sv.vehicles.includes('boat')) label = 'Fish';
+      if (scene.id === 'mines' && sv.wand && !label) label = 'Sparkle!';
+      if (!sv.canFish && (label === 'Fish' || label === 'Drop a line')) label = 'Fish? (ask Genji)';
+      if (scene.id === 'deepsea' && !label) label = (feet.y >= 10 || faced.y >= 11) ? 'Sail south to go home' : 'Drop a line';
+      // the freezer keeps its secret until you've been through once
+      if (it?.id === 'portal' && !saveRef.current.storySeen.includes('backrooms-intro')) label = npcT ? 'Talk' : undefined;
+      if (scene.id === 'mines') {
+        const node = oreNodesRef.current.find(n => n.x === faced.x && n.y === faced.y);
+        if (node) label = `Mine ${node.mineral.name}`;
+        else {
+          const cr = crawlersRef.current.find(c => {
+            const ct = feetTile({ x: c.x, y: c.y });
+            return ct.x === faced.x && ct.y === faced.y;
+          });
+          if (cr) label = saveRef.current.wand ? 'Sparkle!' : 'Shoo...?';
+        }
+      }
+      if (scene.id === 'apartment') {
+        const s = saveRef.current;
+        const bed = s.placed['bed'];
+        const r = bed ? { x: bed.x, y: bed.y, w: 2, h: 1 } : { x: 1, y: 1, w: 2, h: 1 };
+        const inRect = (tt: Vec) => tt.x >= r.x && tt.x < r.x + r.w && tt.y >= r.y && tt.y < r.y + r.h;
+        if (inRect(faced) || inRect(feet)) label = 'Sleep';
+      }
+      if (label) {
+        ctx.font = 'bold 6px monospace';
+        const text = `[E] ${label}`;
+        const w = text.length * 4 + 4;
+        const lx = Math.min(VIEW_PW - w - 2, Math.max(2, Math.round(p.x) - cam.x + 8 - w / 2));
+        const ly = Math.max(2, Math.round(p.y) - cam.y - 10);
+        ctx.fillStyle = 'rgba(10,10,12,0.8)';
+        ctx.fillRect(lx, ly, w, 9);
+        ctx.fillStyle = '#ffd24a';
+        ctx.fillText(text, lx + 2, ly + 2);
+      }
+    }
+
+    // fishing reel UI
+    if (fm && fm.phase === 'reel') {
+      const barX = VIEW_PW - 26, barY = 12, barH = VIEW_PH - 36, barW = 8;
+      ctx.fillStyle = 'rgba(10,10,12,0.85)';
+      ctx.fillRect(barX - 14, barY - 6, 36, barH + 22);
+      ctx.fillStyle = '#1d2430';
+      ctx.fillRect(barX, barY, barW, barH);
+      // catch zone (zonePos is the bottom edge in 0..1, bar is drawn top-down)
+      const zoneTopPx = barY + (1 - (fm.st.zonePos + ZONE_H)) * barH;
+      ctx.fillStyle = '#3da26b';
+      ctx.fillRect(barX, zoneTopPx, barW, ZONE_H * barH);
+      // fish marker
+      const fy = barY + (1 - fm.st.fishPos) * barH - 3;
+      ctx.drawImage(atlas[fm.st.fish.sprite], barX - 12, fy, 12, 6);
+      // progress
+      const progH = Math.round(fm.st.progress * barH);
+      ctx.fillStyle = '#2a3340';
+      ctx.fillRect(barX + barW + 3, barY, 4, barH);
+      ctx.fillStyle = fm.st.progress > 0.6 ? '#ffd24a' : '#c97a4a';
+      ctx.fillRect(barX + barW + 3, barY + (barH - progH), 4, progH);
+      ctx.font = 'bold 6px monospace';
+      ctx.fillStyle = '#e8e0d0';
+      ctx.fillText('HOLD E', barX - 12, barY + barH + 9);
+    } else if (fm) {
+      ctx.font = 'bold 6px monospace';
+      ctx.fillStyle = 'rgba(10,10,12,0.8)';
+      const msg = fm.phase === 'wait' ? 'waiting for a bite...' : 'BITE! PRESS E!';
+      ctx.fillRect(VIEW_PW / 2 - msg.length * 2 - 3, 8, msg.length * 4 + 6, 10);
+      ctx.fillStyle = fm.phase === 'bite' ? '#ffd24a' : '#9fc4e8';
+      ctx.fillText(msg, VIEW_PW / 2 - msg.length * 2, 10);
+    }
+  }, []);
+
+  // ---- lifecycle --------------------------------------------------------------
+
+  const begin = useCallback((fresh: boolean) => {
+    const s = fresh ? newSave() : (loadSave() ?? newSave());
+    saveRef.current = s;
+    sceneRef.current = SCENES[s.scene] ?? SCENES.apartment;
+    posRef.current = { x: s.px, y: s.py };
+    dirRef.current = s.dir;
+    pendingBeatsRef.current = [];
+    fishModeRef.current = null;
+    setOverlayBoth(null);
+    if (!s.visited.includes(s.scene)) s.visited.push(s.scene);
+    if (s.scene === 'mines') {
+      oreNodesRef.current = oreNodesFor(s, ORE_SPOTS);
+      crawlersRef.current = CRAWLER_SPAWNS.map(c => ({
+        x: c.x * TILE, y: c.y * TILE - 4, hp: 2, stepT: Math.random(), hurtT: 0, dir: 'down' as Dir,
+      }));
+    } else {
+      crawlersRef.current = [];
+    }
+    computeSolids();
+    checkStory(); // queues the day-one journal entry on a fresh save
+    persistSave(s);
+    refreshHud();
+    setScreen('playing');
+    // Start music here — the New Game / Continue click is the user gesture
+    // browsers require before audio can play.
+    playMusicFor(s.scene);
+  }, [computeSolids, checkStory, refreshHud, setOverlayBoth, playMusicFor]);
+
+  // Title → game with a cover transition (the "game has started" moment).
+  const startGame = useCallback((fresh: boolean) => {
+    sfxGameStart();
+    setManageOpen(false);
+    runTransition('start', () => begin(fresh), 600, 1400);
+  }, [begin, runTransition]);
+
+  const toggleMusic = useCallback(() => {
+    setMusicMuted(prev => {
+      const next = !prev;
+      try { localStorage.setItem(MUSIC_MUTE_KEY, next ? '1' : '0'); } catch { /* private mode */ }
+      tracksRef.current.forEach(a => { a.muted = next; });
+      return next;
+    });
+  }, []);
+
+  // Wipe the save from the management panel (guarded by a confirm step).
+  const wipeSave = useCallback(() => {
+    clearSave();
+    setConfirmMode(null);
+    setManageOpen(false);
+    setSaveTick(t => t + 1);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    // iOS can't fullscreen an element — show the home-screen guide instead.
+    if (!fsSupported) { setFsGuideOpen(true); return; }
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      rootRef.current?.requestFullscreen().catch(() => {});
+    }
+  }, [fsSupported]);
+
+  // One tap: go fullscreen, then try to lock landscape (Android Chrome only).
+  const goFullscreenLandscape = useCallback(async () => {
+    if (!fsSupported) { setFsGuideOpen(true); return; }
+    try { if (!document.fullscreenElement) await rootRef.current?.requestFullscreen(); } catch { /* denied */ }
+    try {
+      const orient = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void> } }).orientation;
+      await orient?.lock?.('landscape');
+    } catch { /* lock unsupported / not allowed */ }
+  }, [fsSupported]);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  // Track portrait/landscape so we can nudge phone players to rotate.
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait)');
+    const onChange = () => setIsPortrait(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // Stop all music when the game unmounts (navigating away from the page)
+  useEffect(() => () => {
+    fadeTimersRef.current.forEach(id => window.clearInterval(id));
+    fadeTimersRef.current.clear();
+    tracksRef.current.forEach(a => a.pause());
+    tracksRef.current.clear();
+    currentTrackRef.current = null;
+    transTimers.current.forEach(id => window.clearTimeout(id));
+    transTimers.current = [];
+  }, []);
+
+  // Title-screen theme. Autoplay is usually blocked until a user gesture, so
+  // try immediately and also arm a one-shot listener for the first input.
+  useEffect(() => {
+    if (screen !== 'title') return;
+    playMusicFor('title');
+    const kick = () => playMusicFor('title');
+    window.addEventListener('pointerdown', kick, { once: true });
+    window.addEventListener('keydown', kick, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', kick);
+      window.removeEventListener('keydown', kick);
+    };
+  }, [screen, playMusicFor]);
+
+  // The saved game (or null), re-read whenever a new game starts or it's wiped.
+  const saved = useMemo(() => loadSave(), [saveTick]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fit the canvas to the frame at an integer device-pixel scale. Fractional
+  // scales blur the art on Retina displays even with image-rendering: pixelated.
+  useEffect(() => {
+    const fit = () => {
+      const canvas = canvasRef.current, frame = frameRef.current;
+      if (!canvas || !frame) return;
+      const dpr = window.devicePixelRatio || 1;
+      const scale = Math.max(1, Math.floor(Math.min(
+        (frame.clientWidth * dpr) / VIEW_PW,
+        (frame.clientHeight * dpr) / VIEW_PH,
+      )));
+      if (canvas.width !== VIEW_PW * scale) {
+        canvas.width = VIEW_PW * scale;
+        canvas.height = VIEW_PH * scale;
+      }
+      canvas.style.width = `${(VIEW_PW * scale) / dpr}px`;
+      canvas.style.height = `${(VIEW_PH * scale) / dpr}px`;
+      scaleRef.current = scale;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    if (frameRef.current) ro.observe(frameRef.current);
+    window.addEventListener('resize', fit); // catches devicePixelRatio changes too
+    return () => { ro.disconnect(); window.removeEventListener('resize', fit); };
+  }, []);
+
+  useEffect(() => {
+    if (screen !== 'playing') return;
+    if (!atlasRef.current) atlasRef.current = buildAtlas();
+    const input = inputRef.current;
+    window.addEventListener('keydown', input.onKeyDown);
+    window.addEventListener('keyup', input.onKeyUp);
+    const stop = startLoop(update, render);
+    return () => {
+      stop();
+      window.removeEventListener('keydown', input.onKeyDown);
+      window.removeEventListener('keyup', input.onKeyUp);
+      input.clear();
+      if (sleepTimerRef.current) window.clearTimeout(sleepTimerRef.current);
+      // persist the latest position on the way out
+      const s = saveRef.current;
+      s.px = posRef.current.x; s.py = posRef.current.y; s.dir = dirRef.current; s.scene = sceneRef.current.id;
+      persistSave(s);
+    };
+  }, [screen, update, render]);
+
+  // ---- shop actions ---------------------------------------------------------
+
+  const buyAtPrice = (itemId: string, price: number) => {
+    const s = saveRef.current;
+    if (!buyFurniture(s, itemId, price)) return;
+    sfxBuy();
+    computeSolids();
+    checkStory();
+    persistSave(s);
+    refreshHud();
+    setShopTick(v => v + 1);
+  };
+
+  const buyVehicle = (vehicleId: string) => {
+    const s = saveRef.current;
+    const v = vehicleById(vehicleId);
+    if (s.vehicles.includes(vehicleId) || s.money < v.price) return;
+    s.money -= v.price;
+    s.vehicles.push(vehicleId);
+    if (vehicleId === 'car') s.carPos = { scene: 'badtown', x: 17, y: 3 };
+    sfxBuy();
+    award(vehicleId === 'car' ? 'wheels' : 'captain');
+    computeSolids();
+    persistSave(s);
+    refreshHud();
+    setShopTick(v2 => v2 + 1);
+    setOverlayBoth(null);
+    showDialog(
+      vehicleId === 'car'
+        ? ['Kojima slides the keys across the counter. "Treat her right."', 'She is parked out front. Walk up, press E, and drive. Press E again anywhere outdoors to park.']
+        : ['"She is moored down at the shore," Kojima says. "Deep water, and if you trust the hull — there is an island out there."'],
+      'Kojima',
+    );
+  };
+
+  const towCar = () => {
+    const s = saveRef.current;
+    if (!s.vehicles.includes('car') || s.money < 500) return;
+    s.money -= 500;
+    s.carPos = { scene: 'badtown', x: 17, y: 3 };
+    s.driving = false;
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+    setOverlayBoth(null);
+    showDialog(['Kojima makes one phone call, in a dialect of grunts.', 'Twenty minutes later the kei car is parked out front, looking sheepish. "Stop losing her," he does not say, loudly.'], 'Kojima');
+  };
+
+  const buySketchyDeal = (itemId: string, price: number) => {
+    const s = saveRef.current;
+    if (s.sketchyDay === s.day || s.money < price || s.owned.includes(itemId)) return;
+    s.money -= price;
+    s.sketchyDay = s.day;
+    const broke = Math.random() < SKETCHY_BREAK_CHANCE;
+    if (!broke) {
+      s.owned.push(itemId);
+      sfxBuy();
+      award('bargain');
+      computeSolids();
+      checkStory();
+    } else {
+      sfxMiss();
+      award('scammed');
+    }
+    persistSave(s);
+    refreshHud();
+    setShopTick(v => v + 1);
+    setOverlayBoth(null);
+    const name = furnitureById(itemId).name;
+    showDialog(
+      broke
+        ? [`Halfway home, the ${name} makes a sound furniture should not make.`, 'By your door it is mostly tape and regret. It was never real. Jimmy is, somehow, already gone.', `(−¥${price.toLocaleString()}, nothing gained. The street always wins eventually.)`]
+        : [`Against all odds, the ${name} survives the trip home. It is real. It works.`, `Jimmy's voice echoes: "TOLD you. Quality. Tell your friends. Don't tell the cops."`],
+    );
+  };
+
+  const buyWand = () => {
+    const s = saveRef.current;
+    if (s.wand || s.money < WAND_PRICE) return;
+    s.money -= WAND_PRICE;
+    s.wand = true;
+    sfxBuy();
+    award('wand');
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const craftRare = (itemId: string) => {
+    const s = saveRef.current;
+    const recipe = CRAFT_RECIPES[itemId];
+    if (!recipe || s.rares.includes(itemId)) return;
+    if (!Object.entries(recipe).every(([m, n]) => (s.minerals[m] ?? 0) >= n)) return;
+    for (const [m, n] of Object.entries(recipe)) s.minerals[m] -= n;
+    s.rares.push(itemId);
+    s.today.newFurniture.push(itemId);
+    sfxBuy();
+    award('crafted');
+    award('rare-one');
+    computeSolids();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const sellMinerals = () => {
+    const s = saveRef.current;
+    const total = MINERALS.reduce((sum, m) => sum + (s.minerals[m.id] ?? 0) * m.value, 0);
+    if (total === 0) return;
+    s.money += total;
+    s.minerals = {};
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const buyTikiDrink = () => {
+    const s = saveRef.current;
+    if (s.money < 800 || s.energy >= maxEnergy(s)) return;
+    s.money -= 800;
+    s.energy = Math.min(maxEnergy(s), s.energy + 25);
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const sellCoconuts = () => {
+    const s = saveRef.current;
+    if (s.coconuts === 0) return;
+    s.money += s.coconuts * 120;
+    s.coconuts = 0;
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const requestTrack = (sceneId: string) => {
+    djPickRef.current = sceneId === 'nightclub' ? null : sceneId;
+    playMusicFor('nightclub');
+    sfxCoin();
+    setShopTick(v => v + 1);
+  };
+
+  const buyHat = () => {
+    const s = saveRef.current;
+    if (s.hat || s.money < 6700) return;
+    s.money -= 6700;
+    s.hat = true;
+    sfxBuy();
+    award('hat');
+    persistSave(s);
+    refreshHud();
+    setShopTick(v => v + 1);
+    setOverlayBoth(null);
+    showDialog(
+      ['"Sixty-seven dollars," Tex says, accepting your yen without counting it.', 'The hat settles onto your head like it was always meant to be there. Yee-haw, quietly.'],
+      'Tex',
+    );
+  };
+
+  const buyFood = (foodId: string) => {
+    const s = saveRef.current;
+    const food = KONBINI_FOOD.find(f => f.id === foodId)!;
+    if (s.money < food.price || s.energy >= maxEnergy(s)) return;
+    s.money -= food.price;
+    s.energy = Math.min(maxEnergy(s), s.energy + food.energy);
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const sellAllFish = () => {
+    const s = saveRef.current;
+    if (s.fishInv.length === 0) return;
+    const total = s.fishInv.reduce((sum, id) => sum + fishById(id).value, 0);
+    s.money += total;
+    s.fishInv = [];
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const workShift = () => {
+    const s = saveRef.current;
+    const cost = energyCost(s, SHIFT_COST);
+    if (s.shiftDay === s.day || s.energy < cost) return;
+    s.energy -= cost;
+    s.money += SHIFT_PAY;
+    s.shiftDay = s.day;
+    s.shiftsWorked += 1;
+    s.today.shifts += 1;
+    if (s.shiftsWorked >= 5) award('shift-5');
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+    setOverlayBoth(null);
+    showDialog([`You stock shelves and work the register for a few hours. (+¥${SHIFT_PAY})`]);
+  };
+
+  const finishEnding = () => {
+    const s = saveRef.current;
+    s.ended = true;
+    persistSave(s);
+    award('furnished');
+    refreshHud();
+    setOverlayBoth(null);
+  };
+
+  // ---- menu (inventory + achievements + cheats) ----------------------------------
+
+  const [placingItem, setPlacingItem] = useState<string | null>(null);
+  const [cheatInput, setCheatInput] = useState('');
+  const [cheatMsg, setCheatMsg] = useState('');
+
+  // Save and bail back to the title screen mid-game.
+  const quitToMenu = useCallback(() => {
+    persistSave(saveRef.current);
+    setPlacingItem(null);
+    setOverlayBoth(null);
+    fishModeRef.current = null;
+    setSaveTick(t => t + 1); // refresh the title's save summary
+    setScreen('title');      // the title effect handles swapping music
+  }, [setOverlayBoth]);
+
+  const applyCheat = () => {
+    const s = saveRef.current;
+    const code = cheatInput.trim().toLowerCase();
+    setCheatInput('');
+    switch (code) {
+      case 'motherlode':
+        s.money += 50000;
+        sfxCoin();
+        setCheatMsg('+¥50,000. The economy quietly weeps.');
+        break;
+      case 'redbull':
+        s.energy = maxEnergy(s);
+        setCheatMsg('Energy refilled. Wings not included.');
+        break;
+      case 'midnight':
+        s.timeMin = 25 * 60 + 30;
+        setCheatMsg('1:30 AM. Tick tock.');
+        break;
+      case 'country roads': {
+        // Take me home — to the apartment, right by the futon.
+        if (s.driving) { s.carPos = { scene: 'badtown', x: 17, y: 3 }; s.driving = false; }
+        sceneRef.current = SCENES.apartment;
+        posRef.current = { x: 2 * TILE, y: 2 * TILE - 4 };
+        dirRef.current = 'down';
+        s.scene = 'apartment';
+        oreNodesRef.current = []; crawlersRef.current = []; projectilesRef.current = [];
+        computeSolids();
+        playMusicFor('apartment');
+        setOverlayBoth(null);
+        setCheatMsg('Take me home. Almost heaven.');
+        persistSave(s); refreshHud();
+        return;
+      }
+      case 'rocks':
+        for (const m of MINERALS) s.minerals[m.id] = (s.minerals[m.id] ?? 0) + 10;
+        setCheatMsg('+10 of every mineral. The Manager raises whatever it has instead of eyebrows.');
+        break;
+      case 'gimmegimme':
+        for (const f of FURNITURE) if (!s.owned.includes(f.id)) s.owned.push(f.id);
+        setCheatMsg('All base furniture delivered to your boxes. Place it yourself, slacker.');
+        break;
+      default:
+        setCheatMsg(code ? `"${code}"? Never heard of it.` : '');
+        return;
+    }
+    persistSave(s);
+    refreshHud();
+    setShopTick(v => v + 1);
+  };
+
+  const doPlace = (itemId: string, x: number, y: number) => {
+    const s = saveRef.current;
+    placeItem(s, itemId, x, y);
+    sfxBuy();
+    computeSolids();
+    persistSave(s);
+    refreshHud(); // max energy / effects may change
+    setPlacingItem(null);
+    setShopTick(v => v + 1);
+  };
+
+  const doPutAway = (itemId: string) => {
+    const s = saveRef.current;
+    unplaceItem(s, itemId);
+    computeSolids();
+    persistSave(s);
+    refreshHud();
+    setShopTick(v => v + 1);
+  };
+
+  const renderMenu = (ov: Extract<Overlay, { type: 'menu' }>) => {
+    void shopTick;
+    const s = saveRef.current;
+    const atHome = sceneRef.current.id === 'apartment';
+    const allItems = [...s.owned, ...s.rares];
+    const boxed = allItems.filter(id => !s.placed[id]);
+    const placed = allItems.filter(id => Boolean(s.placed[id]));
+    const tabBtn = (tab: 'inventory' | 'achievements' | 'cheats', label: string) => (
+      <button
+        className={`px-3 py-1 text-lg border-b-2 ${ov.tab === tab ? 'text-[#ffd24a] border-[#ffd24a]' : 'opacity-50 border-transparent hover:opacity-80'}`}
+        onClick={() => { setPlacingItem(null); setOverlayBoth({ type: 'menu', tab }); }}
+      >
+        {label}
+      </button>
+    );
+
+    return (
+      <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-4 py-3`}>
+        <div className="flex items-center gap-2 border-b-2 border-[#ffd24a]/40 mb-2">
+          {tabBtn('inventory', 'INVENTORY')}
+          {tabBtn('achievements', `ACHIEVEMENTS ${s.gameAch.length}/${GAME_ACHIEVEMENTS.length}`)}
+          {tabBtn('cheats', '???')}
+          <span className="ml-auto font-pixel text-sm bg-[#9fc4e8]/20 text-[#9fc4e8] border border-[#9fc4e8]/50 px-2 py-0.5 animate-pulse">⏸ PAUSED</span>
+          <button className={`${btnCls} text-sm px-2 py-0.5 mb-1`} onClick={() => { setPlacingItem(null); setOverlayBoth(null); }}>ESC ✕</button>
+        </div>
+
+        <div className="flex justify-end mb-1">
+          <button
+            className="font-pixel text-sm border border-[#9fc4e8]/60 text-[#9fc4e8] px-3 py-1 hover:bg-[#9fc4e8] hover:text-black transition-colors"
+            onClick={quitToMenu}
+          >
+            💾 SAVE &amp; QUIT TO MENU
+          </button>
+        </div>
+
+        {ov.tab === 'inventory' && (
+          <>
+            <p className="text-base text-[#ffd24a]/80">FURNITURE — IN BOXES ({boxed.length})</p>
+            {boxed.length === 0 && <p className="py-1 text-lg opacity-50">Nothing boxed up.</p>}
+            {boxed.map(id => {
+              const f = furnitureById(id);
+              const spots = freeSpotsFor(s, id);
+              return (
+                <div key={id} className="py-1.5 border-b border-white/10">
+                  <div className="flex items-center gap-3">
+                    <p className="flex-grow text-xl">{f.name}</p>
+                    {atHome
+                      ? <button className={btnCls} disabled={spots.length === 0} onClick={() => setPlacingItem(placingItem === id ? null : id)}>
+                          {placingItem === id ? 'CANCEL' : 'PLACE'}
+                        </button>
+                      : <span className="text-sm opacity-50">place at home</span>}
+                  </div>
+                  {placingItem === id && atHome && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {spots.map(spot => (
+                        <button key={`${spot.x},${spot.y}`} className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doPlace(id, spot.x, spot.y)}>
+                          {spot.label}
+                        </button>
+                      ))}
+                      {spots.length === 0 && <p className="text-sm opacity-50">No free spot fits it — put something away first.</p>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <p className="text-base text-[#ffd24a]/80 mt-3">FURNITURE — PLACED ({placed.length})</p>
+            {placed.length === 0 && <p className="py-1 text-lg opacity-50">The apartment is bare.</p>}
+            {placed.map(id => (
+              <div key={id} className="flex items-center gap-3 py-1 border-b border-white/10">
+                <p className="flex-grow text-lg">{furnitureById(id).name} <span className="text-sm opacity-50">— {spotLabelAt(s.placed[id].x, s.placed[id].y)}</span></p>
+                {atHome && <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doPutAway(id)}>PUT AWAY</button>}
+              </div>
+            ))}
+
+            <p className="text-base text-[#ffd24a]/80 mt-3">FISH BAG ({s.fishInv.length})</p>
+            {s.fishInv.length === 0
+              ? <p className="py-1 text-lg opacity-50">Empty. The shore is west of Kawamachi St.</p>
+              : (() => {
+                  const counts: Record<string, number> = {};
+                  for (const id of s.fishInv) counts[id] = (counts[id] || 0) + 1;
+                  return Object.entries(counts).map(([id, n]) => (
+                    <p key={id} className="text-lg py-0.5 opacity-80">{fishById(id).name} ×{n} <span className="opacity-50">(¥{fishById(id).value} ea — sell at the konbini)</span></p>
+                  ));
+                })()}
+
+            {(s.peepis > 0 || s.coconuts > 0) && (
+              <>
+                <p className="text-base text-[#ffd24a]/80 mt-3">POCKET</p>
+                {s.coconuts > 0 && (
+                  <div className="flex items-center gap-3 py-1">
+                    <p className="flex-grow text-lg opacity-80">Coconut ×{s.coconuts} <span className="opacity-50">(+15 energy, or sell at the tiki bar)</span></p>
+                    <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={eatCoconut}>EAT</button>
+                  </div>
+                )}
+                {s.peepis > 0 && (
+                  <div className="flex items-center gap-3 py-1">
+                    <p className="flex-grow text-lg opacity-80">"Diet Doctor Peepis" ×{s.peepis} <span className="opacity-50">(+12 energy)</span></p>
+                    <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={drinkPeepis}>DRINK</button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {ov.tab === 'cheats' && (
+          <div className="py-2">
+            <p className="text-lg opacity-70 mb-2">Whisper a word to the void. (For testing. The void doesn't judge. Much.)</p>
+            <div className="flex gap-2">
+              <input
+                value={cheatInput}
+                onChange={e => setCheatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') applyCheat(); e.stopPropagation(); }}
+                className="flex-grow bg-black/60 border border-[#ffd24a]/40 px-2 py-1 text-lg text-[#e8e0d0] outline-none focus:border-[#ffd24a]"
+                placeholder="enter code…"
+                autoFocus
+              />
+              <button className={btnCls} onClick={applyCheat}>APPLY</button>
+            </div>
+            {cheatMsg && <p className="text-base text-[#7ce8a0] mt-2">{cheatMsg}</p>}
+          </div>
+        )}
+
+        {ov.tab === 'achievements' && GAME_ACHIEVEMENTS.map(a => {
+          const got = s.gameAch.includes(a.id);
+          return (
+            <div key={a.id} className={`py-1.5 border-b border-white/10 ${got ? '' : 'opacity-50'}`}>
+              <p className="text-lg leading-tight">{got ? '🏆' : '🔒'} {got ? a.title : '???'}</p>
+              <p className="text-sm opacity-70 leading-tight">{got ? a.desc : a.hint}</p>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ---- UI pieces --------------------------------------------------------------
+
+  const panelCls = 'bg-[#16181d] border-2 border-[#ffd24a]/60 text-[#e8e0d0] font-pixel shadow-[4px_4px_0px_#000]';
+  const btnCls = 'border border-[#ffd24a]/60 px-3 py-1 text-[#ffd24a] hover:bg-[#ffd24a] hover:text-black transition-colors disabled:opacity-30 disabled:pointer-events-none text-lg';
+
+  const renderShop = (ov: Extract<Overlay, { type: 'shop' }>) => {
+    void shopTick;
+    const s = saveRef.current;
+    const close = () => setOverlayBoth(null);
+
+    if (ov.shop === 'denden') {
+      return (
+        <ShopFrame title="DOKI DOKI DISCOUNT" subtitle="Your heart goes doki doki, our prices go down down!!" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {FURNITURE.map(f => {
+            const owned = s.owned.includes(f.id);
+            return (
+              <div key={f.id} className="flex items-center gap-3 py-1.5 border-b border-white/10">
+                <div className="flex-grow min-w-0">
+                  <p className="text-xl leading-tight">{f.name}</p>
+                  <p className="text-sm opacity-60 leading-tight">{f.blurb}</p>
+                </div>
+                {owned
+                  ? <span className="text-[#3da26b] text-base shrink-0">OWNED</span>
+                  : <button className={`${btnCls} shrink-0`} disabled={s.money < f.price} onClick={() => buyAtPrice(f.id, f.price)}>¥{f.price.toLocaleString()}</button>}
+              </div>
+            );
+          })}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'pawn') {
+      const offers = pawnStockFor(s).filter(o => !s.owned.includes(o.itemId));
+      return (
+        <ShopFrame title="KAWAMACHI PAWN" subtitle={`Day ${s.day} stock — different every morning`} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {offers.length === 0 && <p className="py-4 text-lg opacity-60">Nothing left today that you need. Come back tomorrow.</p>}
+          {offers.map(o => {
+            const f = furnitureById(o.itemId);
+            return (
+              <div key={o.itemId} className="flex items-center gap-3 py-1.5 border-b border-white/10">
+                <div className="flex-grow min-w-0">
+                  <p className="text-xl leading-tight">{f.name} <span className="text-sm opacity-50">(used)</span></p>
+                  <p className="text-sm opacity-60 leading-tight">{f.blurb}</p>
+                </div>
+                <span className="text-sm opacity-40 line-through shrink-0">¥{f.price.toLocaleString()}</span>
+                <button className={`${btnCls} shrink-0`} disabled={s.money < o.price} onClick={() => buyAtPrice(o.itemId, o.price)}>¥{o.price.toLocaleString()}</button>
+              </div>
+            );
+          })}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'garage') {
+      return (
+        <ShopFrame title="KOJIMA MOTORS" subtitle={'"Car runs, boat floats. That is the whole pitch."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {VEHICLES.map(v => {
+            const owned = s.vehicles.includes(v.id);
+            return (
+              <div key={v.id} className="flex items-center gap-3 py-1.5 border-b border-white/10">
+                <div className="flex-grow min-w-0">
+                  <p className="text-xl leading-tight">{v.name}</p>
+                  <p className="text-sm opacity-60 leading-tight">{v.blurb}</p>
+                </div>
+                {owned
+                  ? <span className="text-[#3da26b] text-base shrink-0">YOURS</span>
+                  : <button className={`${btnCls} shrink-0`} disabled={s.money < v.price} onClick={() => buyVehicle(v.id)}>¥{v.price.toLocaleString()}</button>}
+              </div>
+            );
+          })}
+          {s.vehicles.includes('car') && (
+            <div className="flex items-center gap-3 py-1.5">
+              <p className="flex-grow text-lg opacity-80">Lost the car? Kojima will tow it back out front.</p>
+              <button className={btnCls} disabled={s.money < 500} onClick={towCar}>TOW ¥500</button>
+            </div>
+          )}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'monster') {
+      if (!s.monsterFed) {
+        return (
+          <ShopFrame title="THE MANAGER" subtitle={'"A customer! How wonderful. How rare. How... hm."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+            <p className="py-2 text-lg leading-snug opacity-90">
+              "Forgive me — I would show you the inventory, truly, but I am simply <span className="text-[#b06ad0]">parched</span>.
+              Absolutely parched. Centuries of dust in the throat."
+            </p>
+            <p className="py-1 text-lg leading-snug opacity-90">
+              "And before you offer — I am on a <span className="text-[#b06ad0]">diet</span>. Doctor's orders. It must be the diet kind.
+              You would not believe my doctor."
+            </p>
+            {s.peepis > 0
+              ? <button className={`${btnCls} mt-2`} onClick={feedMonster}>OFFER A COLD "DIET DOCTOR PEEPIS" (×{s.peepis})</button>
+              : <p className="text-sm opacity-50 mt-2">You have nothing cold, diet, or doctor-adjacent on you.</p>}
+          </ShopFrame>
+        );
+      }
+      const mineralCount = (id: string) => s.minerals[id] ?? 0;
+      const canCraft = (itemId: string) =>
+        Object.entries(CRAFT_RECIPES[itemId] ?? {}).every(([m, n]) => mineralCount(m) >= (n as number));
+      const recipeText = (itemId: string) =>
+        Object.entries(CRAFT_RECIPES[itemId] ?? {}).map(([m, n]) => `${n}× ${mineralById(m).name}`).join(' + ');
+      const sellableTotal = MINERALS.reduce((sum, m) => sum + mineralCount(m.id) * m.value, 0);
+      return (
+        <ShopFrame title="THE MANAGER" subtitle={'"Ahh. Crisp. Legally distinct. You are my favorite customer in nine hundred years."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {!s.wand && (
+            <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+              <div className="flex-grow min-w-0">
+                <p className="text-xl leading-tight">Magical Girl Wand ✨</p>
+                <p className="text-sm opacity-60 leading-tight">"For the crawlers downstairs. Point the sparkly end away from yourself."</p>
+              </div>
+              <button className={`${btnCls} shrink-0`} disabled={s.money < WAND_PRICE} onClick={buyWand}>¥{WAND_PRICE.toLocaleString()}</button>
+            </div>
+          )}
+          <p className="text-base text-[#b06ad0]/80 mt-1">FURNITURE — "Money? Quaint. Down here we work in minerals."</p>
+          {RARE_FURNITURE.map(f => {
+            const owned = s.rares.includes(f.id);
+            return (
+              <div key={f.id} className="py-1.5 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="flex-grow min-w-0">
+                    <p className="text-xl leading-tight">{f.name}</p>
+                    <p className="text-sm opacity-60 leading-tight">{f.blurb}</p>
+                    {!owned && <p className="text-sm text-[#b06ad0]/70 leading-tight mt-0.5">needs: {recipeText(f.id)}</p>}
+                  </div>
+                  {owned
+                    ? <span className="text-[#b06ad0] text-base shrink-0">ACQUIRED</span>
+                    : <button className={`${btnCls} shrink-0`} disabled={!canCraft(f.id)} onClick={() => craftRare(f.id)}>CRAFT</button>}
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-base text-[#b06ad0]/80 mt-2">MINERALS — "I buy. I do not ask where from. I know where from."</p>
+          {MINERALS.map(m => (
+            <p key={m.id} className="text-lg py-0.5 opacity-80">{m.name} ×{mineralCount(m.id)} <span className="opacity-50">(¥{m.value} ea)</span></p>
+          ))}
+          <button className={`${btnCls} mt-1`} disabled={sellableTotal === 0} onClick={sellMinerals}>SELL ALL — ¥{sellableTotal.toLocaleString()}</button>
+          <p className="text-sm opacity-50 mt-2">It bows politely as you browse. Its shadow does not.</p>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'dj') {
+      const options = DJ_SETLIST.filter(t => t.scene === 'nightclub' || s.visited.includes(t.scene));
+      const locked = DJ_SETLIST.length - options.length;
+      return (
+        <ShopFrame title="DJ TANUKI" subtitle={'"Requests?! ...Fine. But ONLY places you have actually been. Authenticity matters."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {options.map(t => (
+            <div key={t.scene} className="flex items-center gap-3 py-1 border-b border-white/10">
+              <p className="flex-grow text-lg">{t.label}</p>
+              <button
+                className={`${btnCls} text-sm px-2 py-0.5`}
+                disabled={(djPickRef.current ?? 'nightclub') === t.scene}
+                onClick={() => requestTrack(t.scene)}
+              >
+                {(djPickRef.current ?? 'nightclub') === t.scene ? 'SPINNING' : 'PLAY'}
+              </button>
+            </div>
+          ))}
+          {locked > 0 && <p className="text-sm opacity-50 mt-2">{locked} more in the crate — go see more of the city first.</p>}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'sketchy') {
+      const offer = sketchyOfferFor(s);
+      const doneToday = s.sketchyDay === s.day;
+      return (
+        <ShopFrame title="JIMMY'S 'WAREHOUSE'" subtitle={'"Fell off a truck. The truck is fine. Don\'t worry about the truck."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {!offer && <p className="py-3 text-lg opacity-60">"You bought EVERYTHING? Respect. Come back when you own less."</p>}
+          {offer && doneToday && <p className="py-3 text-lg opacity-60">"One deal a day, friend. Scarcity. It's economics. Look it up."</p>}
+          {offer && !doneToday && (() => {
+            const f = furnitureById(offer.itemId);
+            return (
+              <div className="flex items-center gap-3 py-1.5">
+                <div className="flex-grow min-w-0">
+                  <p className="text-xl leading-tight">{f.name} <span className="text-sm opacity-50">("new")</span></p>
+                  <p className="text-sm opacity-60 leading-tight">"Genuine. Probably. No refunds. DEFINITELY no refunds."</p>
+                </div>
+                <span className="text-sm opacity-40 line-through shrink-0">¥{f.price.toLocaleString()}</span>
+                <button className={`${btnCls} shrink-0`} disabled={s.money < offer.price} onClick={() => buySketchyDeal(offer.itemId, offer.price)}>¥{offer.price.toLocaleString()}</button>
+              </div>
+            );
+          })()}
+          <p className="text-sm text-[#e89a7c]/80 mt-2">⚠ Half the time Jimmy's stuff doesn't survive the walk home. The discount knows why.</p>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'boat') {
+      return (
+        <ShopFrame title="THE SKIFF" subtitle="She creaks in a way Kojima swears is normal" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <div className="flex flex-col gap-2 py-1">
+            <button className={btnCls} onClick={() => { setOverlayBoth(null); enterScene('deepsea', 9, 9, 'up'); showDialog(['The motor coughs twice, then commits. Sumikawa Bay opens up around you.', 'Sail anywhere. Press E to drop a line. The way home is the gap in the south swell.']); }}>HEAD OUT INTO THE BAY 🌊</button>
+            <button className={btnCls} onClick={() => { setOverlayBoth(null); enterScene('island', 5, 6, 'down'); showDialog(['The skiff puts the city behind you, tower by tower, until it is a postcard.', 'Ahead: a green smudge becomes palms. Kiwami Island.']); }}>SAIL TO KIWAMI ISLAND ⛵</button>
+            <button className={`${btnCls} opacity-60`} onClick={close}>NEVER MIND</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'boat-island') {
+      return (
+        <ShopFrame title="THE SKIFF" subtitle="The tide will hold. Probably." money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <div className="flex flex-col gap-2 py-1">
+            <button className={btnCls} onClick={() => { setOverlayBoth(null); enterScene('shore', 3, 8, 'down'); showDialog(['The city rises back out of the haze to meet you. Home water.']); }}>SAIL BACK TO SUMIKAWA SHORE</button>
+            <button className={`${btnCls} opacity-60`} onClick={close}>STAY A LITTLE LONGER</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+
+    if (ov.shop === 'tiki') {
+      const cocoVal = s.coconuts * 120;
+      return (
+        <ShopFrame title="LULU'S TIKI BAR" subtitle={'"No shirt, no shoes, no problem. The blender runs on vibes."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+            <div className="flex-grow min-w-0">
+              <p className="text-xl leading-tight">Blue Kiwami 🍹</p>
+              <p className="text-sm opacity-60 leading-tight">Frozen, electric blue, aggressively refreshing. +25 energy.</p>
+            </div>
+            <button className={btnCls} disabled={s.money < 800 || s.energy >= maxEnergy(s)} onClick={buyTikiDrink}>¥800</button>
+          </div>
+          <div className="flex items-center gap-3 py-1.5">
+            <p className="flex-grow text-lg opacity-80">Coconuts ×{s.coconuts} <span className="opacity-50">(¥120 ea — "the blender is hungry")</span></p>
+            <button className={btnCls} disabled={s.coconuts === 0} onClick={sellCoconuts}>SELL ALL — ¥{cocoVal.toLocaleString()}</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'hat') {
+      return (
+        <ShopFrame title="TEX'S BEACH GOODS" subtitle={'"One hat. One price. One dream."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <div className="flex items-center gap-3 py-1.5">
+            <div className="flex-grow min-w-0">
+              <p className="text-xl leading-tight">Cowboy Hat</p>
+              <p className="text-sm opacity-60 leading-tight">The tag says $67. Tex says that's ¥6,700. Tex does not negotiate. You will wear it forever.</p>
+            </div>
+            {s.hat
+              ? <span className="text-[#3da26b] text-base shrink-0">ON YOUR HEAD</span>
+              : <button className={`${btnCls} shrink-0`} disabled={s.money < 6700} onClick={buyHat}>¥6,700</button>}
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    // konbini
+    const counts: Record<string, number> = {};
+    for (const id of s.fishInv) counts[id] = (counts[id] || 0) + 1;
+    const sellTotal = s.fishInv.reduce((sum, id) => sum + fishById(id).value, 0);
+    const shiftDone = s.shiftDay === s.day;
+    const shiftCost = energyCost(s, SHIFT_COST);
+    return (
+      <ShopFrame title="KONBINI 24h" subtitle="Hot food, cold drinks, honest prices" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        <p className="text-base text-[#ffd24a]/80 mt-1">EAT (energy {s.energy}/{maxEnergy(s)})</p>
+        {KONBINI_FOOD.map(f => (
+          <div key={f.id} className="flex items-center gap-3 py-1 border-b border-white/10">
+            <p className="flex-grow text-xl">{f.name} <span className="text-sm opacity-60">+{f.energy} energy</span></p>
+            <button className={btnCls} disabled={s.money < f.price || s.energy >= maxEnergy(s)} onClick={() => buyFood(f.id)}>¥{f.price}</button>
+          </div>
+        ))}
+        <p className="text-base text-[#ffd24a]/80 mt-3">SELL FISH</p>
+        {s.fishInv.length === 0
+          ? <p className="py-1 text-lg opacity-60">No fish in your bag. The shore is west of the street.</p>
+          : (
+            <>
+              {Object.entries(counts).map(([id, n]) => (
+                <p key={id} className="text-lg py-0.5 opacity-80">{fishById(id).name} ×{n} <span className="opacity-60">(¥{fishById(id).value} ea)</span></p>
+              ))}
+              <button className={`${btnCls} mt-1`} onClick={sellAllFish}>SELL ALL — ¥{sellTotal.toLocaleString()}</button>
+            </>
+          )}
+        <p className="text-base text-[#ffd24a]/80 mt-3">WORK</p>
+        <div className="flex items-center gap-3 py-1">
+          <p className="flex-grow text-lg opacity-80">One shift per day. Costs {shiftCost} energy.</p>
+          <button className={btnCls} disabled={shiftDone || s.energy < shiftCost} onClick={workShift}>
+            {shiftDone ? 'DONE TODAY' : `SHIFT +¥${SHIFT_PAY}`}
+          </button>
+        </div>
+      </ShopFrame>
+    );
+  };
+
+  // ---- render tree --------------------------------------------------------------
+
+  return (
+    <div
+      ref={rootRef}
+      // General UI click feedback: any <button> tap chirps, except those marked
+      // data-nosfx (the touch d-pad — movement shouldn't click).
+      onClick={e => {
+        const btn = (e.target as HTMLElement).closest('button');
+        if (btn && !btn.hasAttribute('data-nosfx')) sfxUiClick();
+      }}
+      className={isFullscreen
+        ? 'w-full h-full flex flex-col bg-black select-none'
+        : 'w-full max-w-[1000px] mx-auto select-none'}
+    >
+      {/* HUD */}
+      {screen === 'playing' && (
+        <div className="flex items-center gap-3 sm:gap-5 px-3 py-1.5 bg-[#16181d] border-2 border-b-0 border-[#ffd24a]/40 font-pixel text-[#e8e0d0] text-lg sm:text-xl">
+          <span className="text-[#ffd24a]">¥{hud.money.toLocaleString()}</span>
+          <span>Day {hud.day}</span>
+          <span className={hud.late ? 'text-[#e0552e] animate-pulse font-bold' : 'text-[#9fc4e8]'}>{hud.time}</span>
+          {hud.late && (
+            <span className="hidden sm:inline text-[#e0552e] text-sm sm:text-base animate-pulse" title="At 2:00 AM you pass out and wake up at home">
+              ⚠ pass out at 2 AM
+            </span>
+          )}
+          {(() => {
+            const pct = Math.max(0, Math.min(1, hud.energy / hud.max));
+            // green when rested, amber mid, red when nearly spent
+            const fill = pct > 0.5 ? '#3da26b' : pct > 0.25 ? '#e0a32e' : '#d2452e';
+            return (
+              <span className="flex items-center gap-1.5">
+                <span className="text-sm opacity-60">EN</span>
+                <span className="relative inline-block w-20 sm:w-28 h-3.5 rounded-sm bg-black/70 border border-white/20 align-middle overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.6)]">
+                  <span
+                    className="block h-full rounded-sm transition-[width,background-color] duration-300"
+                    style={{ width: `${pct * 100}%`, backgroundColor: fill }}
+                  />
+                  {/* glossy highlight strip */}
+                  <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-white/15" />
+                </span>
+                <span className="text-sm opacity-60 tabular-nums">{hud.energy}/{hud.max}</span>
+              </span>
+            );
+          })()}
+          <span className="ml-auto opacity-70 truncate">{hud.sceneName}</span>
+          <button
+            onClick={() => setOverlayBoth(overlay?.type === 'menu' ? null : { type: 'menu', tab: 'inventory' })}
+            title="Menu / Inventory (I)"
+            aria-label="Menu"
+            className="shrink-0 flex items-center gap-1 bg-[#ffd24a] text-black border-2 border-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base shadow-[2px_2px_0px_#000] hover:bg-[#ffe27a] transition-colors"
+          >
+            🎒 <span className="hidden sm:inline">BAG</span>
+            {!isCoarse && <kbd className="hidden sm:inline ml-0.5 text-xs bg-black/20 border border-black/30 rounded px-1 leading-none">I</kbd>}
+          </button>
+          <button
+            onClick={toggleMusic}
+            title={musicMuted ? 'Unmute' : 'Mute'}
+            aria-label={musicMuted ? 'Unmute' : 'Mute'}
+            className="shrink-0 text-xl border border-white/25 rounded-sm px-1.5 py-0.5 opacity-80 hover:opacity-100 transition-opacity"
+          >
+            {musicMuted ? '🔇' : '🔊'}
+          </button>
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            className="shrink-0 flex items-center gap-1 border-2 border-[#ffd24a]/70 text-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base hover:bg-[#ffd24a] hover:text-black transition-colors"
+          >
+            {isFullscreen ? '🗗' : '⛶'} <span className="hidden sm:inline">{isFullscreen ? 'EXIT' : 'FULL'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Canvas + overlays */}
+      <div
+        ref={frameRef}
+        className={`relative bg-black flex items-center justify-center ${isFullscreen ? 'flex-1 min-h-0 border-0' : 'border-2 border-[#ffd24a]/40'}`}
+        style={isFullscreen ? undefined : { aspectRatio: `${VIEW_PW} / ${VIEW_PH}` }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={VIEW_PW}
+          height={VIEW_PH}
+          className="block"
+          style={{ imageRendering: 'pixelated' }}
+        />
+
+        {screen === 'title' && (() => {
+          // Mobile setup steps (soft gate — play stays available either way).
+          const wantFsBtn = isCoarse && fsSupported && !isFullscreen && !isStandalone; // Android: tap to FS
+          const wantInstall = isCoarse && !fsSupported && !isStandalone;               // iOS: add to home
+          const showSetup = isCoarse && (isPortrait || wantFsBtn || wantInstall);
+          const dot = (done: boolean) => (
+            <span className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold ${done ? 'bg-[#3da26b] border-[#3da26b] text-black' : 'border-[#ffd24a]/60 text-[#ffd24a]'}`}>{done ? '✓' : '!'}</span>
+          );
+          return (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-50 flex flex-col items-center justify-center text-center p-4 overflow-y-auto`}>
+            {/* painted background + dark gradient so text stays legible */}
+            <img
+              src={TITLE_BG}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ imageRendering: 'pixelated' }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/40 to-black/80" />
+
+            <button
+              onClick={toggleMusic}
+              title={musicMuted ? 'Unmute' : 'Mute'}
+              aria-label={musicMuted ? 'Unmute' : 'Mute'}
+              className="absolute top-3 right-3 text-2xl opacity-80 hover:opacity-100 transition-opacity drop-shadow-[1px_1px_0_#000]"
+            >
+              {musicMuted ? '🔇' : '🔊'}
+            </button>
+
+            <div className="relative flex flex-col items-center gap-4 w-full max-w-sm">
+              <div className="leading-none">
+                <p className="font-pixel text-[#9fc4e8] text-lg sm:text-2xl mb-1.5 drop-shadow-[2px_2px_0_#000]">a tiny life sim</p>
+                <h2 className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">LITTLE APARTMENT,</h2>
+                <h2 className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">BIG CITY</h2>
+              </div>
+
+              {/* phone setup checklist */}
+              {showSetup && (
+                <div className="w-full bg-black/60 border-2 border-[#ffd24a]/50 rounded-sm px-3 py-2.5 space-y-2.5 shadow-[3px_3px_0_#000]">
+                  <p className="font-pixel text-[#ffd24a] text-sm">PLAYS BEST FULLSCREEN + SIDEWAYS</p>
+                  <div className="flex items-center gap-2.5 text-left">
+                    {dot(!isPortrait)}
+                    <span className="font-pixel text-sm flex-1">{isPortrait ? 'Turn your phone sideways' : 'Landscape — nice.'}</span>
+                  </div>
+                  {fsSupported ? (
+                    <button
+                      data-nosfx
+                      onClick={goFullscreenLandscape}
+                      className="w-full flex items-center gap-2.5 text-left"
+                    >
+                      {dot(isFullscreen)}
+                      <span className="font-pixel text-sm flex-1 underline decoration-dotted underline-offset-2">{isFullscreen ? 'Fullscreen on.' : 'Tap here to go fullscreen'}</span>
+                    </button>
+                  ) : wantInstall ? (
+                    <button
+                      data-nosfx
+                      onClick={() => setFsGuideOpen(true)}
+                      className="w-full flex items-center gap-2.5 text-left"
+                    >
+                      {dot(false)}
+                      <span className="font-pixel text-sm flex-1 underline decoration-dotted underline-offset-2">Add to Home Screen for fullscreen ›</span>
+                    </button>
+                  ) : null}
+                </div>
+              )}
+
+              {/* play — soft gate, always available */}
+              {saved ? (
+                <div className="flex flex-col items-center gap-1.5">
+                  <button
+                    data-nosfx
+                    className="font-pixel text-2xl px-10 py-3 bg-[#ffd24a] text-black border-2 border-[#ffd24a] shadow-[4px_4px_0px_#000] hover:bg-[#ffe27a] transition-colors"
+                    onClick={() => startGame(false)}
+                  >
+                    CONTINUE
+                  </button>
+                  <p className="font-pixel text-[#e8e0d0]/80 text-base drop-shadow-[1px_1px_0_#000]">Day {saved.day} · ¥{saved.money.toLocaleString()}</p>
+                </div>
+              ) : (
+                <button
+                  data-nosfx
+                  className="font-pixel text-2xl px-10 py-3 bg-[#ffd24a] text-black border-2 border-[#ffd24a] shadow-[4px_4px_0px_#000] hover:bg-[#ffe27a] transition-colors"
+                  onClick={() => startGame(true)}
+                >
+                  NEW GAME
+                </button>
+              )}
+
+              {/* secondary actions */}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
+                  onClick={() => setHowToOpen(true)}
+                >
+                  HOW TO PLAY
+                </button>
+                {saved && (
+                  <button
+                    className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
+                    onClick={() => { setManageOpen(true); setConfirmMode(null); }}
+                  >
+                    MANAGE SAVE
+                  </button>
+                )}
+                {/* desktop / mobile-landscape get the fullscreen button here; portrait uses the checklist above */}
+                {(!isCoarse || !isPortrait) && (
+                  <button
+                    className="font-pixel text-base px-5 py-1.5 border-2 border-[#9fc4e8]/70 text-[#9fc4e8] bg-black/40 hover:bg-[#9fc4e8] hover:text-black transition-colors"
+                    onClick={() => { if (!fsSupported) setFsGuideOpen(true); else if (isFullscreen) toggleFullscreen(); else goFullscreenLandscape(); }}
+                  >
+                    {isFullscreen ? '🗗 EXIT FULLSCREEN' : '⛶ GO FULLSCREEN'}
+                  </button>
+                )}
+              </div>
+
+              <p className="font-pixel text-[#e8e0d0]/70 text-sm sm:text-base drop-shadow-[1px_1px_0_#000]">{isCoarse ? 'On-screen controls once you start' : 'WASD / arrows move · E interact · Esc close'}</p>
+            </div>
+          </div>
+          );
+        })()}
+
+        {/* fullscreen guide — Android can just tap fullscreen; iOS needs Add to Home Screen */}
+        {screen === 'title' && fsGuideOpen && (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+            <div className={`${panelCls} w-full max-w-md max-h-full overflow-y-auto px-5 py-4`}>
+              <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
+                <h3 className="font-retro text-[#ffd24a] text-base">GO FULLSCREEN</h3>
+                <button className={btnCls} onClick={() => setFsGuideOpen(false)}>✕</button>
+              </div>
+              {fsSupported ? (
+                <div className="text-base leading-snug space-y-2.5">
+                  <p>Tap the <span className="text-[#ffd24a]">⛶ FULL</span> button (top-right while playing) any time to fill the screen.</p>
+                  <p>For the best fit, also <span className="text-[#ffd24a]">rotate your phone to landscape</span>.</p>
+                  <div className="text-center mt-3">
+                    <button className={btnCls} onClick={() => { setFsGuideOpen(false); toggleFullscreen(); }}>GO FULLSCREEN NOW</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-base leading-snug space-y-2.5">
+                  <p className="opacity-80">iPhone Safari can't fullscreen a web page directly — but you can install this as an app for a true fullscreen experience:</p>
+                  <ol className="list-decimal list-inside space-y-1.5">
+                    <li>Tap the <span className="text-[#ffd24a]">Share</span> button <span aria-hidden>(the square with an ↑ arrow)</span> in Safari's toolbar.</li>
+                    <li>Scroll down and tap <span className="text-[#ffd24a]">Add to Home Screen</span>.</li>
+                    <li>Open the game from the new <span className="text-[#ffd24a]">home-screen icon</span> — it launches fullscreen, no browser bars.</li>
+                    <li>Turn your phone <span className="text-[#ffd24a]">landscape</span> and play.</li>
+                  </ol>
+                  <p className="opacity-60 text-sm">On Android Chrome the ⛶ button just works — no install needed.</p>
+                  <div className="text-center mt-3">
+                    <button className={btnCls} onClick={() => setFsGuideOpen(false)}>GOT IT</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* how to play */}
+        {screen === 'title' && howToOpen && (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+            <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-5 py-4`}>
+              <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
+                <h3 className="font-retro text-[#ffd24a] text-base">HOW TO PLAY</h3>
+                <button className={btnCls} onClick={() => setHowToOpen(false)}>✕</button>
+              </div>
+              <div className="text-base leading-snug space-y-2.5">
+                <p><span className="text-[#ffd24a]">The goal.</span> You just moved into a tiny apartment with two boxes to your name. Earn money, buy furniture, and place all of it to make the place a home — that's the ending.</p>
+                <p><span className="text-[#ffd24a]">Moving around.</span> {isCoarse ? 'Use the on-screen D-pad to move and the E button to interact; ✕ closes menus.' : 'WASD or arrow keys to move. Press E (or Space) to interact with people, doors, and the glowing spots. Esc closes menus.'} Walk to the edges of an area to reach the rest of the city.</p>
+                <p><span className="text-[#ffd24a]">Making money.</span> Fish at the shore (learn how from Genji, the old man on the beach first), work a daily shift at the konbini, mine, or sell things. Sell your catch and goods at the right shops.</p>
+                <p><span className="text-[#ffd24a]">Energy &amp; the clock.</span> Actions cost energy (the EN bar). Eat or sleep in your bed to recover. The day has a clock — stay out past 2 AM and you'll collapse and wake up home. Sleeping starts the next day.</p>
+                <p><span className="text-[#ffd24a]">Furnishing.</span> Things you buy go into boxes. Open your bag (press <span className="text-[#ffd24a]">I</span>, or tap 🎒 BAG) {isCoarse ? '' : 'any time '}at home to place them. Beds, fridges and the like only work once placed.</p>
+                <p><span className="text-[#ffd24a]">Explore.</span> The city is bigger than it looks — a pawn shop, an arcade district, a nightclub, a shrine, an island, and stranger places below. Talk to everyone. Check the menu for your inventory and achievements.</p>
+                <p className="opacity-70">Your progress saves automatically. Pick CONTINUE next time to keep going.</p>
+              </div>
+              <div className="text-center mt-4">
+                <button className={btnCls} onClick={() => setHowToOpen(false)}>GOT IT</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* save management — guarded so a save isn't wiped by a stray click */}
+        {screen === 'title' && manageOpen && (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/80 flex items-center justify-center p-3 sm:p-4`}>
+            <div className={`${panelCls} w-full max-w-md px-5 py-4`}>
+              <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
+                <h3 className="font-retro text-[#ffd24a] text-base">SAVE MANAGEMENT</h3>
+                <button className={btnCls} onClick={() => { setManageOpen(false); setConfirmMode(null); }}>✕</button>
+              </div>
+
+              {saved ? (
+                <>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-base mb-4">
+                    <span className="opacity-60">Day</span><span className="text-right">{saved.day}</span>
+                    <span className="opacity-60">Money</span><span className="text-right">¥{saved.money.toLocaleString()}</span>
+                    <span className="opacity-60">Furniture placed</span><span className="text-right">{Object.keys(saved.placed).length}</span>
+                    <span className="opacity-60">Achievements</span><span className="text-right">{saved.gameAch.length} / {GAME_ACHIEVEMENTS.length}</span>
+                    <span className="opacity-60">Fish caught</span><span className="text-right">{Object.values(saved.fishLog).reduce((a: number, b: number) => a + b, 0)}</span>
+                  </div>
+
+                  {confirmMode === null && (
+                    <div className="flex flex-col gap-2">
+                      <button data-nosfx className={`${btnCls} w-full py-1.5`} onClick={() => startGame(false)}>CONTINUE PLAYING</button>
+                      <button className={`${btnCls} w-full py-1.5`} onClick={() => setConfirmMode('new')}>START NEW GAME</button>
+                      <button className="border border-red-400/60 text-red-300 px-3 py-1.5 w-full font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => setConfirmMode('delete')}>DELETE SAVE</button>
+                    </div>
+                  )}
+
+                  {confirmMode === 'new' && (
+                    <div className="text-center">
+                      <p className="text-base text-[#e8e0d0]/90 mb-3">Start over? Your Day {saved.day} save will be <span className="text-red-300">erased</span>.</p>
+                      <div className="flex gap-2 justify-center">
+                        <button className={btnCls} onClick={() => setConfirmMode(null)}>CANCEL</button>
+                        <button data-nosfx className="border border-red-400/60 text-red-300 px-3 py-1 font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => { setConfirmMode(null); startGame(true); }}>ERASE &amp; START</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {confirmMode === 'delete' && (
+                    <div className="text-center">
+                      <p className="text-base text-[#e8e0d0]/90 mb-3">Delete your Day {saved.day} save for good? This <span className="text-red-300">cannot be undone</span>.</p>
+                      <div className="flex gap-2 justify-center">
+                        <button className={btnCls} onClick={() => setConfirmMode(null)}>CANCEL</button>
+                        <button className="border border-red-400/60 text-red-300 px-3 py-1 font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={wipeSave}>DELETE FOREVER</button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center">
+                  <p className="text-base opacity-70 mb-4">No save yet — start a new game from the title.</p>
+                  <button data-nosfx className={`${btnCls} w-full py-1.5`} onClick={() => startGame(true)}>NEW GAME</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* dialogue */}
+        {overlay?.type === 'dialog' && (
+          <div className="absolute inset-x-2 bottom-2 cursor-pointer" onClick={advanceDialog}>
+            <div className={`${panelCls} px-4 py-2.5`}>
+              {overlay.speaker && <p className="text-[#ffd24a] text-base mb-0.5">{overlay.speaker}</p>}
+              <p className="text-xl leading-snug">{overlay.lines[overlay.idx]}</p>
+              <p className="text-right text-sm opacity-40 mt-1">{overlay.idx + 1}/{overlay.lines.length} · E ▸</p>
+            </div>
+          </div>
+        )}
+
+        {/* shops */}
+        {overlay?.type === 'shop' && (
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4">
+            {renderShop(overlay)}
+          </div>
+        )}
+
+        {/* story letter */}
+        {overlay?.type === 'letter' && (
+          <div className="absolute inset-0 bg-black/75 flex items-center justify-center p-2 sm:p-4">
+            <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-5 py-4 border-[#9fc4e8]/60`}>
+              <p className="text-sm text-[#9fc4e8] tracking-widest">— {overlay.beat.from} —</p>
+              <h3 className="text-2xl text-[#ffd24a] mb-3">{overlay.beat.title}</h3>
+              {overlay.beat.lines.map((line, i) => (
+                <p key={i} className="text-lg leading-snug mb-2 opacity-90">{line}</p>
+              ))}
+              <div className="text-center mt-3">
+                <button className={btnCls} onClick={() => setOverlayBoth(null)}>CLOSE</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* sleep / pass-out fade */}
+        {overlay?.type === 'sleep' && (
+          <div
+            className={`absolute inset-0 z-50 bg-black flex flex-col items-center justify-center gap-3 px-6 text-center overflow-hidden ${overlay.awaitClick ? 'cursor-pointer' : ''}`}
+            onClick={overlay.awaitClick ? finishSleep : undefined}
+          >
+            <style>{`
+              @keyframes labFadeIn { from{opacity:0} to{opacity:1} }
+              @keyframes labRise { 0%{opacity:0;transform:translateY(8px)} 100%{opacity:1;transform:translateY(0)} }
+              @keyframes labThrob { 0%,100%{transform:scale(1);opacity:.85} 50%{transform:scale(1.06);opacity:1} }
+              @keyframes labZzz { 0%{opacity:.3;transform:translateY(0)} 50%{opacity:1} 100%{opacity:.3;transform:translateY(-6px)} }
+              @keyframes labVignette { from{opacity:0} to{opacity:1} }
+              .lab-sleep-vignette{position:absolute;inset:0;animation:labVignette 700ms ease forwards;
+                background:radial-gradient(circle at 50% 45%, rgba(0,0,0,0) 30%, rgba(0,0,0,.85) 100%)}
+            `}</style>
+            {overlay.collapsed ? (
+              <>
+                <span className="lab-sleep-vignette" style={{ background: 'radial-gradient(circle at 50% 45%, rgba(70,10,10,0.5) 0%, rgba(0,0,0,0.92) 70%)' }} />
+                <p className="relative font-retro text-[#e0552e] text-2xl sm:text-4xl tracking-widest" style={{ animation: 'labThrob 1100ms ease-in-out infinite' }}>OUT COLD</p>
+                <p className="relative font-pixel text-[#e8e0d0]/70 text-base sm:text-lg max-w-sm" style={{ animation: 'labRise 900ms ease forwards' }}>
+                  Energy hit zero. The world goes soft and dark… somehow your feet know the way home.
+                </p>
+                <button
+                  className="relative mt-2 font-pixel text-lg px-6 py-2 bg-[#e0552e] text-black border-2 border-[#e0552e] shadow-[3px_3px_0px_#000] hover:bg-[#f0703e] transition-colors"
+                  style={{ animation: 'labRise 900ms ease 400ms both' }}
+                  onClick={finishSleep}
+                >
+                  …come to ▸
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="lab-sleep-vignette" />
+                <p className="relative text-4xl sm:text-5xl" style={{ animation: 'labZzz 1600ms ease-in-out infinite' }} aria-hidden>💤</p>
+                <p className="relative font-pixel text-[#e8e0d0]/70 text-base sm:text-lg" style={{ animation: 'labFadeIn 800ms ease forwards' }}>Goodnight.</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* end-of-day recap */}
+        {overlay?.type === 'endday' && (() => {
+          const r = overlay.recap;
+          const row = (label: string, value: string, tone?: string) => (
+            <div className="flex items-center justify-between gap-3 py-1 border-b border-[#ffd24a]/15">
+              <span className="opacity-70">{label}</span>
+              <span className={`tabular-nums ${tone ?? ''}`}>{value}</span>
+            </div>
+          );
+          return (
+            <div className="absolute inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4">
+              <div className={`${panelCls} w-full max-w-md max-h-full overflow-y-auto px-5 py-4`}>
+                <div className="text-center border-b-2 border-[#ffd24a]/40 pb-2 mb-3">
+                  <p className="font-pixel text-[#9fc4e8] text-sm">{r.collapsed ? 'you pushed it too far' : 'another day in the big city'}</p>
+                  <h3 className="font-retro text-[#ffd24a] text-lg sm:text-2xl leading-relaxed">DAY {r.day} — RECAP</h3>
+                </div>
+                <div className="font-pixel text-base sm:text-lg">
+                  {row('Money', `${r.net >= 0 ? '+' : '−'}¥${Math.abs(r.net).toLocaleString()}`, r.net >= 0 ? 'text-[#3da26b]' : 'text-[#e0552e]')}
+                  {row('Fish caught', `${r.fish}`)}
+                  {row('Minerals mined', `${r.minerals}`)}
+                  {row('Shifts worked', `${r.shifts}`)}
+                  <div className="py-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="opacity-70">New furniture</span>
+                      <span className="tabular-nums">{r.furniture.length}</span>
+                    </div>
+                    {r.furniture.length > 0 && (
+                      <p className="text-sm text-[#ffd24a]/80 mt-1 leading-snug">
+                        {r.furniture.map(id => furnitureById(id).name).join(' · ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {r.collapsed && (
+                  <p className="font-pixel text-sm text-[#e0552e]/90 mt-3 text-center">You blacked out before bed — try to wrap up before 2 AM.</p>
+                )}
+                <div className="text-center mt-4">
+                  <button className={`${btnCls} px-8 py-1.5`} onClick={closeEndDay}>START DAY {r.day + 1} ▸</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* in-game achievement toast (separate from the site system) */}
+        {achToast && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-[#16181d]/95 border-2 border-[#ffd24a] px-4 py-2 font-pixel text-center animate-toast-in z-20 pointer-events-none">
+            <p className="text-[#ffd24a] text-lg leading-tight">🏆 {achToast.title}</p>
+            <p className="text-[#e8e0d0]/70 text-sm leading-tight">{achToast.desc}</p>
+          </div>
+        )}
+
+        {/* menu: inventory + achievements */}
+        {overlay?.type === 'menu' && (
+          <div className="absolute inset-0 bg-black/75 flex items-center justify-center p-2 sm:p-4">
+            {renderMenu(overlay)}
+          </div>
+        )}
+
+        {/* ending */}
+        {overlay?.type === 'ending' && (
+          <div className="absolute inset-0 bg-black/95 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+            <div className="max-w-lg text-center font-pixel">
+              <h3 className="font-retro text-[#ffd24a] text-lg sm:text-2xl leading-relaxed mb-5">{ENDING.title}</h3>
+              {ENDING.lines.map((line, i) => (
+                <p key={i} className="text-[#e8e0d0] text-lg sm:text-xl leading-snug mb-3 opacity-90">{line}</p>
+              ))}
+              <button className={`${btnCls} mt-2 text-xl`} onClick={finishEnding}>STAY A WHILE</button>
+            </div>
+          </div>
+        )}
+
+        {/* mid-play portrait nudge */}
+        {screen === 'playing' && isCoarse && isPortrait && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-[#ffd24a] text-black font-pixel text-xs px-3 py-1.5 rounded-sm shadow-[2px_2px_0_#000] flex items-center gap-1.5 whitespace-nowrap">
+            <span aria-hidden>🔄</span> turn sideways
+          </div>
+        )}
+
+        {/* touch controls */}
+        {screen === 'playing' && isCoarse && (
+          <>
+            <div className="absolute bottom-3 left-3 grid grid-cols-3 gap-1 opacity-80" style={{ touchAction: 'none' }}>
+              {([
+                [null, 'up', null],
+                ['left', null, 'right'],
+                [null, 'down', null],
+              ] as (Dir | null)[][]).flat().map((d, i) =>
+                d ? (
+                  <TouchBtn key={i} onHold={down => inputRef.current.setVirtualDir(d, down)}>
+                    {d === 'up' ? '▲' : d === 'down' ? '▼' : d === 'left' ? '◀' : '▶'}
+                  </TouchBtn>
+                ) : <span key={i} className="w-11 h-11" />
+              )}
+            </div>
+            <div className="absolute bottom-3 right-3 flex flex-col items-center gap-2" style={{ touchAction: 'none' }}>
+              <TouchBtn small onHold={down => { if (down) inputRef.current.queueCancel(); }}>✕</TouchBtn>
+              <TouchBtn big onHold={down => inputRef.current.pressVirtualAction(down)}>E</TouchBtn>
+            </div>
+          </>
+        )}
+
+        {/* scene transitions */}
+        {transition && (
+          <>
+            <style>{`
+              @keyframes labStartCover { 0%{opacity:0} 16%{opacity:1} 74%{opacity:1} 100%{opacity:0} }
+              @keyframes labStartZoom { 0%{transform:scale(1.18);opacity:0} 26%{transform:scale(1);opacity:1} 72%{opacity:1} 100%{transform:scale(.9);opacity:0} }
+              @keyframes labBlink { 0%,100%{opacity:.35} 50%{opacity:1} }
+              @keyframes labFreezeBg {
+                0%{opacity:0;background:#eaf4ff}
+                10%{opacity:1;background:#eaf4ff}
+                34%{background:#cfe6ff}
+                44%{background:#0c0d10}
+                52%{background:#d8c93a}
+                86%{opacity:1;background:#d8c93a}
+                100%{opacity:0;background:#d8c93a}
+              }
+              @keyframes labShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-3px)} 40%{transform:translateX(3px)} 60%{transform:translateX(-2px)} 80%{transform:translateX(2px)} }
+              @keyframes labGlitch { 0%,100%{opacity:.9;letter-spacing:.25em} 50%{opacity:.45;letter-spacing:.6em} }
+              .lab-transition{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden}
+              .lab-transition-start{background:#0e1016;animation:labStartCover 1400ms ease-in-out forwards}
+              .lab-transition-start .lab-trans-inner{animation:labStartZoom 1400ms ease-in-out forwards}
+              .lab-transition-freezer{animation:labFreezeBg 1750ms ease-in-out forwards}
+              .lab-transition-freezer .lab-trans-inner{animation:labShake 220ms steps(2) infinite}
+              .lab-blink{animation:labBlink 700ms steps(2,end) infinite}
+              .lab-glitch{animation:labGlitch 280ms steps(2,end) infinite}
+            `}</style>
+            <div className={`lab-transition lab-transition-${transition}`}>
+              {transition === 'start' ? (
+                <div className="lab-trans-inner text-center px-4">
+                  <p className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">LITTLE APARTMENT,</p>
+                  <p className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">BIG CITY</p>
+                  <p className="font-pixel text-[#9fc4e8] text-base mt-3 lab-blink">starting…</p>
+                </div>
+              ) : (
+                <div className="lab-trans-inner text-center px-4">
+                  <p className="font-pixel lab-glitch text-3xl sm:text-5xl text-black/80">░ ▒ ▓</p>
+                  <p className="font-pixel text-black/70 text-sm sm:text-base mt-2 tracking-[0.3em] text-center">WARPING INTO THE UNKNOWN</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {screen === 'playing' && !isCoarse && (
+        <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · I bag/inventory · Esc close</p>
+      )}
+    </div>
+  );
+};
+
+// ---- small helpers ------------------------------------------------------------
+
+const TouchBtn: React.FC<{ onHold: (down: boolean) => void; small?: boolean; big?: boolean; children: React.ReactNode }> =
+  ({ onHold, small, big, children }) => (
+    <button
+      data-nosfx
+      className={`${big ? 'w-16 h-16 text-2xl' : small ? 'w-10 h-10 text-base' : 'w-11 h-11 text-lg'} bg-[#16181d]/80 border-2 border-[#ffd24a]/50 text-[#ffd24a] font-pixel rounded-sm active:bg-[#ffd24a] active:text-black`}
+      style={{ touchAction: 'none' }}
+      onPointerDown={e => { e.preventDefault(); onHold(true); }}
+      onPointerUp={() => onHold(false)}
+      onPointerLeave={() => onHold(false)}
+      onPointerCancel={() => onHold(false)}
+      onContextMenu={e => e.preventDefault()}
+    >
+      {children}
+    </button>
+  );
+
+const ShopFrame: React.FC<{
+  title: string; subtitle: string; money: number; onClose: () => void;
+  panelCls: string; btnCls: string; children: React.ReactNode;
+}> = ({ title, subtitle, money, onClose, panelCls, btnCls, children }) => (
+  <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-4 py-3`}>
+    <div className="flex items-start justify-between gap-2 border-b-2 border-[#ffd24a]/40 pb-1.5 mb-1.5">
+      <div>
+        <h3 className="font-retro text-[#ffd24a] text-sm sm:text-base">{title}</h3>
+        <p className="text-sm opacity-60">{subtitle}</p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-[#ffd24a] text-xl">¥{money.toLocaleString()}</p>
+        <button className={`${btnCls} text-sm px-2 py-0.5 mt-1`} onClick={onClose}>ESC ✕</button>
+      </div>
+    </div>
+    {children}
+  </div>
+);
+
+export default LittleApartmentGame;
