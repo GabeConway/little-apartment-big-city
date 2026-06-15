@@ -4,6 +4,8 @@ import {
   buyFurniture, shrineLuck, gachaComplete, pawnStockFor, sketchyOfferFor,
   allFurnished, itemFootprintW, spotFree, placeItem, unplaceItem,
   WAKE_MIN, type GameSave,
+  morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
+  orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE,
 } from '../src/game/state';
 import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, GACHA_FIGURES } from '../src/game/data';
 
@@ -189,5 +191,65 @@ describe('freshDayLog', () => {
     expect(log.startMoney).toBe(1234);
     expect(log.fishCaught).toBe(0);
     expect(log.newFurniture).toEqual([]);
+  });
+});
+
+describe('morningT', () => {
+  it('is full at wake and gone by mid-morning', () => {
+    const s = newSave();
+    s.timeMin = 7 * 60;       expect(morningT(s)).toBeCloseTo(1, 5);
+    s.timeMin = 8.25 * 60;    expect(morningT(s)).toBeGreaterThan(0);
+    s.timeMin = 9.5 * 60;     expect(morningT(s)).toBe(0);
+    s.timeMin = 13 * 60;      expect(morningT(s)).toBe(0);
+  });
+});
+
+describe('phone messages', () => {
+  it('delivers earned messages once and tracks unread', () => {
+    const s = newSave();
+    const first = syncMessages(s);
+    expect(first.length).toBeGreaterThan(0);
+    expect(unreadCount(s)).toBe(s.messages.length);
+    // re-running delivers nothing new (deduped)
+    expect(syncMessages(s).length).toBe(0);
+    // reading drops the unread count
+    s.messages[0].read = true;
+    expect(unreadCount(s)).toBe(s.messages.length - 1);
+  });
+});
+
+describe('ZamaZonk', () => {
+  it('prices include the ZamaPrime fee', () => {
+    const bed = FURNITURE.find(f => f.id === 'bed')!;
+    expect(zamazonkPrice(bed)).toBe(bed.price + ZAMAZONK_FEE);
+  });
+  it('an order debits cash and queues next-morning delivery', () => {
+    const s = newSave();
+    s.money = 50000;
+    const bed = FURNITURE.find(f => f.id === 'bed')!;
+    const price = zamazonkPrice(bed);
+    expect(orderZamaZonk(s, 'bed', price)).toBe(true);
+    expect(s.money).toBe(50000 - price);
+    expect(s.orders).toEqual([{ itemId: 'bed', dueDay: s.day + 1 }]);
+    // already in transit → not offered again, can't double-order
+    expect(zamazonkCatalog(s).some(f => f.id === 'bed')).toBe(false);
+    expect(orderZamaZonk(s, 'bed', price)).toBe(false);
+  });
+  it('rejects orders you cannot afford', () => {
+    const s = newSave();
+    s.money = 10;
+    expect(orderZamaZonk(s, 'bed', zamazonkPrice(FURNITURE.find(f => f.id === 'bed')!))).toBe(false);
+    expect(s.orders).toHaveLength(0);
+  });
+  it('fulfills due deliveries into the boxes on the right day', () => {
+    const s = newSave();
+    s.day = 5;
+    s.orders = [{ itemId: 'bed', dueDay: 5 }, { itemId: 'tv', dueDay: 6 }];
+    const delivered = fulfillDeliveries(s);
+    expect(delivered).toEqual(['bed']);
+    expect(s.owned).toContain('bed');
+    expect(s.owned).not.toContain('tv');
+    expect(s.orders).toEqual([{ itemId: 'tv', dueDay: 6 }]);
+    expect(s.today.newFurniture).toContain('bed');
   });
 });

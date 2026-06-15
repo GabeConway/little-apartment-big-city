@@ -20,9 +20,12 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 - [x] **Resolution**: logical view 320×192 → 448×256 → settled **384×224** (user-tuned zoom)
 - [x] **Day/night**: clock (1.8 game-min/s), HUD time, evening tint, 2 AM collapse → wake home
 - [x] **Day/night polish** (`morningT`, `relightSigns`): cool blue night + sky band; lit neon signs re-light over the tint (additive bloom + repaint) so they shine; warm golden-hour morning wash 7:00→9:30
-- [x] **Inventory + placement**: purchases boxed; place/put-away via the phone Bag app at 17 labeled spots; effects + ending need PLACED; save v2 + v1 migration
-- [x] **Smartphone (I / 📱, replaces bag menu)**: phone-shell overlay — status bar (energy-as-battery), home app grid, apps: Bag · Messages · Trophies · Settings (wallet + Save&Quit + Developer codes/cheats); ⏸ PAUSED; time frozen in overlays
-- [x] **Phone messages**: `MESSAGES` catalog of company/people texts delivered by milestone (`syncMessages` on scene-enter/wake/start); unread badge + green dots; read on open; stored in `save.messages`
+- [x] **Inventory + placement**: purchases boxed; effects + ending need PLACED; save v2 + v1 migration
+- [x] **Furniture Arrange (drag-and-drop, replaces fixed spots)**: phone Bag → ARRANGE ROOM at home; pointer-capture surface + DOM tray/bin + canvas grid & ghost (`placeableAt`); drag/tap to place, move, or bin; movement frozen, Esc exits. `PLACEMENT_SPOTS` now migration-only
+- [x] **Smartphone (P / 📱, replaces bag menu)**: phone-shell overlay — status bar (energy-as-battery), home app grid, apps: Bag · Messages · ZamaZonk · Trophies · Settings (wallet + Save&Quit + Developer codes/cheats); no Wallet app; ⏸ PAUSED; time frozen in overlays. Open key changed I→**P**
+- [x] **Phone messages**: `MESSAGES` catalog of company/people texts delivered by milestone (`syncMessages` on scene-enter/wake/start); `pushMessage` for one-offs; unread badge + green dots; read on open; stored in `save.messages`
+- [x] **ZamaZonk megacorp**: phone app orders base furniture (`price + ¥300 ZamaPrime`), arrives next morning boxed (`fulfillDeliveries` in `finishSleep`); `save.orders[]`; order+delivery receipts via `pushMessage`; welcome promo; logo `public/images/zamazonk-logo.png`
+- [x] **HUD bar polish**: fixed-height (`h-12`) gradient/chip bar — also fixes the title→game jutter (no font-load reflow)
 - [x] **In-game achievements**: 21, own system + toasts (site ACHIEVEMENTS untouched)
 - [x] **Bad side of town** (badtown): Club Kaiju (bar, dancers, DJ requests from visited scenes), Kojima Motors (car = outdoor speed ×1.5 + parked sprite; boat = deep fishing), sketchy Jimmy (daily 35% deal, 50% breaks)
 - [x] **Backrooms chain**: konbini freezer door (hidden until first E) → Manager (Peepis-gated: "parched but on a diet"), Jean-Pierre tourist → **mines**: daily ore, crawlers, Magical Girl Wand combat, mineral-only CRAFT for rare furniture + mineral selling

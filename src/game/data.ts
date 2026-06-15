@@ -361,6 +361,15 @@ export const MESSAGES: MessageDef[] = [
     ],
   },
   {
+    id: 'zamazonk-welcome', from: 'ZamaZonk 📦', avatar: '📦', company: true,
+    when: c => c.day >= 1,
+    body: [
+      'Hello, valued human. This is ZamaZonk™ — the Everything Store. We got your number. We get everyone\'s number.',
+      'Furniture, delivered to your door by morning. Open your phone → the ZamaZonk app → tap to order. It is THAT easy. It is too easy. Keep tapping.',
+      'Why visit a store when a store can visit you, forever? 📦',
+    ],
+  },
+  {
     id: 'dokidoki-promo', from: 'Doki Doki Discount 🛒', avatar: '🛒', company: true,
     when: c => c.visited.includes('city'),
     body: [

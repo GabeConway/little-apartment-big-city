@@ -7,9 +7,9 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind, MESSAGES,
+  itemKind, MESSAGES, furnitureById,
 } from './data';
-import type { PhoneMessage, MsgCtx } from './data';
+import type { PhoneMessage, MsgCtx, Furniture } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, PLACEMENT_SPOTS } from './maps';
 
 export const WAKE_MIN = 7 * 60;       // days start at 7:00 AM
@@ -54,7 +54,11 @@ export interface GameSave {
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
   messages: PhoneMessage[];     // smartphone texts delivered so far
+  orders: ZamaOrder[];          // ZamaZonk furniture in transit (arrives next morning)
 }
+
+// A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
+export interface ZamaOrder { itemId: string; dueDay: number }
 
 // Per-day tally, reset every morning; feeds the end-of-day recap screen.
 export interface DayLog {
@@ -109,6 +113,7 @@ export const newSave = (): GameSave => ({
   ended: false,
   today: freshDayLog(3000),
   messages: [],
+  orders: [],
 });
 
 export const loadSave = (): GameSave | null => {
@@ -333,3 +338,62 @@ export const syncMessages = (s: GameSave): PhoneMessage[] => {
 
 export const unreadCount = (s: GameSave): number =>
   s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0);
+
+// Push a one-off (non-catalog) message — used for ZamaZonk order/delivery
+// receipts. Deduped by id so re-running is safe.
+export const pushMessage = (s: GameSave, m: Omit<PhoneMessage, 'day' | 'read'>): void => {
+  if (s.messages.some(x => x.id === m.id)) return;
+  s.messages.push({ ...m, day: s.day, read: false });
+};
+
+// ---- ZamaZonk (the everything store) ----------------------------------------
+// An aggressively convenient megacorp. Order furniture from the phone; it pays
+// up front and arrives in your boxes the next morning, minus your dignity.
+
+export const ZAMAZONK_FEE = 300; // flat "ZamaPrime convenience fee" per order
+
+export const zamazonkPrice = (f: Furniture): number => f.price + ZAMAZONK_FEE;
+
+// Base furniture you don't own yet and haven't already got in transit.
+export const zamazonkCatalog = (s: GameSave): Furniture[] =>
+  FURNITURE.filter(f => !s.owned.includes(f.id) && !s.orders.some(o => o.itemId === f.id));
+
+export const orderZamaZonk = (s: GameSave, itemId: string, price: number): boolean => {
+  if (s.money < price || s.owned.includes(itemId) || s.orders.some(o => o.itemId === itemId)) return false;
+  s.money -= price;
+  s.orders.push({ itemId, dueDay: s.day + 1 });
+  const name = furnitureById(itemId).name;
+  pushMessage(s, {
+    id: `zz-order-${itemId}-${s.day}`, from: 'ZamaZonk 📦', avatar: '📦', company: true,
+    body: [
+      `Order confirmed: 1× ${name}. Thank you for choosing ZamaZonk™.`,
+      'A ZamaZonk associate has already been dispatched and is, frankly, sprinting.',
+      'Estimated arrival: tomorrow morning. Do not attempt to outrun the driver.',
+    ],
+  });
+  return true;
+};
+
+// Deliver every order whose day has come; returns the delivered item ids.
+// Call on waking. New furniture lands boxed (place it via Arrange).
+export const fulfillDeliveries = (s: GameSave): string[] => {
+  const due = s.orders.filter(o => o.dueDay <= s.day);
+  if (due.length === 0) return [];
+  s.orders = s.orders.filter(o => o.dueDay > s.day);
+  const ids: string[] = [];
+  for (const o of due) {
+    if (!s.owned.includes(o.itemId)) { s.owned.push(o.itemId); s.today.newFurniture.push(o.itemId); ids.push(o.itemId); }
+  }
+  if (ids.length > 0) {
+    const names = ids.map(id => furnitureById(id).name).join(', ');
+    pushMessage(s, {
+      id: `zz-deliver-${s.day}`, from: 'ZamaZonk 📦', avatar: '📦', company: true,
+      body: [
+        `Delivered to MAISON KAWA 204: ${names}.`,
+        'It is in your boxes. Open your phone → Arrange to set it down.',
+        'Rate your driver 5 stars or the algorithm remembers. 🙂',
+      ],
+    });
+  }
+  return ids;
+};

@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   TILE, VIEW_PW, VIEW_PH, Input, startLoop, tryMove, feetTile, facedTile,
-  cameraFor, sceneSize, isSolid,
+  cameraFor, sceneSize, isSolid, tileAt,
 } from './engine';
 import type { Dir, Vec, SceneDef, Interactable } from './engine';
 import { buildAtlas } from './sprites';
@@ -16,6 +16,7 @@ import {
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, MINE_COST, WAND_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
+  itemKind,
 } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
@@ -23,8 +24,9 @@ import {
   maxEnergy, energyCost, sleep as passNight, pawnStockFor, buyFurniture, allFurnished,
   sketchyOfferFor, gachaComplete,
   clockLabel, nightT, morningT, COLLAPSE_MIN,
-  freeSpotsFor, placeItem, unplaceItem, spotLabelAt, unlockGameAch,
+  placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   oreNodesFor, shrineLuck, syncMessages, unreadCount,
+  fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk,
 } from './state';
 import type { OreNode } from './state';
 import type { GameSave } from './state';
@@ -93,6 +95,7 @@ const sfxGameStart = () => playSfx('/sfx/game-start.mp3');
 
 const DEFAULT_MUSIC = '/music/tokyo-apt-drift.mp3';
 const TITLE_BG = '/images/title-bg.png';
+const ZAMAZONK_LOGO = '/images/zamazonk-logo.png';
 const SCENE_MUSIC: Record<string, string> = {
   title: '/music/title.mp3',
   endofday: '/music/end-of-day.mp3',
@@ -156,7 +159,7 @@ type Overlay =
   | { type: 'menu'; tab: PhoneApp; thread?: string }
   | { type: 'ending' };
 
-type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats';
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk';
 
 const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
 
@@ -444,6 +447,15 @@ const LittleApartmentGame: React.FC = () => {
   const lastSafeTileRef = useRef<Vec | null>(null);
   const djPickRef = useRef<string | null>(null);
 
+  // ---- furniture Arrange mode (drag-and-drop placement) ----------------------
+  const arrangeRef = useRef(false);                 // loop reads this to freeze/render
+  const [arrangeOpen, setArrangeOpen] = useState(false); // drives the DOM overlay
+  const [arrangeTick, setArrangeTick] = useState(0);     // re-render tray on change
+  const heldRef = useRef<{ id: string; from: 'box' | 'placed' } | null>(null);
+  const ghostRef = useRef<{ tx: number; ty: number; valid: boolean } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const exitArrangeRef = useRef<() => void>(() => {}); // late-bound (update runs before the handler is defined)
+
   const setOverlayBoth = useCallback((o: Overlay | null) => {
     overlayRef.current = o;
     setOverlay(o);
@@ -563,6 +575,7 @@ const LittleApartmentGame: React.FC = () => {
       computeSolids();
       if (!pending.nursed) award('night-owl');
     }
+    fulfillDeliveries(s); // ZamaZonk orders land in the boxes this morning
     checkStory();
     syncMessages(s); // new day can trigger date-gated texts
     persistSave(s);
@@ -624,7 +637,7 @@ const LittleApartmentGame: React.FC = () => {
     return bed ? { x: bed.x, y: bed.y, w: 2, h: 1 } : { x: 1, y: 1, w: 2, h: 1 };
   }, []);
 
-  // Cans go in your pocket — drink them from the menu (I), or share one with
+  // Cans go in your pocket — drink them from the phone (P), or share one with
   // someone parched.
   const useVending = useCallback(() => {
     const s = saveRef.current;
@@ -1022,6 +1035,15 @@ const LittleApartmentGame: React.FC = () => {
       } else {
         input.consumeInteract(); input.consumeCancel(); input.consumeInventory();
       }
+      movingRef.current = false;
+      return;
+    }
+
+    // Arrange mode: pointer drives placement; freeze the avatar, let Esc/B leave.
+    if (arrangeRef.current) {
+      input.consumeInteract();
+      input.consumeInventory();
+      if (input.consumeCancel()) exitArrangeRef.current();
       movingRef.current = false;
       return;
     }
@@ -1438,6 +1460,39 @@ const LittleApartmentGame: React.FC = () => {
       },
     });
     ents.sort((a, b) => a.y - b.y).forEach(e => e.draw());
+
+    // Arrange mode: dim the room, light up placeable floor, draw the drag ghost.
+    if (arrangeRef.current && scene.id === 'apartment') {
+      ctx.fillStyle = 'rgba(8, 10, 24, 0.45)';
+      ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      const held = heldRef.current;
+      // grid + valid-cell wash over the interior floor (y 1..8, x 1..14)
+      ctx.lineWidth = 1;
+      for (let ty = 0; ty <= 8; ty++) {
+        for (let tx = 1; tx <= 14; tx++) {
+          const ok = held ? placeableAt(held.id, tx, ty) : (tileAt(scene, tx, ty) && !tileAt(scene, tx, ty)!.solid && ty >= 1);
+          if (ty === 0 && (!held || itemKind(held.id) !== 'wall')) continue;
+          const px = tx * TILE - cam.x, py = ty * TILE - cam.y;
+          ctx.fillStyle = ok ? 'rgba(124, 232, 160, 0.14)' : 'rgba(255,255,255,0.03)';
+          ctx.fillRect(px, py, TILE, TILE);
+          ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+          ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+        }
+      }
+      // ghost sprite at the hovered tile
+      const g = ghostRef.current;
+      if (held && g) {
+        const spr = atlas[furnitureById(held.id).sprite];
+        const gx = g.tx * TILE - cam.x, gy = g.ty * TILE - cam.y;
+        ctx.globalAlpha = 0.75;
+        if (spr) ctx.drawImage(spr, gx, gy);
+        ctx.globalAlpha = 1;
+        const w = itemFootprintW(held.id) * TILE;
+        ctx.strokeStyle = g.valid ? '#7ce8a0' : '#e0552e';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(gx + 0.5, gy + 0.5, w - 1, TILE - 1);
+      }
+    }
 
     // time-of-day wash: cool night fall, warm golden morning. Interiors keep
     // their own lights, so they barely shift; the street takes the full swing.
@@ -2090,6 +2145,170 @@ const LittleApartmentGame: React.FC = () => {
     setShopTick(v => v + 1);
   };
 
+  // ---- Arrange mode: free drag-and-drop furniture placement ------------------
+  // Cells the apartment floor can't take a new item (other furniture, the
+  // default futon, the maneki trophy). `ignoreId` lets the held item vacate its
+  // own footprint while it's being moved.
+  const apartmentOccupied = (s: GameSave, ignoreId?: string) => {
+    const occ = new Set<string>();
+    if (!s.placed['bed'] && ignoreId !== 'bed') { occ.add('1,1'); occ.add('2,1'); } // floor futon
+    for (const id of Object.keys(s.placed)) {
+      if (id === ignoreId) continue;
+      const p = s.placed[id], w = itemFootprintW(id);
+      for (let dx = 0; dx < w; dx++) occ.add(`${p.x + dx},${p.y}`);
+    }
+    if (gachaComplete(s)) occ.add(`${MANEKI_SLOT.x},${MANEKI_SLOT.y}`);
+    return occ;
+  };
+
+  const placeableAt = (id: string, tx: number, ty: number): boolean => {
+    const scene = sceneRef.current;
+    if (scene.id !== 'apartment') return false;
+    const s = saveRef.current;
+    const occ = apartmentOccupied(s, heldRef.current?.id ?? id);
+    if (itemKind(id) === 'wall') {
+      // wall mounts cling to the top wall row on a solid (non-window) tile
+      if (ty !== 0 || tx < 1 || tx > 14) return false;
+      const t = tileAt(scene, tx, ty);
+      return Boolean(t && t.solid) && !occ.has(`${tx},${ty}`);
+    }
+    const w = itemFootprintW(id);
+    for (let dx = 0; dx < w; dx++) {
+      const cx = tx + dx;
+      if (cx < 1 || cx > 14 || ty < 1 || ty > 8) return false;
+      const t = tileAt(scene, cx, ty);
+      if (!t || t.solid) return false;
+      if (occ.has(`${cx},${ty}`)) return false;
+    }
+    return true;
+  };
+
+  const findPlacedAt = (tx: number, ty: number): string | null => {
+    const s = saveRef.current;
+    for (const id of Object.keys(s.placed)) {
+      const p = s.placed[id], w = itemFootprintW(id);
+      if (ty === p.y && tx >= p.x && tx < p.x + w) return id;
+    }
+    return null;
+  };
+
+  const eventTile = (e: React.PointerEvent) => {
+    const cv = canvasRef.current;
+    if (!cv) return null;
+    const r = cv.getBoundingClientRect();
+    const lx = ((e.clientX - r.left) / r.width) * VIEW_PW;
+    const ly = ((e.clientY - r.top) / r.height) * VIEW_PH;
+    const cam = cameraFor(sceneRef.current, posRef.current);
+    return { tx: Math.floor((lx + cam.x) / TILE), ty: Math.floor((ly + cam.y) / TILE) };
+  };
+
+  const setHeld = (h: { id: string; from: 'box' | 'placed' } | null) => {
+    heldRef.current = h;
+    if (!h) ghostRef.current = null;
+    setArrangeTick(t => t + 1);
+  };
+
+  const pickUpPlaced = (id: string) => {
+    const s = saveRef.current;
+    unplaceItem(s, id);
+    computeSolids();
+    setHeld({ id, from: 'placed' });
+    blip([520, 392], 0.05);
+  };
+
+  const commitPlace = (tx: number, ty: number) => {
+    const h = heldRef.current;
+    if (!h) return;
+    const s = saveRef.current;
+    placeItem(s, h.id, tx, ty);
+    sfxBuy();
+    computeSolids();
+    persistSave(s);
+    refreshHud();
+    heldRef.current = null;
+    ghostRef.current = null;
+    setArrangeTick(t => t + 1);
+  };
+
+  // Send the held item back to the boxes (drag-to-trash / cancel of a placed item).
+  const boxHeld = () => {
+    const h = heldRef.current;
+    if (!h) return;
+    const s = saveRef.current;
+    if (s.placed[h.id]) { unplaceItem(s, h.id); computeSolids(); }
+    persistSave(s);
+    refreshHud();
+    heldRef.current = null;
+    ghostRef.current = null;
+    setArrangeTick(t => t + 1);
+  };
+
+  const enterArrange = () => {
+    setOverlayBoth(null);
+    heldRef.current = null;
+    ghostRef.current = null;
+    arrangeRef.current = true;
+    setArrangeOpen(true);
+    setArrangeTick(t => t + 1);
+  };
+
+  const exitArrange = () => {
+    arrangeRef.current = false;
+    heldRef.current = null;
+    ghostRef.current = null;
+    setArrangeOpen(false);
+    persistSave(saveRef.current);
+    refreshHud();
+  };
+  exitArrangeRef.current = exitArrange;
+
+  const isArrangeUI = (el: EventTarget | null) =>
+    el instanceof HTMLElement && Boolean(el.closest('[data-zz-ui]'));
+
+  const arrangeDown = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragStartRef.current = { x: e.clientX, y: e.clientY, moved: false };
+    const el = e.target as HTMLElement;
+    if (el.closest('[data-zz-done]')) { exitArrange(); return; }
+    const chip = el.closest('[data-zz-item]');
+    if (chip) { setHeld({ id: chip.getAttribute('data-zz-item')!, from: 'box' }); return; }
+    if (el.closest('[data-zz-trash]')) { if (heldRef.current) boxHeld(); return; }
+    if (isArrangeUI(el)) return; // a button handles its own click
+    const tt = eventTile(e);
+    if (!tt) return;
+    if (heldRef.current) {
+      if (placeableAt(heldRef.current.id, tt.tx, tt.ty)) commitPlace(tt.tx, tt.ty);
+      return;
+    }
+    const hit = findPlacedAt(tt.tx, tt.ty);
+    if (hit) { pickUpPlaced(hit); ghostRef.current = { tx: tt.tx, ty: tt.ty, valid: placeableAt(hit, tt.tx, tt.ty) }; }
+  };
+
+  const arrangeMove = (e: React.PointerEvent) => {
+    if (dragStartRef.current) {
+      const dx = e.clientX - dragStartRef.current.x, dy = e.clientY - dragStartRef.current.y;
+      if (Math.hypot(dx, dy) > 6) dragStartRef.current.moved = true;
+    }
+    if (!heldRef.current) return;
+    if (isArrangeUI(e.target)) { ghostRef.current = null; return; }
+    const tt = eventTile(e);
+    if (!tt) return;
+    ghostRef.current = { tx: tt.tx, ty: tt.ty, valid: placeableAt(heldRef.current.id, tt.tx, tt.ty) };
+  };
+
+  const arrangeUp = (e: React.PointerEvent) => {
+    const moved = dragStartRef.current?.moved ?? false;
+    dragStartRef.current = null;
+    const el = e.target as HTMLElement;
+    if (!heldRef.current) return;
+    if (el.closest('[data-zz-trash]')) { boxHeld(); return; }
+    if (!moved) return; // a tap: keep the item held for tap-to-place
+    if (isArrangeUI(el) || el.closest('[data-zz-item]')) { boxHeld(); return; } // dropped back on the tray
+    const tt = eventTile(e);
+    if (tt && placeableAt(heldRef.current.id, tt.tx, tt.ty)) commitPlace(tt.tx, tt.ty);
+    // otherwise (invalid floor): keep holding so they can try again
+  };
+
   // The smartphone. Replaces the old bag menu: a phone-shaped shell with a
   // status bar, a home screen of app icons, and one screen per "app"
   // (Bag/Inventory, Messages, Trophies, Settings, Codes).
@@ -2114,41 +2333,33 @@ const LittleApartmentGame: React.FC = () => {
     // ---- per-app screen bodies -----------------------------------------------
     const inventoryApp = (
       <div className="px-3 py-2">
+        {/* Arrange is the new placement UI — drag & drop in the room itself. */}
+        <div className="mb-2">
+          {atHome
+            ? <button
+                className="w-full font-pixel text-base bg-[#ffd24a] text-black px-3 py-2 rounded-lg shadow-[2px_2px_0_#000] hover:bg-[#ffe27a] transition-colors"
+                onClick={enterArrange}
+              >🛋 ARRANGE ROOM — drag furniture around</button>
+            : <p className="text-xs opacity-50 italic">Go home to arrange furniture (drag & drop).</p>}
+        </div>
+
         <p className="text-sm text-[#ffd24a]/80 tracking-wide">FURNITURE — BOXED ({boxed.length})</p>
         {boxed.length === 0 && <p className="py-1 text-base opacity-50">Nothing boxed up.</p>}
-        {boxed.map(id => {
-          const f = furnitureById(id);
-          const spots = freeSpotsFor(s, id);
-          return (
-            <div key={id} className="py-1 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <p className="flex-grow text-base">{f.name}</p>
-                {atHome
-                  ? <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={spots.length === 0} onClick={() => setPlacingItem(placingItem === id ? null : id)}>
-                      {placingItem === id ? 'CANCEL' : 'PLACE'}
-                    </button>
-                  : <span className="text-xs opacity-50">at home</span>}
-              </div>
-              {placingItem === id && atHome && (
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {spots.map(spot => (
-                    <button key={`${spot.x},${spot.y}`} className={`${btnCls} text-xs px-2 py-0.5`} onClick={() => doPlace(id, spot.x, spot.y)}>
-                      {spot.label}
-                    </button>
-                  ))}
-                  {spots.length === 0 && <p className="text-xs opacity-50">No free spot fits — put something away first.</p>}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {boxed.map(id => (
+          <div key={id} className="flex items-center gap-2 py-1 border-b border-white/10">
+            <SpriteIcon atlas={atlasRef.current} sprite={furnitureById(id).sprite} size={22} />
+            <p className="flex-grow text-base">{furnitureById(id).name}</p>
+            {atHome && <span className="text-xs opacity-40">drag in Arrange</span>}
+          </div>
+        ))}
 
         <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3">FURNITURE — PLACED ({placed.length})</p>
         {placed.length === 0 && <p className="py-1 text-base opacity-50">The apartment is bare.</p>}
         {placed.map(id => (
           <div key={id} className="flex items-center gap-2 py-1 border-b border-white/10">
-            <p className="flex-grow text-base">{furnitureById(id).name} <span className="text-xs opacity-50">— {spotLabelAt(s.placed[id].x, s.placed[id].y)}</span></p>
-            {atHome && <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doPutAway(id)}>PUT AWAY</button>}
+            <SpriteIcon atlas={atlasRef.current} sprite={furnitureById(id).sprite} size={22} />
+            <p className="flex-grow text-base">{furnitureById(id).name}</p>
+            {atHome && <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doPutAway(id)}>BOX IT</button>}
           </div>
         ))}
 
@@ -2283,19 +2494,61 @@ const LittleApartmentGame: React.FC = () => {
       </div>
     );
 
+    const order = (id: string, price: number) => {
+      if (orderZamaZonk(s, id, price)) { sfxCoin(); persistSave(s); refreshHud(); setShopTick(v => v + 1); }
+    };
+    const zamaCatalog = zamazonkCatalog(s);
+    const zamazonkApp = (
+      <div className="px-3 py-3">
+        <div className="flex items-center gap-2.5 mb-3 rounded-lg bg-[#120726] px-2.5 py-1.5">
+          <img src={ZAMAZONK_LOGO} alt="ZamaZonk" className="h-12 w-12 object-contain shrink-0" style={{ imageRendering: 'auto' }} />
+          <p className="text-xs opacity-70 leading-tight">The Everything Store.<br/>Delivered by morning.</p>
+        </div>
+        {s.orders.length > 0 && (
+          <div className="mb-2 rounded-lg bg-[#6a3fb0]/20 border border-[#9a6fe0]/40 px-2.5 py-1.5">
+            <p className="text-xs text-[#c9a9ff]">📦 ARRIVING TOMORROW</p>
+            {s.orders.map(o => <p key={o.itemId} className="text-sm opacity-80">{furnitureById(o.itemId).name}</p>)}
+          </div>
+        )}
+        {zamaCatalog.length === 0
+          ? <p className="py-2 text-base opacity-50">You own (or have ordered) every base item. ZamaZonk is mildly disappointed in your restraint.</p>
+          : zamaCatalog.map(f => {
+              const price = zamazonkPrice(f);
+              return (
+                <div key={f.id} className="flex items-center gap-2 py-1.5 border-b border-white/10">
+                  <SpriteIcon atlas={atlasRef.current} sprite={f.sprite} size={26} />
+                  <span className="flex-grow min-w-0">
+                    <span className="block text-base leading-tight">{f.name}</span>
+                    <span className="block text-xs opacity-50 leading-tight">¥{price.toLocaleString()} <span className="opacity-60">(incl. ¥300 ZamaPrime)</span></span>
+                  </span>
+                  <button
+                    className="shrink-0 font-pixel text-sm bg-[#7a4fd0] text-white px-2.5 py-1 rounded-md shadow-[2px_2px_0_#000] disabled:opacity-30 disabled:shadow-none hover:bg-[#8a5fe0] transition-colors"
+                    disabled={s.money < price}
+                    onClick={() => order(f.id, price)}
+                  >ORDER</button>
+                </div>
+              );
+            })}
+      </div>
+    );
+
     // ---- app icon grid (home screen) -----------------------------------------
-    const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: string; label: string; bg: string; badge?: number; onClick: () => void }) => (
+    const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: React.ReactNode; label: string; bg: string; badge?: number; onClick: () => void }) => (
       <button onClick={onClick} className="flex flex-col items-center gap-1 group">
-        <span className="relative w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-[0_2px_6px_rgba(0,0,0,0.5)] group-hover:brightness-110 group-active:scale-95 transition" style={{ background: bg }}>
-          {icon}
-          {badge ? <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-[#e0552e] text-white text-xs font-bold flex items-center justify-center border-2 border-[#0e0f14]">{badge}</span> : null}
+        {/* outer wrapper is NOT clipped, so the badge can overhang; the inner
+            tile clips the icon/logo to the rounded square. */}
+        <span className="relative w-14 h-14 group-hover:brightness-110 group-active:scale-95 transition">
+          <span className="absolute inset-0 rounded-2xl overflow-hidden flex items-center justify-center text-3xl shadow-[0_2px_6px_rgba(0,0,0,0.5)]" style={{ background: bg }}>
+            {icon}
+          </span>
+          {badge ? <span className="absolute -top-1.5 -right-1.5 z-10 min-w-[20px] h-5 px-1 rounded-full bg-[#e0552e] text-white text-xs font-bold flex items-center justify-center border-2 border-[#0e0f14]">{badge}</span> : null}
         </span>
         <span className="font-pixel text-xs text-white/90 drop-shadow">{label}</span>
       </button>
     );
 
     const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
-      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes',
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk',
     };
 
     return (
@@ -2331,11 +2584,14 @@ const LittleApartmentGame: React.FC = () => {
             <div className="grid grid-cols-3 gap-y-5 gap-x-2 px-4 pt-3 pb-6 justify-items-center">
               <AppIcon icon="🧳" label="Bag" bg="linear-gradient(160deg,#c9952f,#8a5a1f)" onClick={() => open('inventory')} />
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
+              <AppIcon
+                icon={<img src={ZAMAZONK_LOGO} alt="" className="w-full h-full object-contain p-0.5" />}
+                label="ZamaZonk" bg="#120726" badge={s.orders.length || undefined} onClick={() => open('zamazonk')}
+              />
               <AppIcon icon="🏆" label="Trophies" bg="linear-gradient(160deg,#e0a32e,#9e6e16)" onClick={() => open('achievements')} />
-              <AppIcon icon="💴" label="Wallet" bg="linear-gradient(160deg,#3a7bd0,#23508a)" onClick={() => open('settings')} />
               <AppIcon icon="⚙️" label="Settings" bg="linear-gradient(160deg,#5a5f6e,#33363f)" onClick={() => open('settings')} />
             </div>
-            <p className="text-center text-xs text-white/50 pb-4">Press <span className="text-white/80">I</span> or Esc to pocket the phone</p>
+            <p className="text-center text-xs text-white/50 pb-4">Press <span className="text-white/80">P</span> or Esc to pocket the phone</p>
           </div>
         ) : (
           // an app: header bar + scrollable body
@@ -2355,6 +2611,7 @@ const LittleApartmentGame: React.FC = () => {
             <div className="flex-1 overflow-y-auto min-h-0">
               {ov.tab === 'inventory' && inventoryApp}
               {ov.tab === 'messages' && messagesApp}
+              {ov.tab === 'zamazonk' && zamazonkApp}
               {ov.tab === 'achievements' && trophiesApp}
               {ov.tab === 'settings' && settingsApp}
               {ov.tab === 'cheats' && codesApp}
@@ -2683,64 +2940,85 @@ const LittleApartmentGame: React.FC = () => {
         ? 'w-full h-full flex flex-col bg-black select-none'
         : 'w-full max-w-[1000px] mx-auto select-none'}
     >
-      {/* HUD */}
+      {/* HUD — fixed height (h-12) so it never reflows as fonts/icons settle,
+          which removes the one-frame jump when arriving from the title. */}
       {screen === 'playing' && (
-        <div className="flex items-center gap-3 sm:gap-5 px-3 py-1.5 bg-[#16181d] border-2 border-b-0 border-[#ffd24a]/40 font-pixel text-[#e8e0d0] text-lg sm:text-xl">
-          <span className="text-[#ffd24a]">¥{hud.money.toLocaleString()}</span>
-          <span>Day {hud.day}</span>
-          <span className={hud.late ? 'text-[#e0552e] animate-pulse font-bold' : 'text-[#9fc4e8]'}>{hud.time}</span>
-          {hud.late && (
-            <span className="hidden sm:inline text-[#e0552e] text-sm sm:text-base animate-pulse" title="At 2:00 AM you pass out and wake up at home">
-              ⚠ pass out at 2 AM
-            </span>
-          )}
+        <div className="relative z-10 flex items-center gap-2 sm:gap-3 px-2 sm:px-3 h-12 shrink-0 overflow-hidden font-pixel text-[#e8e0d0] bg-gradient-to-b from-[#222732] to-[#11131a] border-b-2 border-[#ffd24a]/50 shadow-[0_2px_10px_rgba(0,0,0,0.55)]">
+          {/* thin gold sheen along the top edge */}
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#ffd24a]/40" />
+
+          {/* money */}
+          <span className="flex items-baseline gap-1 leading-none">
+            <span className="text-[#ffd24a]/60 text-sm">¥</span>
+            <span className="text-[#ffd24a] text-base sm:text-xl tabular-nums">{hud.money.toLocaleString()}</span>
+          </span>
+          <span className="w-px h-6 bg-white/10 shrink-0" />
+
+          {/* day + clock */}
+          <span className="flex items-baseline gap-1 leading-none">
+            <span className="opacity-45 text-xs sm:text-sm">DAY</span>
+            <span className="text-base sm:text-xl tabular-nums">{hud.day}</span>
+          </span>
+          <span
+            className={`flex items-center gap-1 leading-none tabular-nums text-base sm:text-xl ${hud.late ? 'text-[#e0552e]' : 'text-[#9fc4e8]'}`}
+            title={hud.late ? 'At 2:00 AM you pass out and wake up at home' : undefined}
+          >
+            {hud.late && <span className="text-[10px] animate-pulse">●</span>}
+            {hud.time}
+          </span>
+
+          {/* energy meter */}
           {(() => {
             const pct = Math.max(0, Math.min(1, hud.energy / hud.max));
-            // green when rested, amber mid, red when nearly spent
             const fill = pct > 0.5 ? '#3da26b' : pct > 0.25 ? '#e0a32e' : '#d2452e';
             return (
-              <span className="flex items-center gap-1.5">
-                <span className="text-sm opacity-60">EN</span>
-                <span className="relative inline-block w-20 sm:w-28 h-3.5 rounded-sm bg-black/70 border border-white/20 align-middle overflow-hidden shadow-[inset_0_1px_0_rgba(0,0,0,0.6)]">
-                  <span
-                    className="block h-full rounded-sm transition-[width,background-color] duration-300"
-                    style={{ width: `${pct * 100}%`, backgroundColor: fill }}
-                  />
-                  {/* glossy highlight strip */}
-                  <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-white/15" />
+              <span className="flex items-center gap-1.5 leading-none">
+                <span className="text-xs opacity-50">EN</span>
+                <span className="relative inline-block w-16 sm:w-28 h-3.5 rounded-full bg-black/70 border border-white/15 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.7)]">
+                  <span className="block h-full rounded-full transition-[width,background-color] duration-300" style={{ width: `${pct * 100}%`, backgroundColor: fill }} />
+                  <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-full" />
                 </span>
-                <span className="text-sm opacity-60 tabular-nums">{hud.energy}/{hud.max}</span>
+                <span className="hidden sm:inline text-xs opacity-50 tabular-nums">{hud.energy}/{hud.max}</span>
               </span>
             );
           })()}
-          <span className="ml-auto opacity-70 truncate">{hud.sceneName}</span>
+
+          {/* scene name */}
+          <span className="ml-auto hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded bg-black/25 text-sm text-[#e8e0d0]/80 leading-none truncate max-w-[34%]">
+            <span className="opacity-50">📍</span>{hud.sceneName}
+          </span>
+
+          {/* phone */}
           <button
             onClick={() => setOverlayBoth(overlay?.type === 'menu' ? null : { type: 'menu', tab: 'home' })}
-            title="Phone — bag, messages, more (I)"
+            title="Phone — bag, messages, ZamaZonk (P)"
             aria-label="Phone"
-            className="relative shrink-0 flex items-center gap-1 bg-[#ffd24a] text-black border-2 border-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base shadow-[2px_2px_0px_#000] hover:bg-[#ffe27a] transition-colors"
+            className="relative shrink-0 sm:ml-1 flex items-center gap-1 h-8 bg-[#ffd24a] text-black rounded-md px-2 text-sm sm:text-base shadow-[0_2px_0_#9a7d1e] hover:bg-[#ffe27a] active:translate-y-px active:shadow-none transition"
           >
             📱 <span className="hidden sm:inline">PHONE</span>
-            {!isCoarse && <kbd className="hidden sm:inline ml-0.5 text-xs bg-black/20 border border-black/30 rounded px-1 leading-none">I</kbd>}
+            {!isCoarse && <kbd className="hidden sm:inline ml-0.5 text-xs bg-black/20 border border-black/30 rounded px-1 leading-none">P</kbd>}
             {hud.unread > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e0552e] text-white text-xs font-bold flex items-center justify-center border-2 border-black">{hud.unread}</span>
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e0552e] text-white text-xs font-bold flex items-center justify-center border-2 border-[#11131a]">{hud.unread}</span>
             )}
           </button>
+
+          {/* mute */}
           <button
             onClick={toggleMusic}
             title={musicMuted ? 'Unmute' : 'Mute'}
             aria-label={musicMuted ? 'Unmute' : 'Mute'}
-            className="shrink-0 text-xl border border-white/25 rounded-sm px-1.5 py-0.5 opacity-80 hover:opacity-100 transition-opacity"
+            className="shrink-0 h-8 w-8 flex items-center justify-center text-lg rounded-md border border-white/15 bg-white/5 opacity-80 hover:opacity-100 hover:bg-white/10 transition"
           >
             {musicMuted ? '🔇' : '🔊'}
           </button>
-          {/* Desktop app is already OS-fullscreen — no in-page FS toggle. */}
+
+          {/* fullscreen (web/mobile only — native window owns FS) */}
           {!isDesktopApp && (
             <button
               onClick={toggleFullscreen}
               title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-              className="shrink-0 flex items-center gap-1 border-2 border-[#ffd24a]/70 text-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base hover:bg-[#ffd24a] hover:text-black transition-colors"
+              className="shrink-0 h-8 flex items-center gap-1 px-2 rounded-md border border-[#ffd24a]/60 text-[#ffd24a] text-sm sm:text-base hover:bg-[#ffd24a] hover:text-black transition"
             >
               {isFullscreen ? '🗗' : '⛶'} <span className="hidden sm:inline">{isFullscreen ? 'EXIT' : 'FULL'}</span>
             </button>
@@ -2983,7 +3261,7 @@ const LittleApartmentGame: React.FC = () => {
                 <p><span className="text-[#ffd24a]">Moving around.</span> {isCoarse ? 'Use the on-screen D-pad to move and the E button to interact; ✕ closes menus.' : 'WASD or arrow keys to move. Press E (or Space) to interact with people, doors, and the glowing spots. Esc closes menus.'} Walk to the edges of an area to reach the rest of the city.</p>
                 <p><span className="text-[#ffd24a]">Making money.</span> Fish at the shore (learn how from Genji, the old man on the beach first), work a daily shift at the konbini, mine, or sell things. Sell your catch and goods at the right shops.</p>
                 <p><span className="text-[#ffd24a]">Energy &amp; the clock.</span> Actions cost energy (the EN bar). Eat or sleep in your bed to recover. The day has a clock — stay out past 2 AM and you'll collapse and wake up home. Sleeping starts the next day.</p>
-                <p><span className="text-[#ffd24a]">Furnishing.</span> Things you buy go into boxes. Open your phone (press <span className="text-[#ffd24a]">I</span>, or tap 📱 PHONE) {isCoarse ? '' : 'any time '}→ the Bag app, at home, to place them. Beds, fridges and the like only work once placed. Your phone also holds messages, trophies, and your wallet.</p>
+                <p><span className="text-[#ffd24a]">Furnishing.</span> Things you buy go into boxes. Open your phone (press <span className="text-[#ffd24a]">P</span>, or tap 📱 PHONE) {isCoarse ? '' : 'any time '}→ the Bag app, then <span className="text-[#ffd24a]">Arrange Room</span> at home to drag furniture wherever you like. Beds, fridges and the like only work once placed. Need more stuff fast? Order it from the <span className="text-[#9a6fe0]">ZamaZonk</span> app — it arrives next morning.</p>
                 <p><span className="text-[#ffd24a]">Explore.</span> The city is bigger than it looks — a pawn shop, an arcade district, a nightclub, a shrine, an island, and stranger places below. Talk to everyone. Check the menu for your inventory and achievements.</p>
                 <p className="opacity-70">Your progress saves automatically. Pick CONTINUE next time to keep going.</p>
               </div>
@@ -3184,6 +3462,61 @@ const LittleApartmentGame: React.FC = () => {
           </div>
         )}
 
+        {/* Arrange mode: a transparent pointer surface over the room + a tray.
+            Drag boxed items onto the floor; drag placed items to move them, or
+            to the bin to box them. The canvas underneath draws the grid+ghost. */}
+        {arrangeOpen && screen === 'playing' && (() => {
+          void arrangeTick;
+          const s = saveRef.current;
+          const boxed = [...s.owned, ...s.rares].filter(id => !s.placed[id]);
+          const held = heldRef.current;
+          return (
+            <div
+              className="absolute inset-0 z-30 select-none"
+              style={{ touchAction: 'none' }}
+              onPointerDown={arrangeDown}
+              onPointerMove={arrangeMove}
+              onPointerUp={arrangeUp}
+              onPointerCancel={() => { dragStartRef.current = null; }}
+              onContextMenu={e => e.preventDefault()}
+            >
+              {/* top banner */}
+              <div data-zz-ui className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-black/70 border-b border-[#ffd24a]/30 pointer-events-none">
+                <span className="font-pixel text-[#ffd24a] text-sm sm:text-base">🛋 ARRANGE ROOM</span>
+                <span className="font-pixel text-[#e8e0d0]/70 text-xs sm:text-sm hidden sm:inline">
+                  {held ? 'Drop on a green tile · bin to box it' : 'Drag furniture onto the floor · drag placed items to move'}
+                </span>
+                <button data-zz-ui data-zz-done className="font-pixel text-sm bg-[#ffd24a] text-black px-3 py-0.5 shadow-[2px_2px_0_#000] pointer-events-auto">DONE</button>
+              </div>
+
+              {/* bottom tray of boxed furniture + the bin */}
+              <div data-zz-ui className="absolute bottom-0 inset-x-0 flex items-end gap-2 px-3 py-2 bg-black/70 border-t border-[#ffd24a]/30">
+                <div className="flex-1 flex gap-2 overflow-x-auto pb-1">
+                  {boxed.length === 0
+                    ? <span className="font-pixel text-[#e8e0d0]/50 text-sm py-3">No furniture in boxes. Buy some, or order from ZamaZonk.</span>
+                    : boxed.map(id => (
+                        <div
+                          key={id}
+                          data-zz-item={id}
+                          className={`shrink-0 w-[68px] flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border bg-[#16181d]/90 cursor-grab active:cursor-grabbing ${held?.id === id ? 'border-[#7ce8a0] opacity-40' : 'border-[#ffd24a]/40'}`}
+                        >
+                          <SpriteIcon atlas={atlasRef.current} sprite={furnitureById(id).sprite} size={30} />
+                          <span className="font-pixel text-[#e8e0d0] text-[10px] leading-tight text-center line-clamp-1">{furnitureById(id).name}</span>
+                        </div>
+                      ))}
+                </div>
+                <div
+                  data-zz-trash
+                  className={`shrink-0 w-16 h-16 flex flex-col items-center justify-center rounded-md border-2 border-dashed ${held ? 'border-[#e0552e] text-[#e0552e] bg-[#e0552e]/10' : 'border-white/25 text-white/40'}`}
+                >
+                  <span className="text-2xl leading-none">🗑</span>
+                  <span className="font-pixel text-[9px]">box it</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ending */}
         {overlay?.type === 'ending' && (
           <div className="absolute inset-0 bg-black/95 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
@@ -3272,7 +3605,7 @@ const LittleApartmentGame: React.FC = () => {
       </div>
 
       {screen === 'playing' && !isCoarse && (
-        <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · I phone · Esc close</p>
+        <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · P phone · Esc close</p>
       )}
     </div>
   );
@@ -3295,6 +3628,25 @@ const TouchBtn: React.FC<{ onHold: (down: boolean) => void; small?: boolean; big
       {children}
     </button>
   );
+
+// Draws an atlas sprite (canvas/bitmap) into a small DOM canvas for menus/trays.
+const SpriteIcon: React.FC<{ atlas: Atlas | null; sprite: string; size?: number }> = ({ atlas, sprite, size = 30 }) => {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current;
+    const img = atlas?.[sprite] as (CanvasImageSource & { width: number; height: number }) | undefined;
+    if (!cv || !img) return;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const iw = img.width || 16, ih = img.height || 16;
+    const sc = Math.min(size / iw, size / ih);
+    const dw = iw * sc, dh = ih * sc;
+    ctx.drawImage(img, Math.round((size - dw) / 2), Math.round((size - dh) / 2), dw, dh);
+  }, [atlas, sprite, size]);
+  return <canvas ref={ref} width={size} height={size} style={{ imageRendering: 'pixelated', width: size, height: size }} />;
+};
 
 const ShopFrame: React.FC<{
   title: string; subtitle: string; money: number; onClose: () => void;

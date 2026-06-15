@@ -23,17 +23,18 @@ with keyboard, touch, or a game controller. Fully offline; saves live in the dev
 ## What you do
 - **Fish** the shore, the deep bay (from a skiff), and a tropical island — a reel minigame, 8+ species, rarer the harder.
 - **Earn yen** every way the town allows: fishing, konbini shifts, the daily pawn stock, mining, and Jimmy's sketchy back-of-a-truck deals.
-- **Furnish the apartment** — buy furniture, box it home, place it into the right spots. A bed, fridge, AC and kotatsu only do anything once they're placed. Furnish all ten and you're home.
+- **Furnish the apartment** — buy furniture (or order it from **ZamaZonk** on your phone for next-morning delivery), then drag-and-drop it anywhere in the room from the phone's **Arrange** mode. A bed, fridge, AC and kotatsu only do anything once they're placed. Furnish all ten and you're home.
+- **Carry a smartphone** — bag, messages from the people and companies you meet, the ZamaZonk store, trophies, and settings, all in a pocket phone (press **P**).
 - **Explore 15 hand-built scenes** — downtown, Club Kaiju, the gachapon hall, Yoshi Shrine, Kiwami Island, and the backrooms-and-mines under the konbini freezer.
 - **Get around** — buy a kei car and an old skiff.
 - A living **day/night cycle**: energy, sleep, and a 2 AM collapse that carries you home anyway. **22 achievements**, a magical-girl wand for the crawlers in the mines, and per-scene music.
 
 ## Controls
-| | Move | Interact / reel | Menu (bag) | Cancel / close |
+| | Move | Interact / reel | Phone | Cancel / close |
 |---|---|---|---|---|
-| **Keyboard** | WASD / arrows | E or Space (hold to reel) | I | Esc |
+| **Keyboard** | WASD / arrows | E or Space (hold to reel) | P | Esc |
 | **Gamepad** | stick / d-pad | A | Y / Start | B |
-| **Touch** | on-screen pad | on-screen buttons | 🎒 button | on-screen ✕ |
+| **Touch** | on-screen pad | on-screen buttons | 📱 button | on-screen ✕ |
 
 ## Quick start (dev)
 ```sh

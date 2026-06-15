@@ -70,8 +70,13 @@ npm run playtest -- drive --save shore --hold ArrowLeft:700
 npm run playtest -- state --save explorer               # dump live state, no image
 npm run playtest -- title --click DISPLAY --full        # open + capture the DISPLAY panel
 npm run playtest -- shot --save shore --scale 1 --full  # verify forced 1× scaling
-npm run playtest -- shot --new --keys "i" --full        # open the phone (home screen)
-npm run playtest -- shot --save city --click "PHONE,Messages" --full  # phone Messages app
+npm run playtest -- shot --new --keys "p" --full        # open the phone (home screen — key is P)
+npm run playtest -- shot --save city --click "PHONE,Messages" --full       # phone Messages app
+npm run playtest -- shot --save city --click "PHONE,ZamaZonk" --full       # ZamaZonk store
+npm run playtest -- shot --save apartment --click "PHONE,Bag,ARRANGE" --full # Arrange mode UI
+# ZamaZonk order debits cash + queues delivery (clicks first ORDER button):
+npm run playtest -- state --save '{"scene":"city","money":40000,"visited":["city"]}' \
+  --click "PHONE,ZamaZonk,ORDER" --assert "save.orders.length===1 && money<40000"
 
 npm run playtest -- state --save rich --assert "money>500000"  # pass/fail via exit code
 ```
@@ -87,3 +92,8 @@ npm run playtest -- state --save rich --assert "money>500000"  # pass/fail via e
   `day`; set `day` in custom save to reproduce specific daily roll.
 - Harness only **reads** state; never pokes refs. To reach state, seed
   save + drive inputs — same constraints as real player.
+- **Arrange mode** placement is a *canvas pointer-drag* — the harness can't
+  synthesize drags at tile coords, so verify the Arrange UI **visually** (`--full`
+  screenshot of `PHONE,Bag,ARRANGE`) and verify the data side with unit tests
+  (`tests/state.test.ts`). DOM buttons inside it (DONE / tray chips) are not
+  plain `<button>`s, so `--click` won't drive them either.

@@ -154,7 +154,7 @@ export class Input {
       this.actionHeld = true;
     }
     if (k === 'escape') { this.cancelQueued = true; }
-    if (k === 'i' && !e.repeat) { this.inventoryQueued = true; }
+    if (k === 'p' && !e.repeat) { this.inventoryQueued = true; } // P opens the phone
   };
 
   readonly onKeyUp = (e: KeyboardEvent) => {
