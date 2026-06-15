@@ -7,11 +7,10 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // Game uses font-retro (Press Start 2P) and font-pixel (Eazygoin, the
-        // English body font; VT323 kept as a per-glyph fallback).
+        // Game uses font-retro (Press Start 2P) and font-pixel (VT323).
         'sans': ['Inter', 'sans-serif'],
         'retro': ['"Press Start 2P"', 'cursive'],
-        'pixel': ['"Eazygoin"', '"VT323"', 'monospace'],
+        'pixel': ['"VT323"', 'monospace'],
         'jp': ['"Naganoshi"', 'sans-serif'], // Japanese pixel font (canvas signs)
         'handwriting': ['"Kalam"', 'cursive'],
       },
