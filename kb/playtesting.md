@@ -21,7 +21,9 @@ Vite **dev** server — no Rust, no Tauri, no build step. Lives in
 
 ## Snapshot fields
 `screen` (`title`/`playing`), `scene`, `pos` {x,y px}, `tile` {x,y}, `dir`,
-`moving`, `overlay` (open overlay type or null), `scale` (live canvas integer
+`moving`, `overlay` (open overlay type or null), `overlayData` (compact on-screen
+contents — dialog `{speaker,line,idx,total}`, shop, menu tab, letter beat, sleep;
+null if no overlay), `scale` (live canvas integer
 scale), `money`, `day`, `energy`, `timeMin`, and full `save` object.
 
 ## Commands
@@ -48,6 +50,7 @@ scale), `money`, `day`, `energy`, `timeMin`, and full `save` object.
 | `--width/--height/--dpr` | viewport (default 1280×800) + deviceScaleFactor. `--dpr 2` checks Retina scaling. |
 | `--show` | headed browser (watch it run). |
 | `--url <url>` | use already-running server instead of spawning vite. |
+| `--assert "<expr>"` | eval JS boolean against snapshot (keys `money`/`scene`/`day`/`overlay`/… + full `save` in scope). Exit 1 on fail/error — CI/agent-checkable without parsing JSON. |
 
 ## Save presets (`PRESETS` in script)
 `new`, `rich`, `fisher`, `explorer`, `lowenergy`, plus **teleports**:
@@ -68,6 +71,7 @@ npm run playtest -- state --save explorer               # dump live state, no im
 npm run playtest -- title --click DISPLAY --full        # open + capture the DISPLAY panel
 npm run playtest -- shot --save shore --scale 1 --full  # verify forced 1× scaling
 npm run playtest -- shot --new --keys "i" --full        # open the bag menu
+npm run playtest -- state --save rich --assert "money>500000"  # pass/fail via exit code
 ```
 
 ## Notes / gotchas

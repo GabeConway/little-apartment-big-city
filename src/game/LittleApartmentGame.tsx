@@ -1665,6 +1665,21 @@ const LittleApartmentGame: React.FC = () => {
         dir: dirRef.current,
         moving: movingRef.current,
         overlay: overlayRef.current?.type ?? null,
+        // Compact, serializable view of the open overlay's contents — lets the
+        // playtest harness read on-screen text/options without a screenshot.
+        overlayData: (() => {
+          const ov = overlayRef.current;
+          if (!ov) return null;
+          switch (ov.type) {
+            case 'dialog':
+              return { speaker: ov.speaker ?? null, line: ov.lines[ov.idx] ?? null, idx: ov.idx, total: ov.lines.length };
+            case 'shop': return { shop: ov.shop };
+            case 'menu': return { tab: ov.tab };
+            case 'letter': return { beat: ov.beat?.id ?? null };
+            case 'sleep': return { day: ov.day, collapsed: !!ov.collapsed };
+            default: return null;
+          }
+        })(),
         scale: scaleRef.current,
         money: saveRef.current.money,
         day: saveRef.current.day,
@@ -1991,7 +2006,7 @@ const LittleApartmentGame: React.FC = () => {
     const placed = allItems.filter(id => Boolean(s.placed[id]));
     const tabBtn = (tab: 'inventory' | 'achievements' | 'cheats', label: string) => (
       <button
-        className={`px-3 py-1 text-lg border-b-2 ${ov.tab === tab ? 'text-[#ffd24a] border-[#ffd24a]' : 'opacity-50 border-transparent hover:opacity-80'}`}
+        className={`px-3 py-1 text-lg whitespace-nowrap border-b-2 ${ov.tab === tab ? 'text-[#ffd24a] border-[#ffd24a]' : 'opacity-50 border-transparent hover:opacity-80'}`}
         onClick={() => { setPlacingItem(null); setOverlayBoth({ type: 'menu', tab }); }}
       >
         {label}
@@ -1999,24 +2014,16 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     return (
-      <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-4 py-3`}>
-        <div className="flex items-center gap-2 border-b-2 border-[#ffd24a]/40 mb-2">
+      <div className={`${panelCls} w-full max-w-xl max-h-full flex flex-col px-4 py-3`}>
+        <div className="flex items-center gap-2 border-b-2 border-[#ffd24a]/40 mb-2 shrink-0">
           {tabBtn('inventory', 'INVENTORY')}
           {tabBtn('achievements', `ACHIEVEMENTS ${s.gameAch.length}/${GAME_ACHIEVEMENTS.length}`)}
-          {tabBtn('cheats', '???')}
+          {tabBtn('cheats', '🐛 CHEATS')}
           <span className="ml-auto font-pixel text-sm bg-[#9fc4e8]/20 text-[#9fc4e8] border border-[#9fc4e8]/50 px-2 py-0.5 animate-pulse">⏸ PAUSED</span>
           <button className={`${btnCls} text-sm px-2 py-0.5 mb-1`} onClick={() => { setPlacingItem(null); setOverlayBoth(null); }}>ESC ✕</button>
         </div>
 
-        <div className="flex justify-end mb-1">
-          <button
-            className="font-pixel text-sm border border-[#9fc4e8]/60 text-[#9fc4e8] px-3 py-1 hover:bg-[#9fc4e8] hover:text-black transition-colors"
-            onClick={quitToMenu}
-          >
-            💾 SAVE &amp; QUIT TO MENU
-          </button>
-        </div>
-
+        <div className="flex-1 overflow-y-auto min-h-0">
         {ov.tab === 'inventory' && (
           <>
             <p className="text-base text-[#ffd24a]/80">FURNITURE — IN BOXES ({boxed.length})</p>
@@ -2025,9 +2032,9 @@ const LittleApartmentGame: React.FC = () => {
               const f = furnitureById(id);
               const spots = freeSpotsFor(s, id);
               return (
-                <div key={id} className="py-1.5 border-b border-white/10">
+                <div key={id} className="py-1 border-b border-white/10">
                   <div className="flex items-center gap-3">
-                    <p className="flex-grow text-xl">{f.name}</p>
+                    <p className="flex-grow text-lg">{f.name}</p>
                     {atHome
                       ? <button className={btnCls} disabled={spots.length === 0} onClick={() => setPlacingItem(placingItem === id ? null : id)}>
                           {placingItem === id ? 'CANCEL' : 'PLACE'}
@@ -2115,6 +2122,16 @@ const LittleApartmentGame: React.FC = () => {
             </div>
           );
         })}
+        </div>
+
+        <div className="flex justify-end pt-2 mt-2 border-t-2 border-[#ffd24a]/40 shrink-0">
+          <button
+            className="font-pixel text-sm border border-[#9fc4e8]/60 text-[#9fc4e8] px-3 py-1 hover:bg-[#9fc4e8] hover:text-black transition-colors"
+            onClick={quitToMenu}
+          >
+            💾 SAVE &amp; QUIT TO MENU
+          </button>
+        </div>
       </div>
     );
   };

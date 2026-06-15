@@ -217,6 +217,24 @@ async function main() {
 
     const snap = await snapshot(page);
 
+    // --assert "<expr>": eval a JS boolean against the snapshot. Snapshot keys
+    // (money, scene, day, energy, overlay, …) and the full `save` are in scope.
+    // Exit 1 on failure so the run is CI/agent-checkable without parsing JSON.
+    if (opts.assert) {
+      const expr = String(opts.assert);
+      let ok;
+      try {
+        ok = Function(...Object.keys(snap), `return (${expr});`)(...Object.values(snap));
+      } catch (e) {
+        process.stderr.write(`✗ assert errored: ${e.message}\n`);
+        process.stdout.write(JSON.stringify(snap, null, 2) + '\n');
+        process.exitCode = 1;
+        return;
+      }
+      process.stderr.write(`${ok ? '✓' : '✗'} assert: ${expr}\n`);
+      if (!ok) process.exitCode = 1;
+    }
+
     if (cmd === 'shot' || cmd === 'title' || cmd === 'drive') {
       const out = resolve(ROOT, opts.out || `playtest/shot-${Date.now()}.png`);
       await mkdir(dirname(out), { recursive: true });
