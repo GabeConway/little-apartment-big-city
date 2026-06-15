@@ -1102,6 +1102,59 @@ const buildMisc = (atlas: Atlas) => {
   ], { p: '#e857a8', y: '#ffd24a', w: '#ffffff' });
 };
 
+// ---- PNG sprite-sheet pipeline ----------------------------------------------
+// buildAtlas() below is all in-code art. This layer loads AI-generated PNG art
+// (from public/, absolute paths like title-bg.png) and injects per-frame
+// canvases into the SAME atlas the renderer blits — so nothing downstream
+// changes. Characters use it now; world tiles/props/maps will add rows later.
+export interface SheetDef {
+  key: string;             // atlas key prefix; frames land at `${key}-${i}`
+  src: string;             // absolute path, e.g. /images/characters/walk-fem.png
+  fw: number; fh: number;  // source frame size (px)
+  frames: number;          // horizontal frame count in the sheet
+  out?: number;            // optional output HEIGHT px (nearest-neighbor downscale); width keeps aspect
+}
+
+// Load sheets async, slice into frame canvases, write into `atlas`. Calls
+// `done` once every sheet has loaded (or errored). Safe to mutate a live atlas:
+// the render loop reads each key per frame, so frames appear as they arrive.
+export const loadSheets = (atlas: Atlas, defs: SheetDef[], done?: () => void): void => {
+  let pending = defs.length;
+  if (pending === 0) { done?.(); return; }
+  for (const def of defs) {
+    const img = new Image();
+    const finish = () => { if (--pending === 0) done?.(); };
+    img.onload = () => {
+      const scale = def.out ? def.out / def.fh : 1;
+      const ow = Math.max(1, Math.round(def.fw * scale));
+      const oh = Math.max(1, Math.round(def.fh * scale));
+      for (let i = 0; i < def.frames; i++) {
+        const [c, ctx] = canvas(ow, oh);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, i * def.fw, 0, def.fw, def.fh, 0, 0, ow, oh);
+        atlas[`${def.key}-${i}`] = c;
+      }
+      finish();
+    };
+    img.onerror = finish;
+    img.src = def.src;
+  }
+};
+
+// Player-character art (AI-generated, 64px source). South-facing only: the
+// renderer mirrors it for 'right' and reuses south for up/down/left (no back/
+// side art yet — mirror-only decision). Frames stay at FULL 64px resolution;
+// the renderer scales them down to PC_DRAW_H with smoothing on (a nearest-
+// neighbor pre-downscale crushed the detail). Temporary until world assets are
+// regenerated at matching scale.
+export const PC_DRAW_H = 32;   // logical px tall = 2 tiles (Stardew proportion); RR supersamples for detail
+export const PC_SHEETS: SheetDef[] = [
+  { key: 'pc-fem-idle',  src: '/images/characters/villager-fem.png',  fw: 128, fh: 128, frames: 1 },
+  { key: 'pc-fem-walk',  src: '/images/characters/walk-fem.png',      fw: 128, fh: 128, frames: 4 },
+  { key: 'pc-masc-idle', src: '/images/characters/villager-masc.png', fw: 128, fh: 128, frames: 1 },
+  { key: 'pc-masc-walk', src: '/images/characters/walk-masc.png',     fw: 128, fh: 128, frames: 4 },
+];
+
 export const buildAtlas = (): Atlas => {
   const atlas: Atlas = {};
   addCharacter(atlas, 'player', PLAYER_PAL);

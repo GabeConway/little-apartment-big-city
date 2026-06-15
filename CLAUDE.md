@@ -21,6 +21,7 @@ router, no site chrome. Input: keyboard, touch, or game controller.
 ## Knowledge base (`kb/`)
 Read before editing the matching area:
 - [kb/games.md](kb/games.md) — the game's full as-built reference (architecture, systems, hard rules, music/sfx).
+- [kb/art-direction.md](kb/art-direction.md) — visual style law: refs (Tiny Tower/Stardew/Habbo), perspective, master palette, PNG asset pipeline. Read before generating art.
 - [kb/little-apartment-progress.md](kb/little-apartment-progress.md) — build-history checklist.
 - [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
 - [kb/conventions.md](kb/conventions.md) — coding conventions.

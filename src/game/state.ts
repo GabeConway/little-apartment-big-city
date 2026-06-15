@@ -15,8 +15,14 @@ import { APARTMENT_SLOTS, RARE_SLOTS, PLACEMENT_SPOTS } from './maps';
 export const WAKE_MIN = 7 * 60;       // days start at 7:00 AM
 export const COLLAPSE_MIN = 26 * 60;  // 2:00 AM — you fade out and wake up at home
 
+// The "what's your vibe?" pick on a new game. Not a gender — just which of the
+// two AI-generated player looks you walk around as. See sprites.ts PC_SHEETS.
+export type Vibe = 'fem' | 'masc';
+
 export interface GameSave {
   v: number;                    // save version (v2+: placement system)
+  vibe: Vibe;                   // chosen player appearance (new-game vibe pick)
+  name: string;                 // player name (chosen at new game; used instead of any pronoun)
   money: number;
   day: number;
   timeMin: number;              // in-game clock, minutes since midnight (can pass 24h)
@@ -76,6 +82,8 @@ const KEY = 'lab-save';
 
 export const newSave = (): GameSave => ({
   v: 2,
+  vibe: 'fem',
+  name: 'Neighbor',
   money: 3000,
   day: 1,
   timeMin: WAKE_MIN,
@@ -328,7 +336,8 @@ export const syncMessages = (s: GameSave): PhoneMessage[] => {
     if (have.has(def.id) || !def.when(ctx)) continue;
     const msg: PhoneMessage = {
       id: def.id, from: def.from, avatar: def.avatar, company: def.company,
-      body: def.body, day: s.day, read: false,
+      body: def.body.map(line => line.replaceAll('{name}', s.name)), // address by name, never a pronoun
+      day: s.day, read: false,
     };
     s.messages.push(msg);
     fresh.push(msg);

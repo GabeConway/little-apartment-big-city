@@ -346,7 +346,7 @@ export const MESSAGES: MessageDef[] = [
     id: 'welcome-landlord', from: 'Maison Kawa 🏢', avatar: '🏢', company: true,
     when: () => true,
     body: [
-      'Welcome to MAISON KAWA, unit 204! This is the building line.',
+      'Welcome to MAISON KAWA, unit 204 — good to have you, {name}! This is the building line.',
       'Hot water is on the meter, the recycling goes out Tuesday, and the wall to 205 is thinner than it looks. Please be a good neighbor.',
       'Rent autodrafts each month — keep a little cushion in the bank. Enjoy your new home! 🌇',
     ],

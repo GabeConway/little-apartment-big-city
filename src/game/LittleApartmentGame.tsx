@@ -4,11 +4,11 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  TILE, VIEW_PW, VIEW_PH, Input, startLoop, tryMove, feetTile, facedTile,
+  TILE, VIEW_PW, VIEW_PH, RR, Input, startLoop, tryMove, feetTile, facedTile,
   cameraFor, sceneSize, isSolid, tileAt,
 } from './engine';
 import type { Dir, Vec, SceneDef, Interactable } from './engine';
-import { buildAtlas } from './sprites';
+import { buildAtlas, loadSheets, PC_SHEETS, PC_DRAW_H } from './sprites';
 import type { Atlas } from './sprites';
 import { SCENES, SCENE_SIGNS, MANEKI_SLOT, ORE_SPOTS, CRAWLER_SPAWNS } from './maps';
 import {
@@ -29,7 +29,7 @@ import {
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk,
 } from './state';
 import type { OreNode } from './state';
-import type { GameSave } from './state';
+import type { GameSave, Vibe } from './state';
 import { startFishing, updateFishing, ZONE_H } from './fishing';
 import type { FishingState } from './fishing';
 
@@ -322,6 +322,10 @@ const PLAYER_SPEED = 72; // px/s
 
 const LittleApartmentGame: React.FC = () => {
   const [screen, setScreen] = useState<'title' | 'playing'>('title');
+  const [vibePick, setVibePick] = useState(false);   // "what's your vibe?" new-game step
+  const [pcName, setPcName] = useState('');           // name input on the vibe screen
+  const pendingVibeRef = useRef<Vibe>('fem');         // chosen vibe, applied in begin()
+  const pendingNameRef = useRef('Neighbor');          // chosen name, applied in begin()
   const [manageOpen, setManageOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [fsGuideOpen, setFsGuideOpen] = useState(false);
@@ -1227,9 +1231,11 @@ const LittleApartmentGame: React.FC = () => {
     const ctx = canvasRef.current?.getContext('2d');
     const atlas = atlasRef.current;
     if (!ctx || !atlas) return;
-    // Integer upscale: the backing store is scale× the logical 320x192 so each
-    // game pixel maps to a whole number of device pixels (crisp on Retina).
-    ctx.setTransform(scaleRef.current, 0, 0, scaleRef.current, 0, 0);
+    // Backing store is (scale·RR)× the 384×224 logical space: `scale` is the
+    // crisp integer device-pixel multiple, RR is the supersample for hi-res art.
+    // All draw code below stays in logical 16px-tile coords; the transform maps
+    // it into the denser buffer (CSS scales the canvas back down — see fit()).
+    ctx.setTransform(scaleRef.current * RR, 0, 0, scaleRef.current * RR, 0, 0);
     ctx.imageSmoothingEnabled = false;
 
     const scene = sceneRef.current;
@@ -1439,8 +1445,13 @@ const LittleApartmentGame: React.FC = () => {
       });
     }
     const p = posRef.current;
-    const frame = movingRef.current ? (Math.floor(animRef.current * 7) % 2) : 0;
-    const playerKey = saveRef.current.hat ? 'player-hat' : 'player';
+    const moving = movingRef.current;
+    // AI-generated player sprite (PC_SHEETS). South-facing art only: mirror it
+    // for 'right', reuse south otherwise. Falls back to the in-code 16px player
+    // until the PNG sheets finish loading (or if a sheet is missing).
+    const vibe = saveRef.current.vibe ?? 'fem';
+    const pcKey = moving ? `pc-${vibe}-walk-${Math.floor(animRef.current * 8) % 4}` : `pc-${vibe}-idle-0`;
+    const pcSpr = atlas[pcKey];
     ents.push({
       y: p.y,
       draw: () => {
@@ -1455,8 +1466,38 @@ const LittleApartmentGame: React.FC = () => {
           ctx.drawImage(atlas['v-car'], Math.round(p.x) - cam.x - 8, Math.round(p.y) - cam.y);
           return;
         }
-        ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y + 2);
-        ctx.drawImage(atlas[`${playerKey}-${dirRef.current}-${frame}`], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y);
+        if (pcSpr) {
+          // Full-res 64px frame scaled to PC_DRAW_H at draw time WITH smoothing
+          // (nearest pre-downscale crushed the detail). Feet on the tile
+          // baseline (p.y+16), horizontally centred on the 16px hitbox.
+          const h = PC_DRAW_H;
+          const w = pcSpr.width * (h / pcSpr.height);
+          const cx = Math.round(p.x) - cam.x + 8;          // hitbox centre x
+          const baseY = Math.round(p.y) - cam.y + 16;       // tile/feet baseline
+          const dx = cx - w / 2;
+          const dy = baseY - h;
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          // (No drop shadow on the PC — the scaled m-shadow read wrong under the
+          // tall sprite; the art already has its own grounding.)
+          // Front-facing art only; mirror horizontally when walking RIGHT so left
+          // vs right read as a turn (no true side/back art yet).
+          if (dirRef.current === 'right') {
+            ctx.save();
+            ctx.translate(dx + w, dy);
+            ctx.scale(-1, 1);
+            ctx.drawImage(pcSpr, 0, 0, w, h);
+            ctx.restore();
+          } else {
+            ctx.drawImage(pcSpr, dx, dy, w, h);
+          }
+          ctx.imageSmoothingEnabled = false; // restore crisp pixel scaling for the rest of the world
+        } else {
+          ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y + 2);
+          const frame = moving ? (Math.floor(animRef.current * 7) % 2) : 0;
+          const playerKey = saveRef.current.hat ? 'player-hat' : 'player';
+          ctx.drawImage(atlas[`${playerKey}-${dirRef.current}-${frame}`], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y);
+        }
       },
     });
     ents.sort((a, b) => a.y - b.y).forEach(e => e.draw());
@@ -1623,6 +1664,7 @@ const LittleApartmentGame: React.FC = () => {
 
   const begin = useCallback((fresh: boolean) => {
     const s = fresh ? newSave() : (loadSave() ?? newSave());
+    if (fresh) { s.vibe = pendingVibeRef.current; s.name = pendingNameRef.current; } // apply the new-game pick
     saveRef.current = s;
     sceneRef.current = SCENES[s.scene] ?? SCENES.apartment;
     posRef.current = { x: s.px, y: s.py };
@@ -1656,6 +1698,14 @@ const LittleApartmentGame: React.FC = () => {
     setManageOpen(false);
     runTransition('start', () => begin(fresh), 600, 1400);
   }, [begin, runTransition]);
+
+  // New-game "what's your vibe?" pick → start with that appearance + name.
+  const chooseVibe = useCallback((v: Vibe) => {
+    pendingVibeRef.current = v;
+    pendingNameRef.current = pcName.trim() || 'Neighbor';
+    setVibePick(false);
+    startGame(true);
+  }, [startGame, pcName]);
 
   const toggleMusic = useCallback(() => {
     setMusicMuted(prev => {
@@ -1778,9 +1828,13 @@ const LittleApartmentGame: React.FC = () => {
         )));
         scale = Math.max(1, Math.min(scalePref, viewMax));
       }
-      if (canvas.width !== VIEW_PW * scale) {
-        canvas.width = VIEW_PW * scale;
-        canvas.height = VIEW_PH * scale;
+      // Backing store is RR× denser than the displayed size (supersampling): the
+      // canvas element is scale·RR× the logical buffer in device px, but CSS sizes
+      // it to scale× — the browser downsamples, so hi-res art stays sharp while
+      // on-screen size/FOV are unchanged.
+      if (canvas.width !== VIEW_PW * scale * RR) {
+        canvas.width = VIEW_PW * scale * RR;
+        canvas.height = VIEW_PH * scale * RR;
       }
       const cssW = (VIEW_PW * scale) / dpr;
       canvas.style.width = `${cssW}px`;
@@ -1840,7 +1894,7 @@ const LittleApartmentGame: React.FC = () => {
 
   useEffect(() => {
     if (screen !== 'playing') return;
-    if (!atlasRef.current) atlasRef.current = buildAtlas();
+    if (!atlasRef.current) { atlasRef.current = buildAtlas(); loadSheets(atlasRef.current, PC_SHEETS); }
     // Canvas text doesn't trigger a webfont fetch on its own — kick the load so
     // the kanji/kana signs render in Naganoshi. The render loop redraws every
     // frame, so it swaps in as soon as the face is ready.
@@ -3122,7 +3176,7 @@ const LittleApartmentGame: React.FC = () => {
                 <button
                   data-nosfx
                   className="font-pixel text-2xl px-10 py-3 bg-[#ffd24a] text-black border-2 border-[#ffd24a] shadow-[4px_4px_0px_#000] hover:bg-[#ffe27a] transition-colors"
-                  onClick={() => startGame(true)}
+                  onClick={() => setVibePick(true)}
                 >
                   NEW GAME
                 </button>
@@ -3175,6 +3229,46 @@ const LittleApartmentGame: React.FC = () => {
           </div>
           );
         })()}
+
+        {/* new-game "what's your vibe?" character pick (not a gender — just a look) */}
+        {screen === 'title' && vibePick && (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center text-center p-4`}>
+            <h2 className="font-retro text-[#ffd24a] text-lg sm:text-2xl mb-5 drop-shadow-[2px_2px_0_#000]">WHAT'S YOUR VIBE?</h2>
+            <div className="flex flex-col items-center gap-1.5 mb-6">
+              <label htmlFor="pc-name" className="font-pixel text-[#e8e0d0]/80 text-sm sm:text-base">YOUR NAME</label>
+              <input
+                id="pc-name"
+                data-nosfx
+                value={pcName}
+                onChange={e => setPcName(e.target.value.slice(0, 16))}
+                placeholder="Neighbor"
+                maxLength={16}
+                className="font-pixel text-lg text-center text-[#e8e0d0] bg-black/50 border-2 border-[#ffd24a]/50 focus:border-[#ffd24a] outline-none px-3 py-1.5 w-56"
+              />
+            </div>
+            <div className="flex gap-5 sm:gap-8">
+              {([
+                ['fem', '/images/characters/villager-fem.png'],
+                ['masc', '/images/characters/villager-masc.png'],
+              ] as const).map(([v, src]) => (
+                <button
+                  key={v}
+                  data-nosfx
+                  onClick={() => chooseVibe(v)}
+                  className="flex flex-col items-center p-3 sm:p-4 border-2 border-[#ffd24a]/40 bg-black/40 hover:border-[#ffd24a] hover:bg-[#ffd24a]/10 transition-colors shadow-[4px_4px_0_#000]"
+                >
+                  <img src={src} alt="" aria-hidden width={176} height={176} style={{ imageRendering: 'pixelated' }} />
+                </button>
+              ))}
+            </div>
+            <button
+              className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40 mt-7`}
+              onClick={() => setVibePick(false)}
+            >
+              ‹ BACK
+            </button>
+          </div>
+        )}
 
         {/* fullscreen guide — Android can just tap fullscreen; iOS needs Add to Home Screen */}
         {screen === 'title' && fsGuideOpen && (
@@ -3304,7 +3398,7 @@ const LittleApartmentGame: React.FC = () => {
                       <p className="text-base text-[#e8e0d0]/90 mb-3">Start over? Your Day {saved.day} save will be <span className="text-red-300">erased</span>.</p>
                       <div className="flex gap-2 justify-center">
                         <button className={btnCls} onClick={() => setConfirmMode(null)}>CANCEL</button>
-                        <button data-nosfx className="border border-red-400/60 text-red-300 px-3 py-1 font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => { setConfirmMode(null); startGame(true); }}>ERASE &amp; START</button>
+                        <button data-nosfx className="border border-red-400/60 text-red-300 px-3 py-1 font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => { setConfirmMode(null); setManageOpen(false); setVibePick(true); }}>ERASE &amp; START</button>
                       </div>
                     </div>
                   )}
@@ -3322,7 +3416,7 @@ const LittleApartmentGame: React.FC = () => {
               ) : (
                 <div className="text-center">
                   <p className="text-base opacity-70 mb-4">No save yet — start a new game from the title.</p>
-                  <button data-nosfx className={`${btnCls} w-full py-1.5`} onClick={() => startGame(true)}>NEW GAME</button>
+                  <button data-nosfx className={`${btnCls} w-full py-1.5`} onClick={() => { setManageOpen(false); setVibePick(true); }}>NEW GAME</button>
                 </div>
               )}
             </div>

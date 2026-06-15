@@ -7,6 +7,14 @@ export const VIEW_H = 14; // tiles
 export const VIEW_PW = VIEW_W * TILE; // 384
 export const VIEW_PH = VIEW_H * TILE; // 224
 
+// Render-resolution multiplier (supersampling). All game logic stays in the
+// 384×224 / 16px-tile logical space (camera, collision, save positions). The
+// renderer draws into a backing store RR× denser, then the canvas is CSS-scaled
+// back down — so 128px character art + (future) 64px tiles resolve sharp for a
+// Stardew-scale look. On-screen size/FOV are unchanged; this only adds detail.
+// See kb/art-direction.md "Render resolution & scale".
+export const RR = 2;
+
 export type Dir = 'up' | 'down' | 'left' | 'right';
 
 export interface Vec { x: number; y: number }
