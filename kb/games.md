@@ -9,7 +9,7 @@ No npm deps (React only). All art in-code (CSP). Logical view **384×224** (24×
 
 | File | Owns |
 |---|---|
-| `engine.ts` | TILE/VIEW consts, SceneDef/Warp/Interactable, AABB movement, camera, `Input` (move/E/Esc/**I=menu**, virtual touch keys, ignores INPUT/TEXTAREA), fixed-step loop, `mulberry32` |
+| `engine.ts` | TILE/VIEW consts, SceneDef/Warp/Interactable, AABB movement, camera, `Input` (keyboard move/E/Esc/**I=menu**; virtual touch keys; **gamepad via `pollGamepad()`** — stick/d-pad move, A=interact/reel, B=cancel, Y/Start=menu; ignores INPUT/TEXTAREA), fixed-step loop, `mulberry32` |
 | `sprites.ts` | `buildAtlas()`. One pixel-string body + **accessory overlay system** (cap/beanie/bucket/shades/glasses/visor/apron/headphones/mohawk/hood/bowtie/**cowboy**) → 13 distinct NPCs + `player-hat` variant; custom monster + crawler sprites; HD facades, grass/sand detail variants, water 3-tone 2-frame; furniture incl. rares (kotatsu/aquarium/arcade/neon/maneki); vehicles (`v-car`,`v-boat`); ore nodes; torii+shrine; freezer door; gacha machine; sparkle VFX |
 | `maps.ts` | **15 scenes**: apartment, city, denden, konbini, pawn, shore, badtown ("Downtown"), nightclub (Club Kaiju), garage, gacha, backrooms, mines, shrine (Yoshi Shrine), island (Kiwami), deepsea (Sumikawa Bay — player IS the boat; whole south edge warps home). `PLACEMENT_SPOTS` (17 labeled spots), legacy `APARTMENT_SLOTS`/`RARE_SLOTS` (migration only), `MANEKI_SLOT`, `ORE_SPOTS`, `CRAWLER_SPAWNS`, `SCENE_SIGNS` (store signs carry Japanese + English; directional signs English-only) |
 | `data.ts` | 10 base furniture, 4 rare (craft-only), 8 fish + deep table, food, vehicles, minerals + `CRAFT_RECIPES`, gacha figures, sketchy/wand/mine constants, **22 `GAME_ACHIEVEMENTS`**, story beats + ending |
@@ -43,7 +43,8 @@ No npm deps (React only). All art in-code (CSP). Logical view **384×224** (24×
 - Warp targets land beside doors, not on them.
 - Save shape changes: loader merges over `newSave()`; only migrations need the `v` check.
 - **`src/game/` imports only `react` + sibling game files** — keep it dependency-free.
-- **Assets are absolute paths** (`/images`, `/music`, `/sfx`) — resolve at app root in both Cloudflare Pages and the Tauri webview. Don't hardcode origins.
+- **Assets are absolute paths** (`/images`, `/music`, `/sfx`) — resolve at the app root in the Tauri webview. Don't hardcode origins.
+- **Controller**: `Input.pollGamepad()` is called once per update tick (top of `update` in `LittleApartmentGame.tsx`). Standard Gamepad mapping, edge-detected; reuses the virtual-dir path so it shares the keyboard's "most recent wins" ordering. Dependency-free (Gamepad API is a webview global).
 - **Persistence is `localStorage`** (`lab-save`, `lab-music-muted`) — works in every webview.
 
 ## Music (`public/music/`)

@@ -7,7 +7,10 @@ name: Release
 # release — otherwise tauri-action's asset upload fails with
 # "ReleaseAsset already_exists". Bump `version` to keep a release permanently.
 #
-# Web (Cloudflare Pages) deploys via its own git integration, not here.
+# This is a build-only game (no web target). Artifacts per release:
+#   macOS  — .dmg (Apple Silicon)            [scripts/make-dmg.mjs]
+#   Windows — NSIS installer (.exe) + a portable one-click .exe ("noinstall")
+#   Linux  — .deb + .AppImage
 # Mobile (iOS/Android) is intentionally omitted: it needs signing secrets
 # (Apple cert + provisioning profile / Android keystore) — add a separate
 # workflow once those are configured.
@@ -132,3 +135,19 @@ jobs:
             -H "Content-Type: application/octet-stream" \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.tauri.outputs.releaseId }}/assets?name=$(basename "$dmg")" \
             --input "$dmg"
+
+      # Portable "noinstall" build: the raw Tauri exe runs with no installer —
+      # double-click to play (needs the WebView2 runtime, preinstalled on
+      # Windows 11). Handy for quick testing without committing to an install.
+      - name: Upload Windows portable exe
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          exe="src-tauri/target/release/little-apartment.exe"
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/octet-stream" \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.tauri.outputs.releaseId }}/assets?name=LittleApartmentBigCity-noinstall.exe" \
+            --input "$exe"

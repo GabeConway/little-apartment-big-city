@@ -6,7 +6,7 @@
   "description": "Little Apartment, Big City — standalone cross-platform build (web + Tauri desktop/mobile).",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/copy-404.js",
+    "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

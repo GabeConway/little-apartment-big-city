@@ -182,6 +182,48 @@ export class Input {
   }
   queueCancel() { this.cancelQueued = true; }
 
+  // ---- Gamepad (standard mapping) --------------------------------------
+  // Polled once per update tick. Left stick / d-pad → movement; A = interact
+  // (held for the fishing reel), B = cancel, Y/Start = inventory. Edge-detected
+  // against the previous poll so a held button fires once. No deps — the
+  // Gamepad API is a webview global (works in Tauri + browsers alike).
+  private padPrev = { up: false, down: false, left: false, right: false, a: false, b: false, inv: false };
+
+  pollGamepad() {
+    const pads = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
+    if (!pads) return;
+    let gp: Gamepad | null = null;
+    for (const p of pads) { if (p) { gp = p; break; } }
+    if (!gp) return;
+
+    const DZ = 0.5; // analog dead-zone
+    const ax = gp.axes[0] ?? 0, ay = gp.axes[1] ?? 0;
+    const btn = (i: number) => Boolean(gp!.buttons[i]?.pressed);
+    const cur = {
+      up:    ay < -DZ || btn(12),
+      down:  ay >  DZ || btn(13),
+      left:  ax < -DZ || btn(14),
+      right: ax >  DZ || btn(15),
+      a:   btn(0),                 // A — confirm / interact / reel
+      b:   btn(1),                 // B — cancel
+      inv: btn(3) || btn(9),       // Y or Start — inventory/menu
+    };
+    const p = this.padPrev;
+
+    // Directions reuse the virtual-dir path so they share the keyboard's
+    // "most recent wins" ordering.
+    for (const d of ['up', 'down', 'left', 'right'] as Dir[]) {
+      if (cur[d] !== p[d]) this.setVirtualDir(d, cur[d]);
+    }
+    // A: queue interact on the press edge; mirror the held state for fishing.
+    if (cur.a && !p.a) this.interactQueued = true;
+    if (cur.a !== p.a) this.actionHeld = cur.a;
+    if (cur.b && !p.b) this.cancelQueued = true;
+    if (cur.inv && !p.inv) this.inventoryQueued = true;
+
+    this.padPrev = cur;
+  }
+
   currentDir(): Dir | null {
     return this.order.length ? this.order[this.order.length - 1] : null;
   }

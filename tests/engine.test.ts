@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   TILE, VIEW_PW, VIEW_PH,
   sceneSize, tileAt, isSolid, tryMove, feetTile, facedTile, cameraFor,
@@ -166,5 +166,42 @@ describe('Input', () => {
     i.clear();
     expect(i.currentDir()).toBeNull();
     expect(i.consumeInteract()).toBe(false);
+  });
+});
+
+describe('Input.pollGamepad', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const pad = (axes: number[], pressed: number[]) => ({
+    getGamepads: () => [{
+      axes,
+      buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: pressed.includes(i) })),
+    }],
+  });
+
+  it('maps the d-pad and A button to movement + interact', () => {
+    vi.stubGlobal('navigator', pad([0, 0], [15, 0])); // d-pad right + A
+    const i = new Input();
+    i.pollGamepad();
+    expect(i.currentDir()).toBe('right');
+    expect(i.consumeInteract()).toBe(true);
+    expect(i.actionHeld).toBe(true);
+  });
+
+  it('reads the analog stick past the dead-zone and edge-fires interact once', () => {
+    vi.stubGlobal('navigator', pad([-1, 0], [0])); // stick left + A held
+    const i = new Input();
+    i.pollGamepad();
+    expect(i.currentDir()).toBe('left');
+    expect(i.consumeInteract()).toBe(true);
+    i.pollGamepad(); // A still held → no new interact
+    expect(i.consumeInteract()).toBe(false);
+  });
+
+  it('is a safe no-op with no gamepad present', () => {
+    vi.stubGlobal('navigator', { getGamepads: () => [null] });
+    const i = new Input();
+    expect(() => i.pollGamepad()).not.toThrow();
+    expect(i.currentDir()).toBeNull();
   });
 });

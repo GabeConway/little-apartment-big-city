@@ -3,34 +3,36 @@
 Guidance for Claude Code in this repo. Detail lives in `kb/` — read the relevant file before working in an area.
 
 ## What this is
-**Little Apartment, Big City** — a cozy pixel life-sim, as a standalone cross-platform app.
+**Little Apartment, Big City** — a cozy pixel life-sim, as a standalone **build-only** native app.
 Extracted from the `personalsite` portfolio repo (where it lived at `/games#apartment`); the
-game source is unchanged. One Vite frontend ships to **web (Cloudflare Pages), Windows, macOS,
-iOS, and Android** via **Tauri v2** wrapping the same `dist/` build. Boots straight to the
-title screen — no router, no site chrome.
+game source is unchanged. One Vite frontend ships to **Windows, macOS, Linux, iOS, and Android**
+via **Tauri v2** wrapping the same `dist/` build. **No web/hosted target** — `npm run build`
+exists only to produce the `dist/` that Tauri bundles. Boots straight to the title screen — no
+router, no site chrome. Input: keyboard, touch, or game controller.
 
 ## Layout
 - `src/main.tsx` — entry; mounts `<LittleApartmentGame/>` at the title screen.
 - `src/game/` — the game (7 files). **Imports only `react` + sibling files — keep it dependency-free.**
 - `src/index.css` — Tailwind + self-hosted `@fontsource` imports.
-- `public/` — `images/`, `music/`, `sfx/` (assets are absolute paths: `/images/...`), `manifest.webmanifest`, `_headers` (Cloudflare CSP).
+- `public/` — `images/`, `music/`, `sfx/` (assets are absolute paths: `/images/...`).
 - `src-tauri/` — Tauri v2 project (Rust). See [kb/build-targets.md](kb/build-targets.md).
-- `scripts/copy-404.js` — SPA 404 fallback for Cloudflare Pages (runs in `npm run build`).
+- `scripts/make-dmg.mjs` — builds the macOS dmg via `hdiutil` (see build-targets).
 
 ## Knowledge base (`kb/`)
 Read before editing the matching area:
 - [kb/games.md](kb/games.md) — the game's full as-built reference (architecture, systems, hard rules, music/sfx).
 - [kb/little-apartment-progress.md](kb/little-apartment-progress.md) — build-history checklist.
-- [kb/build-targets.md](kb/build-targets.md) — web/desktop/mobile pipeline + toolchain prerequisites.
+- [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
 - [kb/conventions.md](kb/conventions.md) — coding conventions.
 - [kb/dependencies.md](kb/dependencies.md) — versions, security policy.
 - [kb/testing.md](kb/testing.md) — Vitest setup, CI, pre-commit hook.
 
 ## Commands
-- `npm run dev` — web dev server (browser). No Rust needed.
-- `npm run build` — production web build → `dist/` (+ `404.html`). Deploy to Cloudflare Pages.
-- `npm run desktop:dev` / `:build`, `android:dev` / `:build`, `ios:dev` / `:build` — Tauri (needs Rust; see build-targets).
-- `./start-dev.sh [web|desktop|android|ios]` (mac/linux) · `start-dev.ps1`/`.cmd` (Windows).
+- `npm run dev` — Vite dev server in a browser (fast iteration only; not a ship target). No Rust needed.
+- `npm run build` — Vite build → `dist/` (the bundle Tauri wraps; not deployed anywhere).
+- `npm test` — Vitest unit tests.
+- `npm run desktop:dev` / `:build` (+ `desktop:build:mac` for .app+.dmg), `android:dev` / `:build`, `ios:dev` / `:build` — Tauri (needs Rust; see build-targets).
+- `./start-dev.sh [desktop|android|ios]` (mac/linux) · `start-dev.ps1`/`.cmd` (Windows).
 
 ## Invariants (don't break)
 - `src/game/` stays React-only (no new npm deps inside it).
@@ -40,7 +42,4 @@ Read before editing the matching area:
 - Fonts are self-hosted (`@fontsource`), not the Google Fonts CDN — required for offline native.
 
 ## Validate every change
-`npx tsc --noEmit` clean, then `npm test` (Vitest) clean, then `npm run build` clean. Then smoke-test via `npm run preview`. CI runs all three on every PR; a Claude pre-commit hook runs `npm test` before commits (see [kb/testing.md](kb/testing.md)).
-
-## Commands (test)
-- `npm test` — run unit tests once. `npm run test:watch` — watch mode.
+`npx tsc --noEmit` clean, then `npm test` (Vitest) clean, then `npm run build` clean. Then smoke-test via `npm run preview` (or `npm run desktop:dev`). CI runs all three on every PR; a Claude pre-commit hook runs `npm test` before commits (see [kb/testing.md](kb/testing.md)).

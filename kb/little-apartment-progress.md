@@ -2,7 +2,9 @@
 
 Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, `[x]` done.
 
-**Status: EXTRACTED into standalone repo `lilaptbigcty` (2026-06-14)** — game lifted verbatim from `personalsite` (was on branch `fable`, latest game commit `47f877e`); now lives at `src/game/`, boots straight to the title screen, builds for web (Cloudflare Pages) + Tauri v2 desktop/mobile. Game source unchanged from the portfolio version. Cross-platform pipeline: [kb/build-targets.md](build-targets.md).
+**Status: EXTRACTED into standalone repo `lilaptbigcty` (2026-06-14)** — game lifted verbatim from `personalsite` (was on branch `fable`, latest game commit `47f877e`); now lives at `src/game/`, boots straight to the title screen. **Build-only native game** (Tauri v2 desktop/mobile) — the web/Cloudflare target was removed. Pipeline: [kb/build-targets.md](build-targets.md).
+
+> **Update (2026-06-14, post-extraction):** web/Cloudflare dropped — this is build-only now (`scripts/copy-404.js`, `public/_headers`, `manifest.webmanifest` deleted). Official releases: Windows (installer + portable noinstall `.exe`), macOS `.dmg` (Apple Silicon), Linux `.deb` + `.AppImage`. Added Vitest + CI + pre-commit hook ([kb/testing.md](testing.md)) and gamepad/controller support. The web-era checklist items below (PWA, CF Pages) are **historical** and no longer apply.
 
 > History below (Parts A–v3.6) is the as-built record from the `personalsite` era. Part A ("Games section") is portfolio-only and no longer applies to this standalone repo.
 
@@ -121,11 +123,11 @@ type-checks React calls — the two bugs above were invisible there. This repo D
 `@types/react`, so `tsc --noEmit` is a real gate here. Don't assume personalsite is type-clean.
 
 **Remaining (next context — see kb/build-targets.md):**
-- [ ] Install **Rust** (rustup) — required for ALL native builds; not on this machine yet
+- [x] Install **Rust** (rustup/Homebrew) — done (cargo 1.96)
+- [x] Committed to `main`; CI release pipeline green (Win/macOS/Linux)
 - [ ] `npm run tauri android init` (needs Android Studio/SDK/NDK) · `npm run tauri ios init` (needs Xcode)
-- [ ] Test `desktop:dev` / `android:dev` / `ios:dev` once Rust + SDKs present
-- [ ] New Cloudflare Pages project → repo, build `npm run build`, output `dist`
-- [ ] Initial git commit (scaffold currently uncommitted)
+- [ ] Test `android:dev` / `ios:dev` once SDKs present; add signed mobile CI workflow
+- [ ] Code-signing/notarization secrets (Gatekeeper/SmartScreen)
 - [ ] (Optional) esbuild dev-only audit advisory — fix is vite 8 (major, held back)
 
 ## Last session (personalsite era)

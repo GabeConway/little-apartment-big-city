@@ -965,6 +965,7 @@ const LittleApartmentGame: React.FC = () => {
 
   const update = useCallback((dt: number) => {
     const input = inputRef.current;
+    input.pollGamepad(); // fold controller state in before reading input
     const ov = overlayRef.current;
 
     if (ov) {
