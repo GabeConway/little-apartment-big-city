@@ -7,8 +7,9 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind,
+  itemKind, MESSAGES,
 } from './data';
+import type { PhoneMessage, MsgCtx } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, PLACEMENT_SPOTS } from './maps';
 
 export const WAKE_MIN = 7 * 60;       // days start at 7:00 AM
@@ -52,6 +53,7 @@ export interface GameSave {
   sketchyDay: number;           // last day a deal was bought from the sketchy guy
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
+  messages: PhoneMessage[];     // smartphone texts delivered so far
 }
 
 // Per-day tally, reset every morning; feeds the end-of-day recap screen.
@@ -106,6 +108,7 @@ export const newSave = (): GameSave => ({
   sketchyDay: 0,
   ended: false,
   today: freshDayLog(3000),
+  messages: [],
 });
 
 export const loadSave = (): GameSave | null => {
@@ -180,6 +183,14 @@ export const nightT = (s: GameSave): number => {
   if (h < 17) return 0;
   if (h < 20) return (h - 17) / 3;
   return 1;
+};
+
+// Golden hour: 1 right at wake (7:00), fading to 0 by ~9:30. Drives a warm
+// dawn wash + low sun so mornings read distinctly from flat midday.
+export const morningT = (s: GameSave): number => {
+  const h = s.timeMin / 60;
+  if (h < 7 || h >= 9.5) return 0;
+  return 1 - (h - 7) / 2.5;
 };
 
 // ---- Pawn shop daily stock ---------------------------------------------------
@@ -285,3 +296,40 @@ export const sketchyOfferFor = (s: GameSave): SketchyOffer | null => {
 
 export const gachaComplete = (s: GameSave): boolean =>
   GACHA_FIGURES.every(name => (s.gacha[name] ?? 0) > 0);
+
+// ---- phone messages ----------------------------------------------------------
+// Deliver any catalog messages whose condition is now met and that haven't been
+// delivered yet. Returns the messages newly delivered (for a HUD ping). Called
+// on scene change, on waking, and at game start.
+const msgCtx = (s: GameSave): MsgCtx => ({
+  day: s.day,
+  owned: s.owned,
+  placedCount: Object.keys(s.placed).length,
+  money: s.money,
+  vehicles: s.vehicles,
+  hat: s.hat,
+  wand: s.wand,
+  canFish: s.canFish,
+  fishCount: Object.values(s.fishLog).reduce((a, b) => a + b, 0),
+  visited: s.visited,
+  gameAch: s.gameAch,
+});
+
+export const syncMessages = (s: GameSave): PhoneMessage[] => {
+  const ctx = msgCtx(s);
+  const have = new Set(s.messages.map(m => m.id));
+  const fresh: PhoneMessage[] = [];
+  for (const def of MESSAGES) {
+    if (have.has(def.id) || !def.when(ctx)) continue;
+    const msg: PhoneMessage = {
+      id: def.id, from: def.from, avatar: def.avatar, company: def.company,
+      body: def.body, day: s.day, read: false,
+    };
+    s.messages.push(msg);
+    fresh.push(msg);
+  }
+  return fresh;
+};
+
+export const unreadCount = (s: GameSave): number =>
+  s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0);

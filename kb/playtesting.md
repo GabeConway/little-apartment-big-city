@@ -70,7 +70,9 @@ npm run playtest -- drive --save shore --hold ArrowLeft:700
 npm run playtest -- state --save explorer               # dump live state, no image
 npm run playtest -- title --click DISPLAY --full        # open + capture the DISPLAY panel
 npm run playtest -- shot --save shore --scale 1 --full  # verify forced 1× scaling
-npm run playtest -- shot --new --keys "i" --full        # open the bag menu
+npm run playtest -- shot --new --keys "i" --full        # open the phone (home screen)
+npm run playtest -- shot --save city --click "PHONE,Messages" --full  # phone Messages app
+
 npm run playtest -- state --save rich --assert "money>500000"  # pass/fail via exit code
 ```
 

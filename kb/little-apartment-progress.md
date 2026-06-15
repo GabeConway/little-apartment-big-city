@@ -19,8 +19,10 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 ## Part C — v2 expansion (all done 2026-06-12)
 - [x] **Resolution**: logical view 320×192 → 448×256 → settled **384×224** (user-tuned zoom)
 - [x] **Day/night**: clock (1.8 game-min/s), HUD time, evening tint, 2 AM collapse → wake home
-- [x] **Inventory + placement**: purchases boxed; place/put-away via menu at 17 labeled spots; effects + ending need PLACED; save v2 + v1 migration
-- [x] **Menu (I / 🎒)**: Inventory | Achievements | "???" cheats (motherlode/redbull/midnight/country roads/rocks/gimmegimme); ⏸ PAUSED badge; time frozen in overlays
+- [x] **Day/night polish** (`morningT`, `relightSigns`): cool blue night + sky band; lit neon signs re-light over the tint (additive bloom + repaint) so they shine; warm golden-hour morning wash 7:00→9:30
+- [x] **Inventory + placement**: purchases boxed; place/put-away via the phone Bag app at 17 labeled spots; effects + ending need PLACED; save v2 + v1 migration
+- [x] **Smartphone (I / 📱, replaces bag menu)**: phone-shell overlay — status bar (energy-as-battery), home app grid, apps: Bag · Messages · Trophies · Settings (wallet + Save&Quit + Developer codes/cheats); ⏸ PAUSED; time frozen in overlays
+- [x] **Phone messages**: `MESSAGES` catalog of company/people texts delivered by milestone (`syncMessages` on scene-enter/wake/start); unread badge + green dots; read on open; stored in `save.messages`
 - [x] **In-game achievements**: 21, own system + toasts (site ACHIEVEMENTS untouched)
 - [x] **Bad side of town** (badtown): Club Kaiju (bar, dancers, DJ requests from visited scenes), Kojima Motors (car = outdoor speed ×1.5 + parked sprite; boat = deep fishing), sketchy Jimmy (daily 35% deal, 50% breaks)
 - [x] **Backrooms chain**: konbini freezer door (hidden until first E) → Manager (Peepis-gated: "parched but on a diet"), Jean-Pierre tourist → **mines**: daily ore, crawlers, Magical Girl Wand combat, mineral-only CRAFT for rare furniture + mineral selling

@@ -300,3 +300,154 @@ export const ENDING = {
     'THE END — thanks for playing. Your apartment (and the fish) will still be here.',
   ],
 };
+
+// ---- phone messages ---------------------------------------------------------
+// The smartphone's Messages app. Companies push promos; people (Grandma, the
+// folks you meet) text you as you hit milestones. Stored on the save once
+// delivered; `when` is a pure predicate over a small context so data.ts stays
+// independent of state.ts (no import cycle).
+
+export interface PhoneMessage {
+  id: string;
+  from: string;        // sender / thread name
+  avatar: string;      // single emoji shown as the contact icon
+  company?: boolean;   // company/brand thread (vs. a person)
+  body: string[];      // chat bubbles, oldest → newest
+  day: number;         // in-game day delivered
+  read: boolean;
+}
+
+// Just enough of the save to decide delivery, passed by state.ts.
+export interface MsgCtx {
+  day: number;
+  owned: string[];
+  placedCount: number;
+  money: number;
+  vehicles: string[];
+  hat: boolean;
+  wand: boolean;
+  canFish: boolean;
+  fishCount: number;
+  visited: string[];
+  gameAch: string[];
+}
+
+export interface MessageDef {
+  id: string;
+  from: string;
+  avatar: string;
+  company?: boolean;
+  body: string[];
+  when: (c: MsgCtx) => boolean;
+}
+
+export const MESSAGES: MessageDef[] = [
+  {
+    id: 'welcome-landlord', from: 'Maison Kawa 🏢', avatar: '🏢', company: true,
+    when: () => true,
+    body: [
+      'Welcome to MAISON KAWA, unit 204! This is the building line.',
+      'Hot water is on the meter, the recycling goes out Tuesday, and the wall to 205 is thinner than it looks. Please be a good neighbor.',
+      'Rent autodrafts each month — keep a little cushion in the bank. Enjoy your new home! 🌇',
+    ],
+  },
+  {
+    id: 'grandma-phone', from: 'Grandma 💮', avatar: '💮',
+    when: c => c.day >= 2,
+    body: [
+      'your mother set up this "texting" on my phone. am i doing it right?',
+      'are you eating? a city is no excuse for instant noodles every night.',
+      'send me a photo of the apartment when it looks nice. ❤️',
+    ],
+  },
+  {
+    id: 'dokidoki-promo', from: 'Doki Doki Discount 🛒', avatar: '🛒', company: true,
+    when: c => c.visited.includes('city'),
+    body: [
+      '♥ DOKI DOKI DISCOUNT ♥ — your home electronics superstore!',
+      'TV, fridge, AC, microwave — everything to make 19 sqm feel like 20. New stock weekly.',
+      'Show this text for... well, the same prices as everyone else. But we appreciate you. 🧡',
+    ],
+  },
+  {
+    id: 'konbini-coupon', from: 'Konbini 24h 🏪', avatar: '🏪', company: true,
+    when: c => c.visited.includes('konbini'),
+    body: [
+      'Thanks for stopping by KONBINI 24H!',
+      'Reminder: we buy fresh fish at the counter, and the back freezer is staff-only. Do not mind the humming.',
+      'Try a cold "Diet Doctor Peepis" — now with 0% more doctor. 🥤',
+    ],
+  },
+  {
+    id: 'genji-fishing', from: 'Old Genji 🎣', avatar: '🎣',
+    when: c => c.canFish,
+    body: [
+      'kid. its genji. from the pier.',
+      'you got the hang of the rod. tide turns the rare ones bite — patience, not strength.',
+      'come by anytime. i am always here. i have nowhere else to be. 🌊',
+    ],
+  },
+  {
+    id: 'tex-hat', from: "Tex's Hats 🤠", avatar: '🤠', company: true,
+    when: c => c.hat,
+    body: [
+      'WELL HOWDY. Tex here. That hat looks RIGHT on you, partner.',
+      'A hat like that is a promise. Wear it into the bay. Wear it into the club. Wear it to sleep, I don\'t judge.',
+      'Yeehaw responsibly. 🐎',
+    ],
+  },
+  {
+    id: 'kojima-car', from: 'Kojima Motors 🚗', avatar: '🚗', company: true,
+    when: c => c.vehicles.includes('car'),
+    body: [
+      'KOJIMA MOTORS — congrats on the kei car! She is small but she has heart.',
+      'If you ever lose her downtown, we run a tow. ¥500 and no questions about WHY she is on the sidewalk.',
+      'Drive safe. Honk twice for us. 🔧',
+    ],
+  },
+  {
+    id: 'lulu-boat', from: 'Lulu 🌴', avatar: '🌴',
+    when: c => c.vehicles.includes('boat'),
+    body: [
+      'aloha~ it\'s Lulu from the Tiki Bar on Kiwami!',
+      'heard you got a boat. the coconuts are free if you shake the palms, the cocktails are not. 😌',
+      'sail out anytime, the island\'s always warm. 🍹',
+    ],
+  },
+  {
+    id: 'manager-wand', from: 'The Manager 🥤', avatar: '🥤',
+    when: c => c.wand,
+    body: [
+      '...you took the wand. good.',
+      'the deeper rock does not like visitors. the wand does not like the deeper rock. it works out.',
+      'thank you for the cold one. the shop is always open. it is always open. 🧊',
+    ],
+  },
+  {
+    id: 'dj-tanuki', from: 'DJ Tanuki 🎧', avatar: '🎧',
+    when: c => c.visited.includes('nightclub'),
+    body: [
+      'YOOO it\'s DJ TANUKI from CLUB KAIJU 🦖',
+      'i spin the places you\'ve BEEN, so go SEE things and i\'ll drop the track. the more you wander the fatter my crates.',
+      'pull up. the big guy in the back tips in fish. 🎶',
+    ],
+  },
+  {
+    id: 'landlord-furnished', from: 'Maison Kawa 🏢', avatar: '🏢', company: true,
+    when: c => c.placedCount >= 5,
+    body: [
+      'Doing our quarterly walkthrough — unit 204 is looking really put-together. 👏',
+      'A few residents take a decade to hang one poster. You\'ve made it a HOME.',
+      'No notes. Carry on. 🌇',
+    ],
+  },
+  {
+    id: 'grandma-proud', from: 'Grandma 💮', avatar: '💮',
+    when: c => c.placedCount >= 9,
+    body: [
+      'your mother showed me the new photos. oh, it is BEAUTIFUL.',
+      'when i was your age our whole apartment was a kettle and an argument. you have made something lovely.',
+      'i am proud of you. now go to bed at a reasonable hour. ❤️',
+    ],
+  },
+];

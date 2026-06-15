@@ -22,9 +22,9 @@ import {
   newSave, loadSave, persistSave, clearSave,
   maxEnergy, energyCost, sleep as passNight, pawnStockFor, buyFurniture, allFurnished,
   sketchyOfferFor, gachaComplete,
-  clockLabel, nightT, COLLAPSE_MIN,
+  clockLabel, nightT, morningT, COLLAPSE_MIN,
   freeSpotsFor, placeItem, unplaceItem, spotLabelAt, unlockGameAch,
-  oreNodesFor, shrineLuck,
+  oreNodesFor, shrineLuck, syncMessages, unreadCount,
 } from './state';
 import type { OreNode } from './state';
 import type { GameSave } from './state';
@@ -153,8 +153,10 @@ type Overlay =
   | { type: 'letter'; beat: StoryBeat }
   | { type: 'sleep'; day: number; collapsed?: boolean; awaitClick?: boolean }
   | { type: 'endday'; recap: DayRecap }
-  | { type: 'menu'; tab: 'inventory' | 'achievements' | 'cheats' }
+  | { type: 'menu'; tab: PhoneApp; thread?: string }
   | { type: 'ending' };
+
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats';
 
 const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
 
@@ -170,6 +172,7 @@ interface Hud {
   money: number; day: number; time: string; energy: number; max: number;
   sceneName: string; fish: number; ownedCount: number;
   late: boolean; // past midnight — 2 AM collapse looms
+  unread: number; // unread phone messages (badge on the 📱 button)
 }
 
 // Every named character has a voice: several line-sets, picked at random per
@@ -353,7 +356,7 @@ const LittleApartmentGame: React.FC = () => {
   const [confirmMode, setConfirmMode] = useState<null | 'new' | 'delete'>(null);
   const [saveTick, setSaveTick] = useState(0); // bump to re-read the save after new/delete
   const [overlay, setOverlay] = useState<Overlay | null>(null);
-  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false });
+  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0 });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const [isCoarse] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
   const [isPortrait, setIsPortrait] = useState(() => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches);
@@ -478,6 +481,7 @@ const LittleApartmentGame: React.FC = () => {
       money: s.money, day: s.day, time: clockLabel(s), energy: s.energy, max: maxEnergy(s),
       sceneName: sceneRef.current.name, fish: s.fishInv.length, ownedCount: s.owned.length,
       late: s.timeMin >= 24 * 60, // midnight or later
+      unread: unreadCount(s),
     });
   }, [award]);
 
@@ -523,6 +527,7 @@ const LittleApartmentGame: React.FC = () => {
     dirRef.current = dir;
     s.scene = id; s.px = posRef.current.x; s.py = posRef.current.y; s.dir = dir;
     if (!s.visited.includes(id)) s.visited.push(id);
+    syncMessages(s); // visiting a place can unlock its texts
     if (id !== 'nightclub') djPickRef.current = null; // the set ends when you leave
     if (id === 'mines') {
       oreNodesRef.current = oreNodesFor(s, ORE_SPOTS);
@@ -559,6 +564,7 @@ const LittleApartmentGame: React.FC = () => {
       if (!pending.nursed) award('night-owl');
     }
     checkStory();
+    syncMessages(s); // new day can trigger date-gated texts
     persistSave(s);
     refreshHud();
     setOverlayBoth({ type: 'endday', recap: pending.recap });
@@ -999,7 +1005,13 @@ const LittleApartmentGame: React.FC = () => {
         input.consumeInventory();
       } else if (ov.type === 'menu') {
         input.consumeInteract();
-        if (input.consumeCancel() || input.consumeInventory()) setOverlayBoth(null);
+        // I / Y closes the phone outright; Esc / B steps back to the home screen
+        // first (like a phone's back gesture), then closes from there.
+        if (input.consumeInventory()) setOverlayBoth(null);
+        else if (input.consumeCancel()) {
+          if (ov.tab === 'home') setOverlayBoth(null);
+          else setOverlayBoth({ type: 'menu', tab: ov.tab !== 'messages' || !ov.thread ? 'home' : 'messages', thread: undefined });
+        }
       } else if (ov.type === 'sleep') {
         // "Out cold" waits for a press; the plain fade advances on its own timer.
         if (ov.awaitClick && (input.consumeInteract() || input.consumeCancel())) finishSleep();
@@ -1183,7 +1195,7 @@ const LittleApartmentGame: React.FC = () => {
     }
 
     if (input.consumeInteract()) handleInteract();
-    if (input.consumeInventory()) setOverlayBoth({ type: 'menu', tab: 'inventory' });
+    if (input.consumeInventory()) setOverlayBoth({ type: 'menu', tab: 'home' });
     input.consumeCancel();
   }, [advanceDialog, setOverlayBoth, showDialog, catchFish, enterScene, handleInteract, refreshHud, doSleep, finishSleep, closeEndDay]);
 
@@ -1235,8 +1247,11 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
-    // painted store signs — kanji, neon blink, vertical Kabukicho banners
+    // painted store signs — kanji, neon blink, vertical Kabukicho banners.
+    // Drawn once now (the daytime look); when night falls a second pass below
+    // re-lights the neon ones over the tint so they glow instead of going dark.
     const signs = SCENE_SIGNS[scene.id];
+    let relightSigns: ((amt: number) => void) | null = null;
     if (signs) {
       ctx.textBaseline = 'top';
       const neonOn = Math.floor(t * 1.3) % 4 !== 0; // long on, short off
@@ -1255,27 +1270,78 @@ const LittleApartmentGame: React.FC = () => {
         let cx = x;
         for (const ch of txt) { ctx.font = charFont(ch, size); ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width; }
       };
-      for (const sign of signs) {
-        const size = sign.font ?? 6;
-        const sx = sign.x * TILE - cam.x, sy = sign.y * TILE - cam.y + 4;
-        const color = sign.blink && !neonOn ? 'rgba(255,255,255,0.25)' : sign.color;
-        if (sign.vertical) {
-          const chars = [...sign.text];
-          const w = size + 5, h = chars.length * (size + 1) + 4;
-          ctx.fillStyle = sign.bg ?? 'rgba(0,0,0,0.45)';
-          ctx.fillRect(sx - 2, sy - 2, w, h);
-          if (sign.border) { ctx.strokeStyle = sign.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, h - 1); }
-          ctx.fillStyle = color;
-          chars.forEach((ch, i) => { ctx.font = charFont(ch, size); ctx.fillText(ch, sx, sy + i * (size + 1)); });
+      // hex → "r,g,b" + luminance, to colour the neon bloom by the sign's
+      // brightest swatch (the glowing tube, usually the text or border colour).
+      const hex2rgb = (h: string): [number, number, number] => {
+        let c = h.slice(1); if (c.length === 3) c = c.split('').map(x => x + x).join('');
+        const n = parseInt(c, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      };
+      const lum = (h: string) => { const [r, g, b] = hex2rgb(h); return r * 0.299 + g * 0.587 + b * 0.114; };
+      // A sign reads as "lit" (back-lit neon) if it blinks, has a tube border,
+      // or sits on a solid panel — plain wayfinding placards stay matte.
+      const isLit = (sg: typeof signs[number]) => Boolean(sg.blink || sg.border || (sg.bg && sg.bg[0] === '#'));
+      const glowRgb = (sg: typeof signs[number]) => {
+        const cands = [sg.color, sg.border, sg.bg].filter((c): c is string => Boolean(c && c[0] === '#'));
+        const best = cands.sort((a, b) => lum(b) - lum(a))[0] ?? sg.color;
+        return hex2rgb(best).join(',');
+      };
+      const dims = (sg: typeof signs[number]) => {
+        const size = sg.font ?? 6;
+        if (sg.vertical) return { size, w: size + 5, h: [...sg.text].length * (size + 1) + 4 };
+        return { size, w: Math.ceil(measureRun(sg.text, size)) + 5, h: size + 4 };
+      };
+      const paintText = (sg: typeof signs[number], sx: number, sy: number, size: number, color: string) => {
+        ctx.fillStyle = color;
+        if (sg.vertical) {
+          [...sg.text].forEach((ch, i) => { ctx.font = charFont(ch, size); ctx.fillText(ch, sx, sy + i * (size + 1)); });
         } else {
-          const w = Math.ceil(measureRun(sign.text, size)) + 5;
-          ctx.fillStyle = sign.bg ?? 'rgba(0,0,0,0.45)';
-          ctx.fillRect(sx - 2, sy - 2, w, size + 4);
-          if (sign.border) { ctx.strokeStyle = sign.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, size + 3); }
-          ctx.fillStyle = color;
-          drawRun(sign.text, sx, sy, size);
+          drawRun(sg.text, sx, sy, size);
         }
-      }
+      };
+      const paint = (sg: typeof signs[number]) => {
+        const { size, w, h } = dims(sg);
+        const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
+        const color = sg.blink && !neonOn ? 'rgba(255,255,255,0.25)' : sg.color;
+        ctx.fillStyle = sg.bg ?? 'rgba(0,0,0,0.45)';
+        ctx.fillRect(sx - 2, sy - 2, w, h);
+        if (sg.border) { ctx.strokeStyle = sg.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, h - 1); }
+        paintText(sg, sx, sy, size, color);
+      };
+      for (const sign of signs) paint(sign);
+
+      // Night re-light pass: for each lit sign, lay an additive bloom halo over
+      // the darkened world, then repaint the panel + a brightened glyph so the
+      // neon punches through. amt = night strength (0..1).
+      relightSigns = (amt: number) => {
+        for (const sg of signs) {
+          if (!isLit(sg)) continue;
+          const off = sg.blink && !neonOn; // mid-blink: stay dark
+          const { size, w, h } = dims(sg);
+          const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
+          const cx = sx - 2 + w / 2, cy = sy - 2 + h / 2;
+          if (!off) {
+            const r = Math.max(w, h) * 0.85 + 9;
+            const rgb = glowRgb(sg);
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const grd = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
+            grd.addColorStop(0, `rgba(${rgb},${0.36 * amt})`);
+            grd.addColorStop(1, `rgba(${rgb},0)`);
+            ctx.fillStyle = grd;
+            ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+            ctx.restore();
+          }
+          // repaint over the tint so the sign itself isn't dimmed
+          paint(sg);
+          if (!off) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.5 * amt;
+            paintText(sg, sx, sy, size, sg.color);
+            ctx.restore();
+          }
+        }
+      };
     }
 
     // apartment furniture: whatever the player has placed, where they placed it
@@ -1373,17 +1439,43 @@ const LittleApartmentGame: React.FC = () => {
     });
     ents.sort((a, b) => a.y - b.y).forEach(e => e.draw());
 
-    // evening falls: tint the world (interiors keep their lights on)
+    // time-of-day wash: cool night fall, warm golden morning. Interiors keep
+    // their own lights, so they barely shift; the street takes the full swing.
     {
       const s = saveRef.current;
-      const base = nightT(s);
-      if (base > 0) {
-        const sceneFactor = scene.outdoor ? 0.45 : (scene.id === 'nightclub' || scene.id === 'backrooms' ? 0 : 0.16);
-        const alpha = base * sceneFactor;
+      const night = nightT(s);
+      const morn = morningT(s);
+      const sceneFactor = scene.outdoor ? 1 : (scene.id === 'nightclub' || scene.id === 'backrooms' ? 0 : 0.36);
+      if (night > 0) {
+        // Two-layer dusk: a deep blue body + a fainter cyan top band so the sky
+        // half of the frame reads cooler/darker than the lit street.
+        const alpha = night * (scene.outdoor ? 0.5 : 0.16);
         if (alpha > 0) {
           ctx.fillStyle = `rgba(10, 16, 42, ${alpha})`;
           ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+          if (scene.outdoor) {
+            const sky = ctx.createLinearGradient(0, 0, 0, VIEW_PH);
+            sky.addColorStop(0, `rgba(6, 10, 30, ${0.28 * night})`);
+            sky.addColorStop(0.55, 'rgba(6, 10, 30, 0)');
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+          }
         }
+        // re-light the neon over the darkness
+        if (relightSigns && sceneFactor > 0) relightSigns(night * Math.min(1, sceneFactor + 0.4));
+      } else if (morn > 0 && scene.outdoor) {
+        // Low golden sun: warm multiply-ish wash + a brighter band raking in
+        // from the upper-left, fading by mid-morning.
+        ctx.save();
+        ctx.globalCompositeOperation = 'soft-light';
+        ctx.fillStyle = `rgba(255, 176, 92, ${0.55 * morn})`;
+        ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+        ctx.restore();
+        const sun = ctx.createLinearGradient(0, 0, VIEW_PW, VIEW_PH);
+        sun.addColorStop(0, `rgba(255, 214, 140, ${0.22 * morn})`);
+        sun.addColorStop(0.5, 'rgba(255, 214, 140, 0)');
+        ctx.fillStyle = sun;
+        ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
       }
     }
 
@@ -1494,6 +1586,7 @@ const LittleApartmentGame: React.FC = () => {
     }
     computeSolids();
     checkStory(); // queues the day-one journal entry on a fresh save
+    syncMessages(s); // seed the welcome texts / any already-earned threads
     persistSave(s);
     refreshHud();
     setScreen('playing');
@@ -1674,7 +1767,7 @@ const LittleApartmentGame: React.FC = () => {
             case 'dialog':
               return { speaker: ov.speaker ?? null, line: ov.lines[ov.idx] ?? null, idx: ov.idx, total: ov.lines.length };
             case 'shop': return { shop: ov.shop };
-            case 'menu': return { tab: ov.tab };
+            case 'menu': return { tab: ov.tab, thread: ov.thread ?? null, unread: unreadCount(saveRef.current) };
             case 'letter': return { beat: ov.beat?.id ?? null };
             case 'sleep': return { day: ov.day, collapsed: !!ov.collapsed };
             default: return null;
@@ -1997,6 +2090,9 @@ const LittleApartmentGame: React.FC = () => {
     setShopTick(v => v + 1);
   };
 
+  // The smartphone. Replaces the old bag menu: a phone-shaped shell with a
+  // status bar, a home screen of app icons, and one screen per "app"
+  // (Bag/Inventory, Messages, Trophies, Settings, Codes).
   const renderMenu = (ov: Extract<Overlay, { type: 'menu' }>) => {
     void shopTick;
     const s = saveRef.current;
@@ -2004,134 +2100,276 @@ const LittleApartmentGame: React.FC = () => {
     const allItems = [...s.owned, ...s.rares];
     const boxed = allItems.filter(id => !s.placed[id]);
     const placed = allItems.filter(id => Boolean(s.placed[id]));
-    const tabBtn = (tab: 'inventory' | 'achievements' | 'cheats', label: string) => (
-      <button
-        className={`px-3 py-1 text-lg whitespace-nowrap border-b-2 ${ov.tab === tab ? 'text-[#ffd24a] border-[#ffd24a]' : 'opacity-50 border-transparent hover:opacity-80'}`}
-        onClick={() => { setPlacingItem(null); setOverlayBoth({ type: 'menu', tab }); }}
-      >
-        {label}
-      </button>
-    );
+    const unread = unreadCount(s);
+    const open = (tab: PhoneApp, thread?: string) => { setPlacingItem(null); setOverlayBoth({ type: 'menu', tab, thread }); };
+    const openThread = (id: string) => {
+      const m = s.messages.find(x => x.id === id);
+      if (m && !m.read) { m.read = true; persistSave(s); refreshHud(); }
+      open('messages', id);
+    };
 
-    return (
-      <div className={`${panelCls} w-full max-w-xl max-h-full flex flex-col px-4 py-3`}>
-        <div className="flex items-center gap-2 border-b-2 border-[#ffd24a]/40 mb-2 shrink-0">
-          {tabBtn('inventory', 'INVENTORY')}
-          {tabBtn('achievements', `ACHIEVEMENTS ${s.gameAch.length}/${GAME_ACHIEVEMENTS.length}`)}
-          {tabBtn('cheats', '🐛 CHEATS')}
-          <span className="ml-auto font-pixel text-sm bg-[#9fc4e8]/20 text-[#9fc4e8] border border-[#9fc4e8]/50 px-2 py-0.5 animate-pulse">⏸ PAUSED</span>
-          <button className={`${btnCls} text-sm px-2 py-0.5 mb-1`} onClick={() => { setPlacingItem(null); setOverlayBoth(null); }}>ESC ✕</button>
-        </div>
+    const battPct = Math.max(0, Math.min(1, s.energy / maxEnergy(s)));
+    const battFill = battPct > 0.5 ? '#7ce8a0' : battPct > 0.25 ? '#ffd24a' : '#e0552e';
 
-        <div className="flex-1 overflow-y-auto min-h-0">
-        {ov.tab === 'inventory' && (
-          <>
-            <p className="text-base text-[#ffd24a]/80">FURNITURE — IN BOXES ({boxed.length})</p>
-            {boxed.length === 0 && <p className="py-1 text-lg opacity-50">Nothing boxed up.</p>}
-            {boxed.map(id => {
-              const f = furnitureById(id);
-              const spots = freeSpotsFor(s, id);
-              return (
-                <div key={id} className="py-1 border-b border-white/10">
-                  <div className="flex items-center gap-3">
-                    <p className="flex-grow text-lg">{f.name}</p>
-                    {atHome
-                      ? <button className={btnCls} disabled={spots.length === 0} onClick={() => setPlacingItem(placingItem === id ? null : id)}>
-                          {placingItem === id ? 'CANCEL' : 'PLACE'}
-                        </button>
-                      : <span className="text-sm opacity-50">place at home</span>}
-                  </div>
-                  {placingItem === id && atHome && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {spots.map(spot => (
-                        <button key={`${spot.x},${spot.y}`} className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doPlace(id, spot.x, spot.y)}>
-                          {spot.label}
-                        </button>
-                      ))}
-                      {spots.length === 0 && <p className="text-sm opacity-50">No free spot fits it — put something away first.</p>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            <p className="text-base text-[#ffd24a]/80 mt-3">FURNITURE — PLACED ({placed.length})</p>
-            {placed.length === 0 && <p className="py-1 text-lg opacity-50">The apartment is bare.</p>}
-            {placed.map(id => (
-              <div key={id} className="flex items-center gap-3 py-1 border-b border-white/10">
-                <p className="flex-grow text-lg">{furnitureById(id).name} <span className="text-sm opacity-50">— {spotLabelAt(s.placed[id].x, s.placed[id].y)}</span></p>
-                {atHome && <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doPutAway(id)}>PUT AWAY</button>}
-              </div>
-            ))}
-
-            <p className="text-base text-[#ffd24a]/80 mt-3">FISH BAG ({s.fishInv.length})</p>
-            {s.fishInv.length === 0
-              ? <p className="py-1 text-lg opacity-50">Empty. The shore is west of Kawamachi St.</p>
-              : (() => {
-                  const counts: Record<string, number> = {};
-                  for (const id of s.fishInv) counts[id] = (counts[id] || 0) + 1;
-                  return Object.entries(counts).map(([id, n]) => (
-                    <p key={id} className="text-lg py-0.5 opacity-80">{fishById(id).name} ×{n} <span className="opacity-50">(¥{fishById(id).value} ea — sell at the konbini)</span></p>
-                  ));
-                })()}
-
-            {(s.peepis > 0 || s.coconuts > 0) && (
-              <>
-                <p className="text-base text-[#ffd24a]/80 mt-3">POCKET</p>
-                {s.coconuts > 0 && (
-                  <div className="flex items-center gap-3 py-1">
-                    <p className="flex-grow text-lg opacity-80">Coconut ×{s.coconuts} <span className="opacity-50">(+15 energy, or sell at the tiki bar)</span></p>
-                    <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={eatCoconut}>EAT</button>
-                  </div>
-                )}
-                {s.peepis > 0 && (
-                  <div className="flex items-center gap-3 py-1">
-                    <p className="flex-grow text-lg opacity-80">"Diet Doctor Peepis" ×{s.peepis} <span className="opacity-50">(+12 energy)</span></p>
-                    <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={drinkPeepis}>DRINK</button>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        {ov.tab === 'cheats' && (
-          <div className="py-2">
-            <p className="text-lg opacity-70 mb-2">Whisper a word to the void. (For testing. The void doesn't judge. Much.)</p>
-            <div className="flex gap-2">
-              <input
-                value={cheatInput}
-                onChange={e => setCheatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') applyCheat(); e.stopPropagation(); }}
-                className="flex-grow bg-black/60 border border-[#ffd24a]/40 px-2 py-1 text-lg text-[#e8e0d0] outline-none focus:border-[#ffd24a]"
-                placeholder="enter code…"
-                autoFocus
-              />
-              <button className={btnCls} onClick={applyCheat}>APPLY</button>
-            </div>
-            {cheatMsg && <p className="text-base text-[#7ce8a0] mt-2">{cheatMsg}</p>}
-          </div>
-        )}
-
-        {ov.tab === 'achievements' && GAME_ACHIEVEMENTS.map(a => {
-          const got = s.gameAch.includes(a.id);
+    // ---- per-app screen bodies -----------------------------------------------
+    const inventoryApp = (
+      <div className="px-3 py-2">
+        <p className="text-sm text-[#ffd24a]/80 tracking-wide">FURNITURE — BOXED ({boxed.length})</p>
+        {boxed.length === 0 && <p className="py-1 text-base opacity-50">Nothing boxed up.</p>}
+        {boxed.map(id => {
+          const f = furnitureById(id);
+          const spots = freeSpotsFor(s, id);
           return (
-            <div key={a.id} className={`py-1.5 border-b border-white/10 ${got ? '' : 'opacity-50'}`}>
-              <p className="text-lg leading-tight">{got ? '🏆' : '🔒'} {got ? a.title : '???'}</p>
-              <p className="text-sm opacity-70 leading-tight">{got ? a.desc : a.hint}</p>
+            <div key={id} className="py-1 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <p className="flex-grow text-base">{f.name}</p>
+                {atHome
+                  ? <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={spots.length === 0} onClick={() => setPlacingItem(placingItem === id ? null : id)}>
+                      {placingItem === id ? 'CANCEL' : 'PLACE'}
+                    </button>
+                  : <span className="text-xs opacity-50">at home</span>}
+              </div>
+              {placingItem === id && atHome && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {spots.map(spot => (
+                    <button key={`${spot.x},${spot.y}`} className={`${btnCls} text-xs px-2 py-0.5`} onClick={() => doPlace(id, spot.x, spot.y)}>
+                      {spot.label}
+                    </button>
+                  ))}
+                  {spots.length === 0 && <p className="text-xs opacity-50">No free spot fits — put something away first.</p>}
+                </div>
+              )}
             </div>
           );
         })}
+
+        <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3">FURNITURE — PLACED ({placed.length})</p>
+        {placed.length === 0 && <p className="py-1 text-base opacity-50">The apartment is bare.</p>}
+        {placed.map(id => (
+          <div key={id} className="flex items-center gap-2 py-1 border-b border-white/10">
+            <p className="flex-grow text-base">{furnitureById(id).name} <span className="text-xs opacity-50">— {spotLabelAt(s.placed[id].x, s.placed[id].y)}</span></p>
+            {atHome && <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doPutAway(id)}>PUT AWAY</button>}
+          </div>
+        ))}
+
+        <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3">FISH BAG ({s.fishInv.length})</p>
+        {s.fishInv.length === 0
+          ? <p className="py-1 text-base opacity-50">Empty. The shore is west of Kawamachi St.</p>
+          : (() => {
+              const counts: Record<string, number> = {};
+              for (const id of s.fishInv) counts[id] = (counts[id] || 0) + 1;
+              return Object.entries(counts).map(([id, n]) => (
+                <p key={id} className="text-base py-0.5 opacity-80">{fishById(id).name} ×{n} <span className="opacity-50">(¥{fishById(id).value} ea)</span></p>
+              ));
+            })()}
+
+        {(s.peepis > 0 || s.coconuts > 0) && (
+          <>
+            <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3">POCKET</p>
+            {s.coconuts > 0 && (
+              <div className="flex items-center gap-2 py-1">
+                <p className="flex-grow text-base opacity-80">Coconut ×{s.coconuts} <span className="opacity-50">(+15 en)</span></p>
+                <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={eatCoconut}>EAT</button>
+              </div>
+            )}
+            {s.peepis > 0 && (
+              <div className="flex items-center gap-2 py-1">
+                <p className="flex-grow text-base opacity-80">"Diet Doctor Peepis" ×{s.peepis} <span className="opacity-50">(+12 en)</span></p>
+                <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={drinkPeepis}>DRINK</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+
+    const threadMsg = ov.thread ? s.messages.find(m => m.id === ov.thread) : undefined;
+    const messagesApp = threadMsg ? (
+      // one conversation: chat bubbles
+      <div className="px-3 py-3 flex flex-col gap-2">
+        <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+          <span className="text-2xl">{threadMsg.avatar}</span>
+          <div className="leading-tight">
+            <p className="text-base">{threadMsg.from}</p>
+            <p className="text-xs opacity-50">{threadMsg.company ? 'Business account' : 'Contact'} · Day {threadMsg.day}</p>
+          </div>
+        </div>
+        {threadMsg.body.map((line, i) => (
+          <div key={i} className="self-start max-w-[85%] bg-[#2b2f3a] text-[#e8e0d0] rounded-2xl rounded-tl-sm px-3 py-1.5 text-base leading-snug shadow">
+            {line}
+          </div>
+        ))}
+        <p className="self-center text-xs opacity-40 mt-1">— delivered —</p>
+      </div>
+    ) : (
+      // thread list, newest first
+      <div className="py-1">
+        {s.messages.length === 0 && <p className="px-3 py-6 text-center text-base opacity-50">No messages yet.<br/>Get out there and meet the city.</p>}
+        {[...s.messages].reverse().map(m => (
+          <button
+            key={m.id}
+            onClick={() => openThread(m.id)}
+            className="w-full flex items-center gap-3 px-3 py-2 text-left border-b border-white/10 hover:bg-white/5 transition-colors"
+          >
+            <span className="text-2xl shrink-0">{m.avatar}</span>
+            <span className="flex-grow min-w-0">
+              <span className="flex items-center gap-2">
+                <span className={`text-base truncate ${m.read ? '' : 'text-[#ffd24a]'}`}>{m.from}</span>
+                <span className="ml-auto text-xs opacity-40 shrink-0">Day {m.day}</span>
+              </span>
+              <span className={`block text-sm truncate ${m.read ? 'opacity-50' : 'opacity-80'}`}>{m.body[0]}</span>
+            </span>
+            {!m.read && <span className="shrink-0 w-2.5 h-2.5 rounded-full bg-[#3da26b]" />}
+          </button>
+        ))}
+      </div>
+    );
+
+    const trophiesApp = (
+      <div className="px-3 py-2">
+        <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">{s.gameAch.length}/{GAME_ACHIEVEMENTS.length} EARNED</p>
+        {GAME_ACHIEVEMENTS.map(a => {
+          const got = s.gameAch.includes(a.id);
+          return (
+            <div key={a.id} className={`py-1.5 border-b border-white/10 ${got ? '' : 'opacity-50'}`}>
+              <p className="text-base leading-tight">{got ? '🏆' : '🔒'} {got ? a.title : '???'}</p>
+              <p className="text-xs opacity-70 leading-tight">{got ? a.desc : a.hint}</p>
+            </div>
+          );
+        })}
+      </div>
+    );
+
+    const settingsApp = (
+      <div className="px-3 py-3 flex flex-col gap-3">
+        <div className="bg-white/5 rounded-lg px-3 py-2">
+          <p className="text-sm opacity-60">Wallet</p>
+          <p className="text-xl text-[#ffd24a]">¥{s.money.toLocaleString()}</p>
+        </div>
+        <div className="bg-white/5 rounded-lg px-3 py-2">
+          <p className="text-sm opacity-60">Day {s.day} · {clockLabel(s)}</p>
+          <p className="text-base">Battery (energy): {s.energy}/{maxEnergy(s)}</p>
+        </div>
+        <button
+          className="w-full font-pixel text-base border border-[#9fc4e8]/60 text-[#9fc4e8] px-3 py-2 rounded-lg hover:bg-[#9fc4e8] hover:text-black transition-colors"
+          onClick={quitToMenu}
+        >
+          💾 SAVE &amp; QUIT TO MENU
+        </button>
+        <button
+          className="w-full font-pixel text-sm border border-white/20 text-[#e8e0d0]/70 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
+          onClick={() => open('cheats')}
+        >
+          🐛 Developer codes
+        </button>
+      </div>
+    );
+
+    const codesApp = (
+      <div className="px-3 py-3">
+        <p className="text-base opacity-70 mb-2">Whisper a word to the void. (For testing. The void doesn't judge. Much.)</p>
+        <div className="flex gap-2">
+          <input
+            value={cheatInput}
+            onChange={e => setCheatInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') applyCheat(); e.stopPropagation(); }}
+            className="flex-grow bg-black/60 border border-[#ffd24a]/40 px-2 py-1 text-base text-[#e8e0d0] outline-none focus:border-[#ffd24a] rounded"
+            placeholder="enter code…"
+            autoFocus
+          />
+          <button className={`${btnCls} text-sm`} onClick={applyCheat}>APPLY</button>
+        </div>
+        {cheatMsg && <p className="text-sm text-[#7ce8a0] mt-2">{cheatMsg}</p>}
+      </div>
+    );
+
+    // ---- app icon grid (home screen) -----------------------------------------
+    const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: string; label: string; bg: string; badge?: number; onClick: () => void }) => (
+      <button onClick={onClick} className="flex flex-col items-center gap-1 group">
+        <span className="relative w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-[0_2px_6px_rgba(0,0,0,0.5)] group-hover:brightness-110 group-active:scale-95 transition" style={{ background: bg }}>
+          {icon}
+          {badge ? <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-[#e0552e] text-white text-xs font-bold flex items-center justify-center border-2 border-[#0e0f14]">{badge}</span> : null}
+        </span>
+        <span className="font-pixel text-xs text-white/90 drop-shadow">{label}</span>
+      </button>
+    );
+
+    const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes',
+    };
+
+    return (
+      // phone shell
+      <div
+        className="relative flex flex-col w-[330px] max-w-[94vw] h-[580px] max-h-full rounded-[34px] border-[3px] border-[#33363f] bg-[#0e0f14] shadow-[0_10px_40px_rgba(0,0,0,0.7)] overflow-hidden font-pixel text-[#e8e0d0] select-none"
+        style={{ boxShadow: '0 0 0 2px #000, 0 12px 40px rgba(0,0,0,0.7)' }}
+      >
+        {/* status bar */}
+        <div className="relative z-10 flex items-center gap-2 px-5 pt-2 pb-1 text-sm shrink-0 bg-black/30">
+          <span className="tabular-nums">{clockLabel(s)}</span>
+          <span className="opacity-50">Day {s.day}</span>
+          <span className="ml-auto flex items-center gap-1.5">
+            <span className="opacity-60 text-xs">{s.energy}%</span>
+            {/* battery glyph filled by energy */}
+            <span className="relative inline-block w-6 h-3 rounded-[3px] border border-white/50">
+              <span className="absolute inset-[1.5px] rounded-[1px]" style={{ width: `calc(${battPct * 100}% - 3px)`, backgroundColor: battFill }} />
+              <span className="absolute -right-1 top-1/2 -translate-y-1/2 w-0.5 h-1.5 rounded-r bg-white/50" />
+            </span>
+          </span>
         </div>
 
-        <div className="flex justify-end pt-2 mt-2 border-t-2 border-[#ffd24a]/40 shrink-0">
-          <button
-            className="font-pixel text-sm border border-[#9fc4e8]/60 text-[#9fc4e8] px-3 py-1 hover:bg-[#9fc4e8] hover:text-black transition-colors"
-            onClick={quitToMenu}
-          >
-            💾 SAVE &amp; QUIT TO MENU
-          </button>
-        </div>
+        {/* notch */}
+        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-[#0e0f14] rounded-b-2xl z-20" />
+
+        {ov.tab === 'home' ? (
+          // home screen: wallpaper + clock widget + app grid
+          <div className="relative flex-1 min-h-0 overflow-y-auto" style={{ background: 'linear-gradient(160deg,#1b2350 0%,#3a2350 45%,#7a2f5e 100%)' }}>
+            <div className="px-5 pt-5 pb-2 text-center">
+              <p className="font-retro text-[#ffe9a0] text-3xl drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)] tabular-nums">{clockLabel(s).replace(/ (AM|PM)$/, '')}</p>
+              <p className="text-sm text-white/80 drop-shadow">Day {s.day} in the big city</p>
+            </div>
+            <div className="grid grid-cols-3 gap-y-5 gap-x-2 px-4 pt-3 pb-6 justify-items-center">
+              <AppIcon icon="🧳" label="Bag" bg="linear-gradient(160deg,#c9952f,#8a5a1f)" onClick={() => open('inventory')} />
+              <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
+              <AppIcon icon="🏆" label="Trophies" bg="linear-gradient(160deg,#e0a32e,#9e6e16)" onClick={() => open('achievements')} />
+              <AppIcon icon="💴" label="Wallet" bg="linear-gradient(160deg,#3a7bd0,#23508a)" onClick={() => open('settings')} />
+              <AppIcon icon="⚙️" label="Settings" bg="linear-gradient(160deg,#5a5f6e,#33363f)" onClick={() => open('settings')} />
+            </div>
+            <p className="text-center text-xs text-white/50 pb-4">Press <span className="text-white/80">I</span> or Esc to pocket the phone</p>
+          </div>
+        ) : (
+          // an app: header bar + scrollable body
+          <div className="flex-1 min-h-0 flex flex-col bg-[#16181d]">
+            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-white/10 shrink-0 bg-[#0e0f14]">
+              <button
+                className="px-2 py-0.5 text-[#9fc4e8] text-base hover:text-white transition-colors"
+                onClick={() => (ov.tab === 'messages' && ov.thread) ? open('messages') : open('home')}
+              >
+                ‹ {(ov.tab === 'messages' && ov.thread) ? 'Inbox' : 'Home'}
+              </button>
+              <span className="mx-auto text-base">
+                {ov.tab === 'messages' && threadMsg ? threadMsg.from : titles[ov.tab as Exclude<PhoneApp, 'home'>]}
+              </span>
+              <span className="px-2 text-xs text-[#9fc4e8]/70 animate-pulse">⏸</span>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {ov.tab === 'inventory' && inventoryApp}
+              {ov.tab === 'messages' && messagesApp}
+              {ov.tab === 'achievements' && trophiesApp}
+              {ov.tab === 'settings' && settingsApp}
+              {ov.tab === 'cheats' && codesApp}
+            </div>
+          </div>
+        )}
+
+        {/* home indicator bar — go home, or pocket the phone if already home */}
+        <button
+          aria-label={ov.tab === 'home' ? 'Close phone' : 'Home'}
+          onClick={() => { if (ov.tab === 'home') { setPlacingItem(null); setOverlayBoth(null); } else open('home'); }}
+          className="shrink-0 flex items-center justify-center py-2 bg-[#0e0f14] hover:bg-[#1a1c22] transition-colors"
+        >
+          <span className="w-28 h-1.5 rounded-full bg-white/40" />
+        </button>
       </div>
     );
   };
@@ -2477,13 +2715,16 @@ const LittleApartmentGame: React.FC = () => {
           })()}
           <span className="ml-auto opacity-70 truncate">{hud.sceneName}</span>
           <button
-            onClick={() => setOverlayBoth(overlay?.type === 'menu' ? null : { type: 'menu', tab: 'inventory' })}
-            title="Menu / Inventory (I)"
-            aria-label="Menu"
-            className="shrink-0 flex items-center gap-1 bg-[#ffd24a] text-black border-2 border-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base shadow-[2px_2px_0px_#000] hover:bg-[#ffe27a] transition-colors"
+            onClick={() => setOverlayBoth(overlay?.type === 'menu' ? null : { type: 'menu', tab: 'home' })}
+            title="Phone — bag, messages, more (I)"
+            aria-label="Phone"
+            className="relative shrink-0 flex items-center gap-1 bg-[#ffd24a] text-black border-2 border-[#ffd24a] px-2 py-0.5 font-pixel text-sm sm:text-base shadow-[2px_2px_0px_#000] hover:bg-[#ffe27a] transition-colors"
           >
-            🎒 <span className="hidden sm:inline">BAG</span>
+            📱 <span className="hidden sm:inline">PHONE</span>
             {!isCoarse && <kbd className="hidden sm:inline ml-0.5 text-xs bg-black/20 border border-black/30 rounded px-1 leading-none">I</kbd>}
+            {hud.unread > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e0552e] text-white text-xs font-bold flex items-center justify-center border-2 border-black">{hud.unread}</span>
+            )}
           </button>
           <button
             onClick={toggleMusic}
@@ -2742,7 +2983,7 @@ const LittleApartmentGame: React.FC = () => {
                 <p><span className="text-[#ffd24a]">Moving around.</span> {isCoarse ? 'Use the on-screen D-pad to move and the E button to interact; ✕ closes menus.' : 'WASD or arrow keys to move. Press E (or Space) to interact with people, doors, and the glowing spots. Esc closes menus.'} Walk to the edges of an area to reach the rest of the city.</p>
                 <p><span className="text-[#ffd24a]">Making money.</span> Fish at the shore (learn how from Genji, the old man on the beach first), work a daily shift at the konbini, mine, or sell things. Sell your catch and goods at the right shops.</p>
                 <p><span className="text-[#ffd24a]">Energy &amp; the clock.</span> Actions cost energy (the EN bar). Eat or sleep in your bed to recover. The day has a clock — stay out past 2 AM and you'll collapse and wake up home. Sleeping starts the next day.</p>
-                <p><span className="text-[#ffd24a]">Furnishing.</span> Things you buy go into boxes. Open your bag (press <span className="text-[#ffd24a]">I</span>, or tap 🎒 BAG) {isCoarse ? '' : 'any time '}at home to place them. Beds, fridges and the like only work once placed.</p>
+                <p><span className="text-[#ffd24a]">Furnishing.</span> Things you buy go into boxes. Open your phone (press <span className="text-[#ffd24a]">I</span>, or tap 📱 PHONE) {isCoarse ? '' : 'any time '}→ the Bag app, at home, to place them. Beds, fridges and the like only work once placed. Your phone also holds messages, trophies, and your wallet.</p>
                 <p><span className="text-[#ffd24a]">Explore.</span> The city is bigger than it looks — a pawn shop, an arcade district, a nightclub, a shrine, an island, and stranger places below. Talk to everyone. Check the menu for your inventory and achievements.</p>
                 <p className="opacity-70">Your progress saves automatically. Pick CONTINUE next time to keep going.</p>
               </div>
@@ -3031,7 +3272,7 @@ const LittleApartmentGame: React.FC = () => {
       </div>
 
       {screen === 'playing' && !isCoarse && (
-        <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · I bag/inventory · Esc close</p>
+        <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · I phone · Esc close</p>
       )}
     </div>
   );
