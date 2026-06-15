@@ -5,9 +5,9 @@
 import type { Dir } from './engine';
 import { mulberry32 } from './engine';
 import {
-  FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
+  FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  furnitureById, itemKind,
+  itemKind,
 } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, PLACEMENT_SPOTS } from './maps';
 
@@ -107,10 +107,6 @@ export const newSave = (): GameSave => ({
   ended: false,
   today: freshDayLog(3000),
 });
-
-export const hasSave = (): boolean => {
-  try { return localStorage.getItem(KEY) !== null; } catch { return false; }
-};
 
 export const loadSave = (): GameSave | null => {
   try {
@@ -273,18 +269,6 @@ export const oreNodesFor = (s: GameSave, candidates: { x: number; y: number }[])
 export const unlockGameAch = (s: GameSave, id: string): boolean => {
   if (s.gameAch.includes(id) || !GAME_ACHIEVEMENTS.some(a => a.id === id)) return false;
   s.gameAch.push(id);
-  return true;
-};
-
-export const furnishedValue = (s: GameSave): number =>
-  s.owned.reduce((sum, id) => sum + furnitureById(id).price, 0);
-
-export const buyRare = (s: GameSave, itemId: string): boolean => {
-  const item = RARE_FURNITURE.find(f => f.id === itemId);
-  if (!item || s.rares.includes(itemId) || s.money < item.price) return false;
-  s.money -= item.price;
-  s.rares.push(itemId);
-  s.today.newFurniture.push(itemId);
   return true;
 };
 

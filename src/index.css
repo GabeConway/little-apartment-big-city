@@ -2,6 +2,18 @@
 @import "@fontsource/press-start-2p/index.css";
 @import "@fontsource/vt323/index.css";
 
+/* Naganoshi — Japanese pixel font (OFL 1.1, GGBotNet). Self-hosted from
+   public/fonts so it resolves at the app root in the Tauri webview. Used for
+   the kanji/kana store signs painted on the game canvas (see font-jp). */
+@font-face {
+  font-family: 'Naganoshi';
+  src: url('/fonts/Naganoshi.woff2') format('woff2'),
+       url('/fonts/Naganoshi.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

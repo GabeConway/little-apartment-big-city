@@ -19,7 +19,7 @@ import {
 } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
-  newSave, loadSave, hasSave, persistSave, clearSave,
+  newSave, loadSave, persistSave, clearSave,
   maxEnergy, energyCost, sleep as passNight, pawnStockFor, buyFurniture, allFurnished,
   sketchyOfferFor, gachaComplete,
   clockLabel, nightT, COLLAPSE_MIN,
@@ -319,6 +319,24 @@ const LittleApartmentGame: React.FC = () => {
   const [manageOpen, setManageOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [fsGuideOpen, setFsGuideOpen] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
+  // Canvas scale preference: 'auto' = max integer fit (default), or a forced
+  // integer multiple of 384×224 (clamped to what fits). Persisted in localStorage.
+  const [scalePref, setScalePref] = useState<'auto' | number>(() => {
+    try {
+      const v = localStorage.getItem('lab-scale');
+      if (!v || v === 'auto') return 'auto';
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n >= 1 && n <= 8 ? n : 'auto';
+    } catch { return 'auto'; }
+  });
+  const setScale = useCallback((p: 'auto' | number) => {
+    setScalePref(p);
+    try { localStorage.setItem('lab-scale', String(p)); } catch { /* ignore */ }
+  }, []);
+  // Windowed + forced scale: CSS width to size the layout box to the canvas
+  // (so a forced scale isn't clipped at the 1000px cap). null = AUTO/filled.
+  const [boxW, setBoxW] = useState<number | null>(null);
   const [transition, setTransition] = useState<null | 'start' | 'freezer'>(null);
   const transTimers = useRef<number[]>([]);
   // Element fullscreen API exists on Android/desktop but NOT iOS Safari, which
@@ -1222,9 +1240,23 @@ const LittleApartmentGame: React.FC = () => {
     if (signs) {
       ctx.textBaseline = 'top';
       const neonOn = Math.floor(t * 1.3) % 4 !== 0; // long on, short off
+      // Per-character font: kana/kanji paint in Naganoshi (a Japanese pixel font
+      // that matches the bitmap look); Latin/digits/punctuation stay bold
+      // monospace — Naganoshi has no Latin glyphs, so a whole-string switch would
+      // render the English parts as tofu. measureRun/drawRun walk char by char.
+      const jpRe = /[　-ヿ㐀-鿿＀-￯]/;
+      const charFont = (ch: string, size: number) => jpRe.test(ch) ? `${size}px 'Naganoshi', sans-serif` : `bold ${size}px monospace`;
+      const measureRun = (txt: string, size: number) => {
+        let w = 0;
+        for (const ch of txt) { ctx.font = charFont(ch, size); w += ctx.measureText(ch).width; }
+        return w;
+      };
+      const drawRun = (txt: string, x: number, y: number, size: number) => {
+        let cx = x;
+        for (const ch of txt) { ctx.font = charFont(ch, size); ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width; }
+      };
       for (const sign of signs) {
         const size = sign.font ?? 6;
-        ctx.font = `bold ${size}px ${sign.font ? 'sans-serif' : 'monospace'}`;
         const sx = sign.x * TILE - cam.x, sy = sign.y * TILE - cam.y + 4;
         const color = sign.blink && !neonOn ? 'rgba(255,255,255,0.25)' : sign.color;
         if (sign.vertical) {
@@ -1234,14 +1266,14 @@ const LittleApartmentGame: React.FC = () => {
           ctx.fillRect(sx - 2, sy - 2, w, h);
           if (sign.border) { ctx.strokeStyle = sign.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, h - 1); }
           ctx.fillStyle = color;
-          chars.forEach((ch, i) => ctx.fillText(ch, sx, sy + i * (size + 1)));
+          chars.forEach((ch, i) => { ctx.font = charFont(ch, size); ctx.fillText(ch, sx, sy + i * (size + 1)); });
         } else {
-          const w = Math.ceil(ctx.measureText(sign.text).width) + 5;
+          const w = Math.ceil(measureRun(sign.text, size)) + 5;
           ctx.fillStyle = sign.bg ?? 'rgba(0,0,0,0.45)';
           ctx.fillRect(sx - 2, sy - 2, w, size + 4);
           if (sign.border) { ctx.strokeStyle = sign.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, size + 3); }
           ctx.fillStyle = color;
-          ctx.fillText(sign.text, sx, sy);
+          drawRun(sign.text, sx, sy, size);
         }
       }
     }
@@ -1565,35 +1597,91 @@ const LittleApartmentGame: React.FC = () => {
   // The saved game (or null), re-read whenever a new game starts or it's wiped.
   const saved = useMemo(() => loadSave(), [saveTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fit the canvas to the frame at an integer device-pixel scale. Fractional
-  // scales blur the art on Retina displays even with image-rendering: pixelated.
+  // Fit the canvas at an integer device-pixel scale. Fractional scales blur the
+  // art on Retina even with image-rendering: pixelated.
+  //   AUTO  → biggest integer scale that fits the frame (the layout box).
+  //   N×    → forced scale N, clamped so it can't exceed the screen. In windowed
+  //           web the box is capped at 1000px, so a forced scale is clamped to
+  //           the *viewport* (not the box) and `boxW` grows the box to match —
+  //           otherwise every scale above 2× would clamp to the box and look
+  //           identical. In the filled (fullscreen/native) layout the frame already
+  //           is the viewport, so it's the cap there.
+  const filled = isFullscreen || isDesktopApp;
   useEffect(() => {
     const fit = () => {
       const canvas = canvasRef.current, frame = frameRef.current;
       if (!canvas || !frame) return;
       const dpr = window.devicePixelRatio || 1;
-      const scale = Math.max(1, Math.floor(Math.min(
+      const frameMax = Math.max(1, Math.floor(Math.min(
         (frame.clientWidth * dpr) / VIEW_PW,
         (frame.clientHeight * dpr) / VIEW_PH,
       )));
+      let scale;
+      if (scalePref === 'auto') {
+        scale = frameMax;
+      } else if (filled) {
+        scale = Math.max(1, Math.min(scalePref, frameMax));
+      } else {
+        // Windowed: clamp the forced scale to the viewport (minus a little for the
+        // HUD row), independent of the 1000px box, so 2×–6× actually differ.
+        const viewMax = Math.max(1, Math.floor(Math.min(
+          (window.innerWidth * dpr) / VIEW_PW,
+          ((window.innerHeight - 72) * dpr) / VIEW_PH,
+        )));
+        scale = Math.max(1, Math.min(scalePref, viewMax));
+      }
       if (canvas.width !== VIEW_PW * scale) {
         canvas.width = VIEW_PW * scale;
         canvas.height = VIEW_PH * scale;
       }
-      canvas.style.width = `${(VIEW_PW * scale) / dpr}px`;
+      const cssW = (VIEW_PW * scale) / dpr;
+      canvas.style.width = `${cssW}px`;
       canvas.style.height = `${(VIEW_PH * scale) / dpr}px`;
       scaleRef.current = scale;
+      // Windowed + forced: only *grow* the box past the 1000px cap (so a large
+      // scale isn't clipped). Smaller scales just center the canvas in the
+      // default box — shrinking the box would crowd the HUD row.
+      setBoxW(!filled && scalePref !== 'auto' && cssW > 1000 ? cssW : null);
     };
     fit();
     const ro = new ResizeObserver(fit);
     if (frameRef.current) ro.observe(frameRef.current);
     window.addEventListener('resize', fit); // catches devicePixelRatio changes too
     return () => { ro.disconnect(); window.removeEventListener('resize', fit); };
-  }, []);
+  }, [scalePref, filled]);
+
+  // Playtest hook — only when the URL carries ?debug. Exposes a read-only
+  // snapshot of live game state on window.__lab for the Playwright harness
+  // (scripts/playtest.mjs). Gated by the flag so it never exists in normal play.
+  // Dependency-free (just a window global) — keeps src/game/ React-only.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !/[?&]debug\b/.test(window.location.search)) return;
+    (window as unknown as { __lab: unknown }).__lab = {
+      snapshot: () => ({
+        screen,
+        scene: sceneRef.current.id,
+        pos: { x: Math.round(posRef.current.x), y: Math.round(posRef.current.y) },
+        tile: { x: Math.floor((posRef.current.x + 4) / TILE), y: Math.floor((posRef.current.y + 4) / TILE) },
+        dir: dirRef.current,
+        moving: movingRef.current,
+        overlay: overlayRef.current?.type ?? null,
+        scale: scaleRef.current,
+        money: saveRef.current.money,
+        day: saveRef.current.day,
+        energy: saveRef.current.energy,
+        timeMin: saveRef.current.timeMin,
+        save: saveRef.current,
+      }),
+    };
+  });
 
   useEffect(() => {
     if (screen !== 'playing') return;
     if (!atlasRef.current) atlasRef.current = buildAtlas();
+    // Canvas text doesn't trigger a webfont fetch on its own — kick the load so
+    // the kanji/kana signs render in Naganoshi. The render loop redraws every
+    // frame, so it swaps in as soon as the face is ready.
+    document.fonts?.load("16px 'Naganoshi'");
     const input = inputRef.current;
     window.addEventListener('keydown', input.onKeyDown);
     window.addEventListener('keyup', input.onKeyUp);
@@ -2322,7 +2410,7 @@ const LittleApartmentGame: React.FC = () => {
   // Fill the whole viewport when in browser fullscreen OR in the desktop app
   // shell (its OS window is already fullscreen). The canvas fit() effect then
   // integer-upscales the art to fill the frame instead of sitting in a 1000px box.
-  const filled = isFullscreen || isDesktopApp;
+  // (`filled` is declared above, by the fit effect.)
 
   return (
     <div
@@ -2333,6 +2421,9 @@ const LittleApartmentGame: React.FC = () => {
         const btn = (e.target as HTMLElement).closest('button');
         if (btn && !btn.hasAttribute('data-nosfx')) sfxUiClick();
       }}
+      // Windowed + forced scale: cap the box at the canvas width (boxW) instead
+      // of 1000px so the chosen scale isn't clipped.
+      style={filled ? undefined : boxW != null ? { maxWidth: `${boxW}px` } : undefined}
       className={filled
         ? 'w-full h-full flex flex-col bg-black select-none'
         : 'w-full max-w-[1000px] mx-auto select-none'}
@@ -2509,6 +2600,12 @@ const LittleApartmentGame: React.FC = () => {
                 >
                   HOW TO PLAY
                 </button>
+                <button
+                  className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
+                  onClick={() => setDisplayOpen(true)}
+                >
+                  ⛶ DISPLAY
+                </button>
                 {saved && (
                   <button
                     className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
@@ -2574,6 +2671,43 @@ const LittleApartmentGame: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* display / scaling */}
+        {screen === 'title' && displayOpen && (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+            <div className={`${panelCls} w-full max-w-md max-h-full overflow-y-auto px-5 py-4`}>
+              <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
+                <h3 className="font-retro text-[#ffd24a] text-base">DISPLAY</h3>
+                <button className={btnCls} onClick={() => setDisplayOpen(false)}>✕</button>
+              </div>
+              <div className="text-base leading-snug space-y-3">
+                <p className="opacity-80">Pixel scale — how big the {VIEW_PW}×{VIEW_PH} picture is drawn. <span className="text-[#ffd24a]">Auto</span> fills the window; a fixed step keeps the same size and is clamped to what fits.</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['auto', 1, 2, 3, 4, 5, 6] as const).map(opt => {
+                    const on = scalePref === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => setScale(opt)}
+                        className={`font-pixel text-base px-2 py-2 border-2 transition-colors ${on ? 'bg-[#ffd24a] text-black border-[#ffd24a]' : 'border-[#ffd24a]/60 text-[#ffd24a] hover:bg-[#ffd24a]/20'}`}
+                      >
+                        {opt === 'auto' ? 'AUTO' : `${opt}×`}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="opacity-60 text-sm">
+                  {scalePref === 'auto'
+                    ? 'Auto — biggest size that fits the window.'
+                    : `${scalePref}× → ${VIEW_PW * scalePref}×${VIEW_PH * scalePref} px (clamped if larger than the window).`}
+                </p>
+              </div>
+              <div className="text-center mt-4">
+                <button className={btnCls} onClick={() => setDisplayOpen(false)}>DONE</button>
+              </div>
             </div>
           </div>
         )}

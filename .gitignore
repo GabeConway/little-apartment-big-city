@@ -3,6 +3,9 @@ dist/
 *.local
 .DS_Store
 
+# playtest harness screenshots (scripts/playtest.mjs default output)
+playtest/
+
 # logs
 npm-debug.log*
 yarn-debug.log*

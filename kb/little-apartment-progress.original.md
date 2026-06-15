@@ -2,11 +2,11 @@
 
 Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, `[x]` done.
 
-**Status: EXTRACTED into standalone repo `lilaptbigcty` (2026-06-14)** — game lifted verbatim from `personalsite` (was on branch `fable`, latest game commit `47f877e`); now at `src/game/`, boots straight to title screen. **Build-only native game** (Tauri v2 desktop/mobile) — web/Cloudflare target removed. Pipeline: [kb/build-targets.md](build-targets.md).
+**Status: EXTRACTED into standalone repo `lilaptbigcty` (2026-06-14)** — game lifted verbatim from `personalsite` (was on branch `fable`, latest game commit `47f877e`); now lives at `src/game/`, boots straight to the title screen. **Build-only native game** (Tauri v2 desktop/mobile) — the web/Cloudflare target was removed. Pipeline: [kb/build-targets.md](build-targets.md).
 
-> **Update (2026-06-14, post-extraction):** web/Cloudflare dropped — build-only now (`scripts/copy-404.js`, `public/_headers`, `manifest.webmanifest` deleted). Official releases: Windows (installer + portable noinstall `.exe`), macOS `.dmg` (Apple Silicon), Linux `.deb` + `.AppImage`. Added Vitest + CI + pre-commit hook ([kb/testing.md](testing.md)) and gamepad/controller support. Web-era checklist items below (PWA, CF Pages) are **historical**, no longer apply.
+> **Update (2026-06-14, post-extraction):** web/Cloudflare dropped — this is build-only now (`scripts/copy-404.js`, `public/_headers`, `manifest.webmanifest` deleted). Official releases: Windows (installer + portable noinstall `.exe`), macOS `.dmg` (Apple Silicon), Linux `.deb` + `.AppImage`. Added Vitest + CI + pre-commit hook ([kb/testing.md](testing.md)) and gamepad/controller support. The web-era checklist items below (PWA, CF Pages) are **historical** and no longer apply.
 
-> History below (Parts A–v3.6) = as-built record from `personalsite` era. Part A ("Games section") portfolio-only, no longer applies to standalone repo.
+> History below (Parts A–v3.6) is the as-built record from the `personalsite` era. Part A ("Games section") is portfolio-only and no longer applies to this standalone repo.
 
 ## Part A — Games section (done earlier, unchanged)
 - [x] Navbar Games tab, `/games` hub (hash views), `/about-me` redirect, GabeOsDesk extraction, link repoints, InterestsPage deleted
@@ -26,9 +26,9 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 - [x] **Backrooms chain**: konbini freezer door (hidden until first E) → Manager (Peepis-gated: "parched but on a diet"), Jean-Pierre tourist → **mines**: daily ore, crawlers, Magical Girl Wand combat, mineral-only CRAFT for rare furniture + mineral selling
 - [x] **Gacha hall**: ¥300 capsules, 10 figures, maneki trophy; **shrine**: donations → fishing luck tiers
 - [x] **Tex's beach stand**: $67 cowboy hat → player-hat sprite
-- [x] **Vending** = pocketable "Diet Doctor Peepis" cans (drink from menu / feed Manager)
+- [x] **Vending** = pocketable "Diet Doctor Peepis" cans (drink from menu / feed the Manager)
 - [x] **Doki Doki Discount** rename (scene id stays `denden`); unique styled signs w/ neon blink
-- [x] **Sprites/personality**: accessory overlay system, 13 distinct NPCs + custom monster/crawlers, rotating state-aware dialogue every character
+- [x] **Sprites/personality**: accessory overlay system, 13 distinct NPCs + custom monster/crawlers, rotating state-aware dialogue for every character
 - [x] **Music**: 10 tracks wired (incl. pawn-shop, the-club, backrooms, garage-theme, gacha), 700ms crossfade, DJ override
 - [x] **Fullscreen** ⛶ toggle
 
@@ -36,16 +36,16 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 Hub logo · placement flow (box→place→put away) · v2 migration guard · freezer discovery · tourist · Manager gate/feed/craft-only/sell/wand · mines descend/mine/crawler damage · DJ gating + track swap · shrine tier + ach · gacha roll · hat · car purchase · sketchy outcome · 2 AM collapse → Day 2 home · cheats (incl. typing in input doesn't move player) · clock ticks in explore, frozen in menu · 384×224 integer backing · craft-only Manager (no yen buttons)
 
 ## Key constraints
-See "Hard rules" in kb/games.md. Plus: injected test saves need `v:2` and relevant `storySeen` or queued story letter eats input.
+See "Hard rules" in kb/games.md. Plus: injected test saves need `v:2` and relevant `storySeen` or a queued story letter eats input.
 
 ## Future adds (documented, not built)
-- [ ] Badtown street + gacha-hall… gacha now own track; badtown street still default — dedicated badtown theme welcome
+- [ ] Badtown street + gacha-hall… gacha now has its own track; badtown street still on default — dedicated badtown theme welcome
 - [ ] Real-device touch pass (D-pad rendered on coarse pointers; desktop-verified only)
 - [ ] Cosmetic: city path north of apartment building dead-ends
 - [ ] Commit + PR (user drives)
 
 ## v3 wave (2026-06-12, late)
-- [x] Shrine = own grounds scene + miko; island = tiki bar + 3 coconut palms (collect/eat/sell); deepsea = sail bay, cast anywhere
+- [x] Shrine = own grounds scene + miko; island = tiki bar + 3 coconut palms (collect/eat/sell); deepsea = sail the bay, cast anywhere
 - [x] Car v2: world entity, board/drive(2.4×)/park-anywhere, door-safe parking + tow service; **¥75k endgame price**
 - [x] Wand fires projectile bolts; crawlers lunge; KO → Jean-Pierre rescue; tourist gates mine entry without wand; ladder-vs-wand interact bug fixed
 - [x] Kabukicho-styled Downtown (rename from Kabukicho label), kana-first signage w/ EN pairs + 酒 on konbini, road-row warps fixed between city↔Downtown
@@ -54,28 +54,28 @@ See "Hard rules" in kb/games.md. Plus: injected test saves need `v:2` and releva
 - All verified headless (verify3/4/5 + spot scripts), zero JS errors
 
 ## v3.1 (2026-06-13)
-- [x] deep-sea.mp3 track for bay (metadata-stripped)
-- [x] Deepsea exit easier: entire south edge warps to shore (was 2-tile gap); HOME sign + prompt
+- [x] deep-sea.mp3 track for the bay (metadata-stripped)
+- [x] Deepsea exit easier: entire south edge warps to shore (was a 2-tile gap); HOME sign + prompt
 - [x] Cheat `country roads` → teleport to apartment
-- [x] GamesPage: ALPHA badge + "alpha release" note on apartment card and in-game title
+- [x] GamesPage: ALPHA badge + "alpha release" note on the apartment card and in-game title
 
 ## v3.2 (2026-06-13, later)
 - [x] **Title screen redo**: painted bg (`public/images/title-bg.png`, Gemini art downscaled 2752→1280w, 1.5MB) cover+pixelated + dark gradient; title music (`public/music/title.mp3`, metadata + cover-art video stream stripped, 3MB) wired via `SCENE_MUSIC.title` w/ autoplay + gesture-kick fallback, crossfades to scene on begin
-- [x] **Default to CONTINUE**: when save exists, CONTINUE = primary filled button (Day/¥ subtitle); NEW GAME shown only when no save
-- [x] **Save management panel** (MANAGE SAVE on title): summary (day/money/furniture/achievements/fish) + START NEW GAME & DELETE SAVE each behind 2-step confirm so progress not wiped by stray click
+- [x] **Default to CONTINUE**: when a save exists, CONTINUE is the primary filled button (Day/¥ subtitle); NEW GAME shown only when no save
+- [x] **Save management panel** (MANAGE SAVE on title): summary (day/money/furniture/achievements/fish) + START NEW GAME & DELETE SAVE each behind a 2-step confirm so progress isn't wiped by a stray click
 - [x] **Achievement fixes**: `deep` no longer awarded for tropical/shallow (strict `fm.table === 'deep'`); `club` desc Club Zinnia→Club Kaiju; new `broke` ach "i dont have enough money for chicken nugget" at ¥0 (22 total)
 
 ## v3.3 (2026-06-13, sfx + polish)
-- [x] **Sampled SFX** (`public/sfx/`, metadata-stripped, `playSfx()` cached/rewound): `achievement-unlocked.mp3` in `award()`; `backrooms-teleport.mp3` on konbini freezer-crack `portal` warp; `ui-click.mp3` via delegated root-button click (skips `data-nosfx`); `game-start.mp3` in `begin()`. `media-src 'self'` covers `/sfx`.
-- [x] **Global mute**: `readMuted` hoisted; `blip()` + `playSfx()` early-return when muted; 🔊 added to title screen.
+- [x] **Sampled SFX** (`public/sfx/`, metadata-stripped, `playSfx()` cached/rewound): `achievement-unlocked.mp3` in `award()`; `backrooms-teleport.mp3` on the konbini freezer-crack `portal` warp; `ui-click.mp3` via delegated root-button click (skips `data-nosfx`); `game-start.mp3` in `begin()`. `media-src 'self'` covers `/sfx`.
+- [x] **Global mute**: `readMuted` hoisted; `blip()` + `playSfx()` early-return when muted; 🔊 added to the title screen.
 - [x] **HUD**: removed fish counter; energy bar now color-ramps (green/amber/red) + gloss + smooth transition.
-- [x] **HOW TO PLAY** overlay on title screen (goal, controls, money, energy/clock, furnishing, explore).
-- [x] **Scene transitions** (`runTransition` + `transTimers`, scoped `<style>` keyframes): `start` cover (title→game, all begin-buttons route through `startGame()`); `freezer` cold-flash (konbini→backrooms `portal`). Action swaps underneath while overlay opaque.
+- [x] **HOW TO PLAY** overlay on the title screen (goal, controls, money, energy/clock, furnishing, explore).
+- [x] **Scene transitions** (`runTransition` + `transTimers`, scoped `<style>` keyframes): `start` cover (title→game, all begin-buttons route through `startGame()`); `freezer` cold-flash (konbini→backrooms `portal`). Action swaps underneath while overlay is opaque.
 - [x] New konbini track (`konbini.mp3` replaced, metadata + cover-art stream stripped).
-- [x] **Portrait nudge**: coarse-pointer + portrait orientation → "rotate to landscape" banner on title screen (`isPortrait` via `matchMedia('(orientation: portrait)')`).
+- [x] **Portrait nudge**: coarse-pointer + portrait orientation → "rotate to landscape" banner on the title screen (`isPortrait` via `matchMedia('(orientation: portrait)')`).
 
 ## v3.4 (2026-06-14, QoL pass)
-- [x] **Save & Quit to Menu** button in pause menu (`quitToMenu`)
+- [x] **Save & Quit to Menu** button in the pause menu (`quitToMenu`)
 - [x] HUD **BAG** + **FULL/EXIT** buttons made obvious (labeled, bordered/filled, drop-shadow)
 - [x] Freezer transition text → "WARPING INTO THE UNKNOWN"
 - [x] **Shorter days**: `TIME_RATE` 1.8 → 3.5 (~5.5 real-min/day)
@@ -84,14 +84,14 @@ See "Hard rules" in kb/games.md. Plus: injected test saves need `v:2` and releva
 - [x] **Pass-out / sleep screen** redone: distinct "OUT COLD" (collapse, red vignette + throb) vs "💤 Goodnight" (normal), vignette + rise/fade animations
 
 ## v3.5 (2026-06-14, end-of-day)
-- [x] **OUT COLD now waits for click/press** (`awaitClick`) before continuing
+- [x] **OUT COLD now waits for a click/press** (`awaitClick`) before continuing
 - [x] **End-of-Day recap** screen (`endday` overlay): net ¥, fish caught, minerals mined, shifts, new furniture; collapse warning. Flow `doSleep → sleep screen → finishSleep → endday → closeEndDay`. Per-day tally `save.today` (`DayLog`) reset each morning.
-- [x] **end-of-day.mp3** plays over recap (metadata + cover-art stream stripped); resumes scene music on close
+- [x] **end-of-day.mp3** plays over the recap (metadata + cover-art stream stripped); resumes scene music on close
 - [x] `broke` achievement now fires under ¥100 (was ≤0)
 - [x] `first-fish` achievement renamed → "way down yonder"
 
 ## v3.6 (2026-06-14, mobile title)
-- [x] Mobile title rebuilt: full-viewport `fixed` layer (was cramped in aspect-locked frame); modals switch to `fixed z-[60]` on coarse
+- [x] Mobile title rebuilt: full-viewport `fixed` layer (was cramped in the aspect-locked frame); modals switch to `fixed z-[60]` on coarse
 - [x] Portrait **setup checklist** (rotate + one-tap fullscreen-landscape / iOS add-to-home); **soft gate** (play always available)
 - [x] `goFullscreenLandscape` = requestFullscreen + `screen.orientation.lock('landscape')` (Android); iOS falls back to guide
 - [x] **PWA**: `public/manifest.webmanifest` + apple meta tags + apple-touch-icon + `viewport-fit=cover` → iOS Add-to-Home-Screen = chromeless fullscreen
@@ -99,12 +99,12 @@ See "Hard rules" in kb/games.md. Plus: injected test saves need `v:2` and releva
 - [x] Site `<title>` "Gabe's Portfolio" → "Gabe's Website"
 
 ## Standalone extraction (2026-06-14, this repo)
-Lifted game out of `personalsite` into `lilaptbigcty` as cross-platform app. Game source
+Lifted the game out of `personalsite` into `lilaptbigcty` as a cross-platform app. Game source
 copied verbatim except two type fixes (see gotcha below).
 
 **Done & verified:**
 - [x] Scaffold: Vite 6 + React 19 + Tailwind 3 + TS; `src/main.tsx` → `<LittleApartmentGame/>` at title (no router/site chrome)
-- [x] `src/game/` = 7 files; assets in `public/{images,music,sfx}` (16 music — `100-band.mp3` unused, dropped); manifest + `_headers` (self-only CSP)
+- [x] `src/game/` = the 7 files; assets in `public/{images,music,sfx}` (16 music — `100-band.mp3` was unused, dropped); manifest + `_headers` (self-only CSP)
 - [x] **Fonts self-hosted** via `@fontsource/press-start-2p` + `@fontsource/vt323` in `src/index.css` (Google CDN removed → offline-safe in native webviews)
 - [x] **Tauri v2** scaffold in `src-tauri/` (Cargo.toml, tauri.conf.json, lib.rs/main.rs, capabilities); `id com.gabeconway.lilapt`; window 1152×672 (3× of 384×224)
 - [x] **App icons generated** — `npm run tauri icon public/images/game-logo.png` populated `src-tauri/icons/` (desktop .icns/.ico, android mipmaps, ios). JS-only, ran without Rust.
@@ -113,14 +113,14 @@ copied verbatim except two type fixes (see gotcha below).
 - [x] **Validated**: `npx tsc --noEmit` clean, `npm run build` clean (JS 345KB / 106KB gz, fonts bundled); `npm run preview` serves index + JS + music + images all 200. `personalsite` left untouched.
 
 **Two source fixes (new repo only — personalsite NOT modified):**
-1. `Hud` initial `useState` missing `time` → added `time: ''`.
-2. `bite` `FishMode` object dropped `table` → `fm.table` was `undefined` after bite, so
-   deep/tropical fish silently fell back to regular `FISH` table. Added `table: fm.table`.
-   **Real runtime bugfix.** If re-sync game from personalsite, re-apply both.
+1. `Hud` initial `useState` was missing `time` → added `time: ''`.
+2. `bite` `FishMode` object dropped `table` → `fm.table` was `undefined` after a bite, so
+   deep/tropical fish silently fell back to the regular `FISH` table. Added `table: fm.table`.
+   **Real runtime bugfix.** If you ever re-sync the game from personalsite, re-apply both.
 
 **⚠ Sync gotcha**: `personalsite` has **no `@types/react`** installed, so its `tsc` never
-type-checks React calls — two bugs above invisible there. This repo DOES have
-`@types/react`, so `tsc --noEmit` is real gate here. Don't assume personalsite type-clean.
+type-checks React calls — the two bugs above were invisible there. This repo DOES have
+`@types/react`, so `tsc --noEmit` is a real gate here. Don't assume personalsite is type-clean.
 
 **Remaining (next context — see kb/build-targets.md):**
 - [x] Install **Rust** (rustup/Homebrew) — done (cargo 1.96)

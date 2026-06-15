@@ -11,6 +11,7 @@ export default {
         'sans': ['Inter', 'sans-serif'],
         'retro': ['"Press Start 2P"', 'cursive'],
         'pixel': ['"VT323"', 'monospace'],
+        'jp': ['"Naganoshi"', 'sans-serif'], // Japanese pixel font (canvas signs)
         'handwriting': ['"Kalam"', 'cursive'],
       },
       colors: {

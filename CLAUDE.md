@@ -26,20 +26,22 @@ Read before editing the matching area:
 - [kb/conventions.md](kb/conventions.md) — coding conventions.
 - [kb/dependencies.md](kb/dependencies.md) — versions, security policy.
 - [kb/testing.md](kb/testing.md) — Vitest setup, CI, pre-commit hook.
+- [kb/playtesting.md](kb/playtesting.md) — Playwright playtest harness (`npm run playtest`): seed a save, drive inputs, read live state, screenshot.
 
 ## Commands
 - `npm run dev` — Vite dev server in a browser (fast iteration only; not a ship target). No Rust needed.
 - `npm run build` — Vite build → `dist/` (the bundle Tauri wraps; not deployed anywhere).
 - `npm test` — Vitest unit tests.
+- `npm run playtest -- <shot|state|drive|title|presets> [opts]` — drive the game in a headless browser (seed save, send input, read live state, screenshot). See [kb/playtesting.md](kb/playtesting.md).
 - `npm run desktop:dev` / `:build` (+ `desktop:build:mac` for .app+.dmg), `android:dev` / `:build`, `ios:dev` / `:build` — Tauri (needs Rust; see build-targets).
 - `./start-dev.sh [desktop|android|ios]` (mac/linux) · `start-dev.ps1`/`.cmd` (Windows).
 
 ## Invariants (don't break)
 - `src/game/` stays React-only (no new npm deps inside it).
 - Assets stay absolute-path; never hardcode an origin (breaks in the Tauri webview).
-- Persistence is `localStorage` (`lab-save` v2, `lab-music-muted`) — portable across all webviews.
+- Persistence is `localStorage` (`lab-save` v2, `lab-music-muted`, `lab-scale`) — portable across all webviews.
 - Canvas backing must be an integer multiple of 384×224 device px (Retina sharpness).
-- Fonts are self-hosted (`@fontsource`), not the Google Fonts CDN — required for offline native.
+- Fonts are self-hosted (`@fontsource`, plus Naganoshi JP pixel font in `public/fonts/`), not the Google Fonts CDN — required for offline native.
 
 ## Validate every change
 `npx tsc --noEmit` clean, then `npm test` (Vitest) clean, then `npm run build` clean. Then smoke-test via `npm run preview` (or `npm run desktop:dev`). CI runs all three on every PR; a Claude pre-commit hook runs `npm test` before commits (see [kb/testing.md](kb/testing.md)).
