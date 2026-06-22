@@ -28,3 +28,10 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
 }
+
+/* Minecraft-style splash text: yellow, tilted, gently bobbing in scale. */
+@keyframes splash-bob {
+  0%, 100% { transform: rotate(-8deg) scale(1); }
+  50%      { transform: rotate(-8deg) scale(1.08); }
+}
+.animate-splash { animation: splash-bob 0.9s ease-in-out infinite; }

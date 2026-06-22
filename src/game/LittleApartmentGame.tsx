@@ -357,6 +357,8 @@ const LittleApartmentGame: React.FC = () => {
   const [howToOpen, setHowToOpen] = useState(false);
   const [fsGuideOpen, setFsGuideOpen] = useState(false);
   const [displayOpen, setDisplayOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
   // Canvas scale preference: 'auto' = max integer fit (default), or a forced
   // integer multiple of 384×224 (clamped to what fits). Persisted in localStorage.
   const [scalePref, setScalePref] = useState<'auto' | number>(() => {
@@ -3285,32 +3287,24 @@ const LittleApartmentGame: React.FC = () => {
                 </button>
               )}
 
-              {/* secondary actions */}
-              <div className="flex flex-wrap items-center justify-center gap-2">
+              {/* secondary actions — single vertical column */}
+              <div className="flex flex-col items-stretch w-full gap-2">
                 <button
-                  className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
+                  className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40 w-full`}
                   onClick={() => setHowToOpen(true)}
                 >
                   HOW TO PLAY
                 </button>
                 <button
-                  className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
-                  onClick={() => setDisplayOpen(true)}
+                  className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40 w-full`}
+                  onClick={() => setSettingsOpen(true)}
                 >
-                  ⛶ DISPLAY
+                  ⚙ SETTINGS
                 </button>
-                {saved && (
-                  <button
-                    className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
-                    onClick={() => { setManageOpen(true); setConfirmMode(null); }}
-                  >
-                    MANAGE SAVE
-                  </button>
-                )}
                 {/* desktop / mobile-landscape get the fullscreen button here; portrait uses the checklist above. Native app is already fullscreen. */}
                 {!isDesktopApp && (!isCoarse || !isPortrait) && (
                   <button
-                    className="font-pixel text-base px-5 py-1.5 border-2 border-[#9fc4e8]/70 text-[#9fc4e8] bg-black/40 hover:bg-[#9fc4e8] hover:text-black transition-colors"
+                    className="font-pixel text-base px-5 py-1.5 border-2 border-[#9fc4e8]/70 text-[#9fc4e8] bg-black/40 hover:bg-[#9fc4e8] hover:text-black transition-colors w-full"
                     onClick={() => { if (!fsSupported) setFsGuideOpen(true); else if (isFullscreen) toggleFullscreen(); else goFullscreenLandscape(); }}
                   >
                     {isFullscreen ? '🗗 EXIT FULLSCREEN' : '⛶ GO FULLSCREEN'}
@@ -3319,7 +3313,7 @@ const LittleApartmentGame: React.FC = () => {
                 {/* desktop app: explicit quit (no browser tab to close) */}
                 {isDesktopApp && (
                   <button
-                    className="font-pixel text-base px-5 py-1.5 border-2 border-[#e0552e]/70 text-[#e0552e] bg-black/40 hover:bg-[#e0552e] hover:text-black transition-colors"
+                    className="font-pixel text-base px-5 py-1.5 border-2 border-[#e0552e]/70 text-[#e0552e] bg-black/40 hover:bg-[#e0552e] hover:text-black transition-colors w-full"
                     onClick={quitDesktopApp}
                   >
                     ✕ QUIT GAME
@@ -3329,6 +3323,11 @@ const LittleApartmentGame: React.FC = () => {
 
               <p className="font-pixel text-[#e8e0d0]/70 text-sm sm:text-base drop-shadow-[1px_1px_0_#000]">{isCoarse ? 'On-screen controls once you start' : 'WASD / arrows move · E interact · Esc close'}</p>
             </div>
+
+            {/* Minecraft-style splash, bottom of the screen */}
+            <p className="absolute bottom-2.5 left-1/2 -translate-x-1/2 origin-center font-pixel text-[#ffd24a] text-xs sm:text-sm animate-splash drop-shadow-[1px_1px_0_#000] pointer-events-none whitespace-nowrap">
+              Made by TechProGabe!
+            </p>
           </div>
           );
         })()}
@@ -3423,6 +3422,44 @@ const LittleApartmentGame: React.FC = () => {
         )}
 
         {/* display / scaling */}
+        {/* Settings menu — groups Display, Save management, and Credits */}
+        {screen === 'title' && settingsOpen && (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+            <div className={`${panelCls} w-full max-w-xs px-5 py-4`}>
+              <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
+                <h3 className="font-retro text-[#ffd24a] text-base">⚙ SETTINGS</h3>
+                <button className={btnCls} onClick={() => setSettingsOpen(false)}>✕</button>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button className={`${btnCls} w-full py-1.5`} onClick={() => { setSettingsOpen(false); setDisplayOpen(true); }}>⛶ DISPLAY</button>
+                {saved && (
+                  <button className={`${btnCls} w-full py-1.5`} onClick={() => { setSettingsOpen(false); setManageOpen(true); setConfirmMode(null); }}>MANAGE SAVE</button>
+                )}
+                <button className={`${btnCls} w-full py-1.5`} onClick={() => { setSettingsOpen(false); setCreditsOpen(true); }}>CREDITS</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Credits */}
+        {screen === 'title' && creditsOpen && (
+          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+            <div className={`${panelCls} w-full max-w-xs px-5 py-4 text-center`}>
+              <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3 text-left">
+                <h3 className="font-retro text-[#ffd24a] text-base">CREDITS</h3>
+                <button className={btnCls} onClick={() => setCreditsOpen(false)}>✕</button>
+              </div>
+              <div className="space-y-2">
+                <p className="font-retro text-[#ffd24a] text-lg leading-relaxed">LITTLE APARTMENT,<br />BIG CITY</p>
+                <p className="text-base opacity-85">Made by <span className="text-[#ffd24a]">TechProGabe</span></p>
+                <p className="text-sm opacity-60">Design · code · pixels · vibes</p>
+                <p className="text-xs opacity-40 pt-2">Thanks for playing. 🌇</p>
+              </div>
+              <button className={`${btnCls} w-full py-1.5 mt-4`} onClick={() => setCreditsOpen(false)}>‹ BACK</button>
+            </div>
+          </div>
+        )}
+
         {screen === 'title' && displayOpen && (
           <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
             <div className={`${panelCls} w-full max-w-md max-h-full overflow-y-auto px-5 py-4`}>
