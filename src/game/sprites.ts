@@ -870,19 +870,23 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#d8584a'; ctx.fillRect(5, top, 1, h);  // lit edge
     ctx.fillStyle = '#8e2a1e'; ctx.fillRect(9, top, 2, h);  // shadow edge
   };
+  // Match t-grass exactly so the gate tiles blend seamlessly into city grass.
+  const grassBg = (ctx: CanvasRenderingContext2D) => {
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 13, 10); speckle(ctx, '#4d7440', 17, 6);
+  };
   atlas['t-torii'] = tile(ctx => {              // leg (lower half), solid
-    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 13, 6);
+    grassBg(ctx);
     toriiPost(ctx, 0, 16);
     ctx.fillStyle = '#7a241a'; ctx.fillRect(4, 13, 8, 3);   // base flare
     ctx.fillStyle = '#1d1d1d'; ctx.fillRect(4, 15, 8, 1);   // ground contact
   });
   atlas['t-torii-top'] = tile(ctx => {          // leg top + crossbar, solid
-    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 17, 5);
+    grassBg(ctx);
     toriiPost(ctx, 4, 12);
     toriiBeam(ctx);
   });
   atlas['t-torii-beam'] = tile(ctx => {         // crossbar over the path, walkable
-    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 19, 5);
+    grassBg(ctx);
     toriiBeam(ctx);
   });
   atlas['t-shrine'] = tile(ctx => {
