@@ -44,6 +44,7 @@ export interface GameSave {
   gacha: Record<string, number>; // figure name -> count
   hat: boolean;                 // Tex's $67 cowboy hat (worn on the sprite)
   peepis: number;               // cans of "Diet Doctor Peepis" in your pocket
+  sodas: Record<string, number>; // other vending sodas in your pocket (soda id -> count)
   monsterFed: boolean;          // gave The Manager a cold one; shop unlocked
   gangPaid: boolean;            // paid off the yakuza blocking the way to Downtown
   minerals: Record<string, number>; // mineral id -> count
@@ -107,6 +108,7 @@ export const newSave = (): GameSave => ({
   gacha: {},
   hat: false,
   peepis: 0,
+  sodas: {},
   monsterFed: false,
   gangPaid: false,
   minerals: {},

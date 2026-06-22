@@ -154,14 +154,15 @@ const MUSIC_FADE_MS = 700;
 
 type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending';
 
-// Vending-machine sodas. Peepis pockets a can (drink later / feed The Manager,
-// as before); the rest are cracked open on the spot for an energy jolt.
-type Soda = { id: string; name: string; price: number; kind: 'pocket' | 'drink'; energy?: number; blurb: string };
+// Vending-machine sodas. You buy a can into your pocket and drink it from the
+// bag for energy (Peepis can also be fed to The Manager / given to David).
+type Soda = { id: string; name: string; price: number; energy: number; blurb: string };
 const SODAS: Soda[] = [
-  { id: 'peepis',  name: '"Diet Doctor Peepis"',   price: 150, kind: 'pocket',             blurb: 'Legally distinct, the can insists. Pocket it (+12 energy when you drink).' },
-  { id: 'doofert', name: '"Diet Mountain Doofert"', price: 150, kind: 'drink', energy: 12, blurb: 'EXTREME citrus. Tastes faintly of cleaning product. Cracked open now.' },
-  { id: 'conk',    name: '"Conk"',                  price: 120, kind: 'drink', energy: 8,  blurb: "It's a cola. It's just a cola. We're pretty sure." },
-  { id: 'zonked',  name: '"Zonked! Energy Drink"',  price: 250, kind: 'drink', energy: 25, blurb: 'Wings sold separately. A genuinely irresponsible jolt.' },
+  { id: 'peepis',  name: '"Diet Doctor Peepis"',   price: 150, energy: 12, blurb: 'Legally distinct, the can insists. Pocket it, drink later, or feed The Manager.' },
+  { id: 'doofert', name: '"Diet Mountain Doofert"', price: 150, energy: 12, blurb: 'EXTREME citrus. Tastes faintly of cleaning product.' },
+  { id: 'conk',    name: '"Conk"',                  price: 120, energy: 8,  blurb: "It's a cola. It's just a cola. We're pretty sure." },
+  { id: 'bepsi',   name: '"Bepsi"',                 price: 130, energy: 10, blurb: 'The other other cola. Tastes like a trademark dispute.' },
+  { id: 'zonked',  name: '"Zonked! Energy Drink"',  price: 250, energy: 25, blurb: 'Wings sold separately. A genuinely irresponsible jolt.' },
 ];
 
 interface Crawler { x: number; y: number; hp: number; stepT: number; hurtT: number; dir: Dir }
@@ -479,6 +480,7 @@ const LittleApartmentGame: React.FC = () => {
   const hurtCooldownRef = useRef(0);
   const lastSafeTileRef = useRef<Vec | null>(null);
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
+  const shrineHealRef = useRef(0);   // accumulates real seconds for the very-slow shrine energy heal
   const djPickRef = useRef<string | null>(null);
 
   // ---- furniture Arrange mode (drag-and-drop placement) ----------------------
@@ -718,13 +720,23 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth({ type: 'shop', shop: 'vending' });
   }, [setOverlayBoth]);
 
+  // Buy a can — it always goes in your pocket (drink it later from the bag).
   const buySoda = (soda: Soda) => {
     const s = saveRef.current;
     if (s.money < soda.price) return;
-    if (soda.kind === 'drink' && s.energy >= maxEnergy(s)) return;
     s.money -= soda.price;
-    if (soda.kind === 'pocket') s.peepis += 1;
-    else s.energy = Math.min(maxEnergy(s), s.energy + (soda.energy ?? 0));
+    if (soda.id === 'peepis') s.peepis += 1;
+    else s.sodas[soda.id] = (s.sodas[soda.id] ?? 0) + 1;
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  // Drink a pocketed soda for its energy (from the bag).
+  const drinkSoda = (soda: Soda) => {
+    const s = saveRef.current;
+    if ((s.sodas[soda.id] ?? 0) <= 0 || s.energy >= maxEnergy(s)) return;
+    s.sodas[soda.id] -= 1;
+    s.energy = Math.min(maxEnergy(s), s.energy + (soda.energy ?? 0));
     sfxCoin();
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
   };
@@ -1148,6 +1160,15 @@ const LittleApartmentGame: React.FC = () => {
       const beforeChunk = Math.floor(s2.timeMin / 10);
       s2.timeMin += dt * TIME_RATE;
       if (Math.floor(s2.timeMin / 10) !== beforeChunk) { refreshHud(); checkMessages(); } // every 10 game-min: fire any time-gated texts
+      // The shrine grounds restore energy very slowly (+1 every few real seconds).
+      if (sceneRef.current.id === 'shrine') {
+        if (s2.energy < maxEnergy(s2)) {
+          shrineHealRef.current += dt;
+          if (shrineHealRef.current >= 3) { shrineHealRef.current = 0; s2.energy = Math.min(maxEnergy(s2), s2.energy + 1); refreshHud(); }
+        }
+      } else if (shrineHealRef.current !== 0) {
+        shrineHealRef.current = 0;
+      }
       if (s2.timeMin >= COLLAPSE_MIN) {
         doSleep(true); // 2 AM: you fade out, the city carries you home
         return;
@@ -2512,7 +2533,7 @@ const LittleApartmentGame: React.FC = () => {
               ));
             })()}
 
-        {(s.peepis > 0 || s.coconuts > 0) && (
+        {(s.peepis > 0 || s.coconuts > 0 || Object.values(s.sodas).some(n => n > 0)) && (
           <>
             <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3">POCKET</p>
             {s.coconuts > 0 && (
@@ -2527,6 +2548,12 @@ const LittleApartmentGame: React.FC = () => {
                 <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={drinkPeepis}>DRINK</button>
               </div>
             )}
+            {SODAS.filter(soda => soda.id !== 'peepis' && (s.sodas[soda.id] ?? 0) > 0).map(soda => (
+              <div key={soda.id} className="flex items-center gap-2 py-1">
+                <p className="flex-grow text-base opacity-80">{soda.name} ×{s.sodas[soda.id]} <span className="opacity-50">(+{soda.energy ?? 0} en)</span></p>
+                <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={() => drinkSoda(soda)}>DRINK</button>
+              </div>
+            ))}
           </>
         )}
       </div>
@@ -2780,23 +2807,22 @@ const LittleApartmentGame: React.FC = () => {
     const close = () => setOverlayBoth(null);
 
     if (ov.shop === 'vending') {
-      const full = s.energy >= maxEnergy(s);
       return (
-        <ShopFrame title="VENDING MACHINE" subtitle="Ice cold. Mostly legal. Pick your poison." money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        <ShopFrame title="VENDING MACHINE" subtitle="Ice cold. Mostly legal. Buy a can, drink it from your bag." money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
           {SODAS.map(soda => {
-            const cantDrink = soda.kind === 'drink' && full;
+            const held = soda.id === 'peepis' ? s.peepis : (s.sodas[soda.id] ?? 0);
             return (
               <div key={soda.id} className="flex items-center gap-3 py-1.5 border-b border-[#ffd24a]/15">
                 <div className="flex-grow">
-                  <p className="text-base text-[#ffd24a]">{soda.name}{soda.id === 'peepis' && s.peepis > 0 ? ` ×${s.peepis}` : ''}</p>
+                  <p className="text-base text-[#ffd24a]">{soda.name}{held > 0 ? ` ×${held}` : ''} <span className="text-xs opacity-50">+{soda.energy ?? 12} en</span></p>
                   <p className="text-sm opacity-60 leading-tight">{soda.blurb}</p>
                 </div>
                 <button
                   className={`${btnCls} text-sm whitespace-nowrap`}
-                  disabled={s.money < soda.price || cantDrink}
+                  disabled={s.money < soda.price}
                   onClick={() => buySoda(soda)}
                 >
-                  {soda.kind === 'pocket' ? 'BUY' : cantDrink ? 'FULL' : 'DRINK'} · ¥{soda.price}
+                  BUY · ¥{soda.price}
                 </button>
               </div>
             );
@@ -3333,10 +3359,13 @@ const LittleApartmentGame: React.FC = () => {
               <p className="font-pixel text-[#e8e0d0]/70 text-sm sm:text-base drop-shadow-[1px_1px_0_#000]">{isCoarse ? 'On-screen controls once you start' : 'WASD / arrows move · E interact · Esc close'}</p>
             </div>
 
-            {/* Minecraft-style splash, bottom of the screen */}
-            <p className="absolute bottom-2.5 left-1/2 -translate-x-1/2 origin-center font-pixel text-[#ffd24a] text-xs sm:text-sm animate-splash drop-shadow-[1px_1px_0_#000] pointer-events-none whitespace-nowrap">
-              Made by TechProGabe!
-            </p>
+            {/* Minecraft-style splash, tucked near the title (upper-left). Position
+                lives on the wrapper so it can't fight the rotate/scale animation. */}
+            <div className="absolute top-12 left-3 sm:top-16 sm:left-8 pointer-events-none z-10">
+              <p className="origin-center font-pixel text-[#ffd24a] text-xs sm:text-sm animate-splash drop-shadow-[1px_1px_0_#000] whitespace-nowrap">
+                Made by TechProGabe!
+              </p>
+            </div>
           </div>
           );
         })()}
@@ -3692,23 +3721,29 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* in-game achievement toast (separate from the site system) */}
         {achToast && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-[#16181d]/95 border-2 border-[#ffd24a] px-4 py-2 font-pixel text-center animate-toast-in z-20 pointer-events-none">
-            <p className="text-[#ffd24a] text-lg leading-tight">🏆 {achToast.title}</p>
-            <p className="text-[#e8e0d0]/70 text-sm leading-tight">{achToast.desc}</p>
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="animate-toast-in bg-[#16181d]/95 border-2 border-[#ffd24a] px-4 py-2 font-pixel text-center">
+              <p className="text-[#ffd24a] text-lg leading-tight">🏆 {achToast.title}</p>
+              <p className="text-[#e8e0d0]/70 text-sm leading-tight">{achToast.desc}</p>
+            </div>
           </div>
         )}
 
-        {/* phone-message toast — buzzes on a new text; tap to open it in the phone */}
+        {/* phone-message toast — buzzes on a new text; tap to open it in the phone.
+            Centering lives on the outer div so it can't fight the toast-in
+            transform (that conflict made it jump/glitch, esp. on hover repaint). */}
         {msgToast && (
-          <button
-            data-nosfx
-            onClick={() => openToastMessage(msgToast.id)}
-            className={`absolute ${achToast ? 'top-16' : 'top-2'} left-1/2 -translate-x-1/2 w-[88%] max-w-sm bg-[#16181d]/95 border-2 border-[#7ce8a0] px-4 py-2 font-pixel text-left animate-toast-in z-20 hover:bg-[#7ce8a0]/15 transition-colors shadow-[3px_3px_0_#000]`}
-          >
-            <p className="text-[#7ce8a0] text-base leading-tight">📱 {msgToast.from}{msgToast.count > 1 ? ` (+${msgToast.count - 1} more)` : ''}</p>
-            <p className="text-[#e8e0d0]/85 text-sm leading-tight truncate">{msgToast.preview}</p>
-            <p className="text-[#e8e0d0]/45 text-xs leading-tight mt-0.5">tap to open · or press P</p>
-          </button>
+          <div className={`absolute ${achToast ? 'top-16' : 'top-2'} left-1/2 -translate-x-1/2 z-20 w-[88%] max-w-sm`}>
+            <button
+              data-nosfx
+              onClick={() => openToastMessage(msgToast.id)}
+              className="animate-toast-in w-full bg-[#16181d]/95 border-2 border-[#7ce8a0] px-4 py-2 font-pixel text-left hover:bg-[#7ce8a0]/15 transition-colors shadow-[3px_3px_0_#000]"
+            >
+              <p className="text-[#7ce8a0] text-base leading-tight">📱 {msgToast.from}{msgToast.count > 1 ? ` (+${msgToast.count - 1} more)` : ''}</p>
+              <p className="text-[#e8e0d0]/85 text-sm leading-tight truncate">{msgToast.preview}</p>
+              <p className="text-[#e8e0d0]/45 text-xs leading-tight mt-0.5">tap to open · or press P</p>
+            </button>
+          </div>
         )}
 
         {/* menu: inventory + achievements */}
