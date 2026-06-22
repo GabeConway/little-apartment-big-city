@@ -345,9 +345,9 @@ export interface MessageDef {
 export const MESSAGES: MessageDef[] = [
   {
     id: 'welcome-landlord', from: 'Maison Kawa 🏢', avatar: '🏢', company: true,
-    // Day 1: arrives a few in-game minutes after you wake (a phone buzz teaches
-    // you the notification + to check the 📱). Already available any later day.
-    when: c => c.day > 1 || c.timeMin >= 7 * 60 + 5,
+    // Day 1: arrives ~7:30 AM, a little after you wake (a phone buzz teaches you
+    // the notification + to check the 📱). Available any later day.
+    when: c => c.day > 1 || c.timeMin >= 7 * 60 + 30,
     body: [
       'Welcome to MAISON KAWA, unit 204 — good to have you, {name}! This is the building line.',
       'That buzz was your phone. Open it any time with the 📱 button (or press P) — messages, the ZamaZonk store, and your wallet all live in there.',
@@ -365,9 +365,9 @@ export const MESSAGES: MessageDef[] = [
   },
   {
     id: 'zamazonk-welcome', from: 'ZamaZonk 📦', avatar: '📦', company: true,
-    // Day 1: lands a beat after the landlord text, so the second buzz reinforces
-    // "check your phone." Available on any later day too.
-    when: c => c.day > 1 || c.timeMin >= 7 * 60 + 15,
+    // Day 1: lands around midday — spread out from the landlord text so the
+    // welcome buzzes don't all pile up at once. Available on any later day too.
+    when: c => c.day > 1 || c.timeMin >= 12 * 60,
     body: [
       'Hello, valued human. This is ZamaZonk™ — the Everything Store. We got your number. We get everyone\'s number.',
       'How it works: open your phone (📱 / P) → tap the ZamaZonk app → pick furniture → it pays up front and arrives in your boxes by morning. Then open ARRANGE ROOM in your Bag to place it.',

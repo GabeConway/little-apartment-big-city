@@ -339,6 +339,7 @@ const PLAYER_SPEED = 72; // px/s
 const LittleApartmentGame: React.FC = () => {
   const [screen, setScreen] = useState<'title' | 'playing'>('title');
   const [vibePick, setVibePick] = useState(false);   // "what's your vibe?" new-game step
+  const [pickedVibe, setPickedVibe] = useState<Vibe>('fem'); // highlighted model in the picker (applied on START)
   const [pcName, setPcName] = useState('');           // name input on the vibe screen
   const pendingVibeRef = useRef<Vibe>('fem');         // chosen vibe, applied in begin()
   const pendingNameRef = useRef('Neighbor');          // chosen name, applied in begin()
@@ -1707,12 +1708,19 @@ const LittleApartmentGame: React.FC = () => {
   }, [begin, runTransition]);
 
   // New-game "what's your vibe?" pick → start with that appearance + name.
+  // Picker click only SELECTS a model (highlights it) — the player still presses START.
   const chooseVibe = useCallback((v: Vibe) => {
     pendingVibeRef.current = v;
+    setPickedVibe(v);
+  }, []);
+
+  // START button on the picker: lock in the highlighted model + name, then begin.
+  const startWithVibe = useCallback(() => {
+    pendingVibeRef.current = pickedVibe;
     pendingNameRef.current = pcName.trim() || 'Neighbor';
     setVibePick(false);
     startGame(true);
-  }, [startGame, pcName]);
+  }, [pickedVibe, pcName, startGame]);
 
   const toggleMusic = useCallback(() => {
     setMusicMuted(prev => {
@@ -3267,7 +3275,8 @@ const LittleApartmentGame: React.FC = () => {
                   key={v}
                   data-nosfx
                   onClick={() => chooseVibe(v)}
-                  className="flex flex-col items-center p-3 sm:p-4 border-2 border-[#ffd24a]/40 bg-black/40 hover:border-[#ffd24a] hover:bg-[#ffd24a]/10 transition-colors shadow-[4px_4px_0_#000]"
+                  aria-pressed={pickedVibe === v}
+                  className={`flex flex-col items-center p-3 sm:p-4 border-2 transition-colors shadow-[4px_4px_0_#000] ${pickedVibe === v ? 'border-[#ffd24a] bg-[#ffd24a]/15' : 'border-[#ffd24a]/40 bg-black/40 hover:border-[#ffd24a] hover:bg-[#ffd24a]/10'}`}
                 >
                   <canvas
                     ref={el => drawVibeThumb(el, v)}
@@ -3276,15 +3285,25 @@ const LittleApartmentGame: React.FC = () => {
                     aria-hidden
                     style={{ width: 176, height: 176, imageRendering: 'pixelated' }}
                   />
+                  <span className={`font-pixel text-sm mt-2 ${pickedVibe === v ? 'text-[#ffd24a]' : 'text-[#e8e0d0]/60'}`}>{pickedVibe === v ? '● SELECTED' : 'SELECT'}</span>
                 </button>
               ))}
             </div>
-            <button
-              className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40 mt-7`}
-              onClick={() => setVibePick(false)}
-            >
-              ‹ BACK
-            </button>
+            <div className="flex gap-3 mt-7">
+              <button
+                className={`${btnCls} font-pixel text-base px-5 py-1.5 bg-black/40`}
+                onClick={() => setVibePick(false)}
+              >
+                ‹ BACK
+              </button>
+              <button
+                data-nosfx
+                className="font-retro text-base px-7 py-1.5 border-2 border-[#ffd24a] bg-[#ffd24a]/15 text-[#ffd24a] hover:bg-[#ffd24a]/30 transition-colors shadow-[3px_3px_0_#000]"
+                onClick={startWithVibe}
+              >
+                START ›
+              </button>
+            </div>
           </div>
         )}
 
