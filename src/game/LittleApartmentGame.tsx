@@ -487,8 +487,18 @@ const LittleApartmentGame: React.FC = () => {
 
   // Phone-message toast (mirrors the achievement toast). Fired by checkMessages
   // when a new text is delivered, with the notification sound.
-  const [msgToast, setMsgToast] = useState<{ from: string; count: number } | null>(null);
+  const [msgToast, setMsgToast] = useState<{ from: string; count: number; preview: string; id: string } | null>(null);
   const msgTimerRef = useRef<number | null>(null);
+
+  // Tapping the toast opens that text in the phone Messages app (marks it read).
+  const openToastMessage = useCallback((id: string) => {
+    if (msgTimerRef.current) window.clearTimeout(msgTimerRef.current);
+    setMsgToast(null);
+    const s = saveRef.current;
+    const m = s.messages.find(x => x.id === id);
+    if (m && !m.read) { m.read = true; persistSave(s); refreshHud(); }
+    setOverlayBoth({ type: 'menu', tab: 'messages', thread: id });
+  }, []);
 
   // Deliver any newly-eligible phone messages; if any arrived, buzz + toast
   // ("check your phone") and refresh the unread badge. Returns fresh count.
@@ -499,9 +509,11 @@ const LittleApartmentGame: React.FC = () => {
     persistSave(s);
     refreshHud();
     sfxPhone();
-    setMsgToast({ from: fresh[fresh.length - 1].from, count: fresh.length });
+    const latest = fresh[fresh.length - 1];
+    const preview = latest.body[0].length > 48 ? latest.body[0].slice(0, 47) + '…' : latest.body[0];
+    setMsgToast({ from: latest.from, count: fresh.length, preview, id: latest.id });
     if (msgTimerRef.current) window.clearTimeout(msgTimerRef.current);
-    msgTimerRef.current = window.setTimeout(() => setMsgToast(null), 4500);
+    msgTimerRef.current = window.setTimeout(() => setMsgToast(null), 6000);
     return fresh.length;
   }, []);
 
@@ -3572,18 +3584,31 @@ const LittleApartmentGame: React.FC = () => {
           </div>
         )}
 
-        {/* phone-message toast — buzzes when a new text lands ("check your phone") */}
+        {/* phone-message toast — buzzes on a new text; tap to open it in the phone */}
         {msgToast && (
-          <div className={`absolute ${achToast ? 'top-16' : 'top-2'} left-1/2 -translate-x-1/2 bg-[#16181d]/95 border-2 border-[#7ce8a0] px-4 py-2 font-pixel text-center animate-toast-in z-20 pointer-events-none`}>
-            <p className="text-[#7ce8a0] text-lg leading-tight">📱 New message{msgToast.count > 1 ? `s (${msgToast.count})` : ''}</p>
-            <p className="text-[#e8e0d0]/70 text-sm leading-tight">{msgToast.from} — open your phone (P)</p>
-          </div>
+          <button
+            data-nosfx
+            onClick={() => openToastMessage(msgToast.id)}
+            className={`absolute ${achToast ? 'top-16' : 'top-2'} left-1/2 -translate-x-1/2 w-[88%] max-w-sm bg-[#16181d]/95 border-2 border-[#7ce8a0] px-4 py-2 font-pixel text-left animate-toast-in z-20 hover:bg-[#7ce8a0]/15 transition-colors shadow-[3px_3px_0_#000]`}
+          >
+            <p className="text-[#7ce8a0] text-base leading-tight">📱 {msgToast.from}{msgToast.count > 1 ? ` (+${msgToast.count - 1} more)` : ''}</p>
+            <p className="text-[#e8e0d0]/85 text-sm leading-tight truncate">{msgToast.preview}</p>
+            <p className="text-[#e8e0d0]/45 text-xs leading-tight mt-0.5">tap to open · or press P</p>
+          </button>
         )}
 
         {/* menu: inventory + achievements */}
         {overlay?.type === 'menu' && (
-          <div className="absolute inset-0 bg-black/75 flex items-center justify-center p-2 sm:p-4">
+          <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-2 p-2 sm:p-4">
             {renderMenu(overlay)}
+            {/* menu-level control (not a phone app) — lets mouse users close the phone */}
+            <button
+              data-nosfx
+              onClick={() => setOverlayBoth(null)}
+              className="font-pixel text-base px-6 py-1.5 border-2 border-red-400/70 text-red-300 bg-black/50 hover:bg-red-500 hover:text-black transition-colors shadow-[3px_3px_0_#000]"
+            >
+              ✕ CLOSE PHONE
+            </button>
           </div>
         )}
 
