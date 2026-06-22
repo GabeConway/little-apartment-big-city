@@ -158,7 +158,7 @@ type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' |
 // bag for energy (Peepis can also be fed to The Manager / given to David).
 type Soda = { id: string; name: string; price: number; energy: number; blurb: string };
 const SODAS: Soda[] = [
-  { id: 'peepis',  name: '"Diet Doctor Peepis"',   price: 150, energy: 12, blurb: 'Legally distinct, the can insists. Pocket it, drink later, or feed The Manager.' },
+  { id: 'peepis',  name: '"Diet Doctor Peepis"',   price: 150, energy: 12, blurb: 'Legally distinct, the can insists. Pocket it and drink it later for energy.' },
   { id: 'doofert', name: '"Diet Mountain Doofert"', price: 150, energy: 12, blurb: 'EXTREME citrus. Tastes faintly of cleaning product.' },
   { id: 'conk',    name: '"Conk"',                  price: 120, energy: 8,  blurb: "It's a cola. It's just a cola. We're pretty sure." },
   { id: 'bepsi',   name: '"Bepsi"',                 price: 130, energy: 10, blurb: 'The other other cola. Tastes like a trademark dispute.' },
@@ -2641,6 +2641,8 @@ const LittleApartmentGame: React.FC = () => {
       </div>
     );
 
+    const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true
+      || (typeof window !== 'undefined' && /[?&]debug\b/.test(window.location.search));
     const codesApp = (
       <div className="px-3 py-3">
         <p className="text-base opacity-70 mb-2">Whisper a word to the void. (For testing. The void doesn't judge. Much.)</p>
@@ -2656,6 +2658,23 @@ const LittleApartmentGame: React.FC = () => {
           <button className={`${btnCls} text-sm`} onClick={applyCheat}>APPLY</button>
         </div>
         {cheatMsg && <p className="text-sm text-[#7ce8a0] mt-2">{cheatMsg}</p>}
+        {isDev && (
+          <div className="mt-3 border-t border-[#ffd24a]/20 pt-2">
+            <p className="text-xs text-[#ffd24a]/70 mb-1">DEV — known codes</p>
+            {[
+              ['motherlode', '+¥50,000'],
+              ['redbull', 'Refill energy'],
+              ['rocks', '+10 of every mineral'],
+              ['gimmegimme', 'Unlock all base furniture'],
+              ['country roads', 'Teleport home'],
+              ['sunrise', 'Time → 7:00 AM'],
+              ['nightfall', 'Time → 10:00 PM'],
+              ['midnight', 'Time → 1:30 AM'],
+            ].map(([code, desc]) => (
+              <p key={code} className="text-sm flex justify-between gap-3 py-px"><span className="text-[#7ce8a0]">{code}</span><span className="opacity-55">{desc}</span></p>
+            ))}
+          </div>
+        )}
       </div>
     );
 
