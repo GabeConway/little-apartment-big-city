@@ -152,7 +152,7 @@ const MUSIC_FADE_MS = 700;
 
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending';
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
 // bag for energy (Peepis can also be fed to The Manager / given to David).
@@ -377,7 +377,7 @@ const LittleApartmentGame: React.FC = () => {
   // Windowed + forced scale: CSS width to size the layout box to the canvas
   // (so a forced scale isn't clipped at the 1000px cap). null = AUTO/filled.
   const [boxW, setBoxW] = useState<number | null>(null);
-  const [transition, setTransition] = useState<null | 'start' | 'freezer'>(null);
+  const [transition, setTransition] = useState<null | 'start' | 'freezer' | 'fade'>(null);
   const transTimers = useRef<number[]>([]);
   // Element fullscreen API exists on Android/desktop but NOT iOS Safari, which
   // only goes fullscreen via "Add to Home Screen". Used to pick the right CTA.
@@ -535,7 +535,7 @@ const LittleApartmentGame: React.FC = () => {
 
   // Cover the screen with a transition overlay, swap underneath while it's
   // opaque (coverMs), then uncover (totalMs). Timers cleared on unmount.
-  const runTransition = useCallback((kind: 'start' | 'freezer', action: () => void, coverMs: number, totalMs: number) => {
+  const runTransition = useCallback((kind: 'start' | 'freezer' | 'fade', action: () => void, coverMs: number, totalMs: number) => {
     transTimers.current.forEach(id => window.clearTimeout(id));
     transTimers.current = [];
     setTransition(kind);
@@ -910,16 +910,7 @@ const LittleApartmentGame: React.FC = () => {
       // Merchants open their stalls; everyone else just talks.
       if (npc.id === 'yakuza') {
         if (s.gangPaid) return; // already paid; he's on his way out
-        if (s.money < 5000) {
-          showDialog(['He looks you over, then at your wallet, unimpressed.', '"Toll to Downtown is five grand. Come back when you\'re holding."'], 'Enforcer');
-          return;
-        }
-        s.money -= 5000;
-        s.gangPaid = true;
-        sfxCoin();
-        computeSolids(); // the enforcers no longer block the alley
-        persistSave(s); refreshHud();
-        showDialog(['He counts the bills without looking, then tips his shades.', '"Pleasure. The district\'s open. Don\'t make me regret it."', 'The enforcers melt back into the neon. The way to Downtown is clear.'], 'Enforcer');
+        setOverlayBoth({ type: 'shop', shop: 'yakuza' });
         return;
       }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
@@ -2204,6 +2195,22 @@ const LittleApartmentGame: React.FC = () => {
     showDialog([`You stock shelves and work the register for a few hours. (+¥${SHIFT_PAY})`]);
   };
 
+  // Pay off the yakuza: they stay put while the screen blacks out, then they're
+  // gone when it fades back. (gangPaid set during the black.)
+  const payYakuza = () => {
+    const s = saveRef.current;
+    if (s.gangPaid || s.money < 5000) return;
+    s.money -= 5000;
+    sfxCoin();
+    persistSave(s); refreshHud();
+    setOverlayBoth(null);
+    runTransition('fade', () => {
+      s.gangPaid = true;
+      computeSolids();
+      persistSave(s); refreshHud();
+    }, 550, 1100);
+  };
+
   const finishEnding = () => {
     const s = saveRef.current;
     s.ended = true;
@@ -2827,6 +2834,21 @@ const LittleApartmentGame: React.FC = () => {
     void shopTick;
     const s = saveRef.current;
     const close = () => setOverlayBoth(null);
+
+    if (ov.shop === 'yakuza') {
+      return (
+        <ShopFrame title="DOWNTOWN — PRIVATE" subtitle={'"This block\'s spoken for, friend."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">A yakuza enforcer plants himself in the alley mouth, gold watch glinting. His friends don't move. Neither does he.</p>
+          <p className="text-base opacity-60 py-1 leading-snug">"Five grand and the district's yours for the night. Or turn around. Your call."</p>
+          <div className="flex items-center gap-3 mt-3">
+            <button className={`${btnCls} flex-grow`} disabled={s.money < 5000} onClick={payYakuza}>
+              {s.money < 5000 ? "CAN'T AFFORD · ¥5,000" : 'PAY THE TOLL · ¥5,000'}
+            </button>
+            <button className={btnCls} onClick={close}>WALK AWAY</button>
+          </div>
+        </ShopFrame>
+      );
+    }
 
     if (ov.shop === 'vending') {
       return (
@@ -3899,6 +3921,8 @@ const LittleApartmentGame: React.FC = () => {
               @keyframes labShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-3px)} 40%{transform:translateX(3px)} 60%{transform:translateX(-2px)} 80%{transform:translateX(2px)} }
               @keyframes labGlitch { 0%,100%{opacity:.9;letter-spacing:.25em} 50%{opacity:.45;letter-spacing:.6em} }
               .lab-transition{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden}
+              @keyframes labFadeBlack { 0%{opacity:0} 28%{opacity:1} 72%{opacity:1} 100%{opacity:0} }
+              .lab-transition-fade{background:#000;animation:labFadeBlack 1100ms ease-in-out forwards}
               .lab-transition-start{background:#0e1016;animation:labStartCover 1400ms ease-in-out forwards}
               .lab-transition-start .lab-trans-inner{animation:labStartZoom 1400ms ease-in-out forwards}
               .lab-transition-freezer{animation:labFreezeBg 1750ms ease-in-out forwards}
@@ -3913,12 +3937,12 @@ const LittleApartmentGame: React.FC = () => {
                   <p className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">BIG CITY</p>
                   <p className="font-pixel text-[#9fc4e8] text-base mt-3 lab-blink">starting…</p>
                 </div>
-              ) : (
+              ) : transition === 'freezer' ? (
                 <div className="lab-trans-inner text-center px-4">
                   <p className="font-pixel lab-glitch text-3xl sm:text-5xl text-black/80">░ ▒ ▓</p>
                   <p className="font-pixel text-black/70 text-sm sm:text-base mt-2 tracking-[0.3em] text-center">WARPING INTO THE UNKNOWN</p>
                 </div>
-              )}
+              ) : null}
             </div>
           </>
         )}
