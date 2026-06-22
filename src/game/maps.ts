@@ -43,6 +43,9 @@ const OUTDOOR = {
   'n': T('t-torii-top', true),   // torii leg-top + crossbar (solid)
   'm': T('t-torii-beam'),        // torii crossbar over the walkable path
   'h': T('t-shrine', true),
+  'T': T('t-tree', true),        // tree (solid)
+  'o': T('t-rock', true),        // boulder (solid)
+  'f': T('t-grass-v1'),          // flowering grass tuft (walkable)
 };
 
 // ---- Apartment -----------------------------------------------------------
@@ -146,14 +149,14 @@ const city: SceneDef = {
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
-    'ggggggwwgggggggggggggggggggggggg',
+    'gTggggwwggggggggggggggggggggggfg',
     'ggQQQQQQQQgggggggggggggggggggggg',
     'ggQQQQQQQQgggggggggggggggggggggg',
-    'ggQQQQDDQQgggggggggggggggggggggg',
-    'ggggggwwgggggggggggggggggggggggg',
+    'ggQQQQDDQQggggggggggTgggggggggfg',
+    'ggggggwwgggggggggggfgfgggggggggg',
     'wwwwwwwwgggggggggggggggnmmnggggg',
-    'wwwwwwwwgggggggggggggggjggjggggg',
-    'gggggggggggggggggggggggggggggggg',
+    'wwwwwwwwggggggggggggggojggjo~~gg',
+    'gggggggggggggggggggggggggggg~~gg',
   ],
   warps: [
     { x: 4, y: 2, to: 'denden', tx: 8, ty: 8, dir: 'up' },

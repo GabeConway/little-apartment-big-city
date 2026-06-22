@@ -897,6 +897,14 @@ const buildTiles = (atlas: Atlas) => {
     grassBg(ctx);
     toriiBeam(ctx);
   });
+  atlas['t-rock'] = tile(ctx => {               // mossy boulder on grass, solid
+    grassBg(ctx);
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(3, 7, 10, 7);  // boulder body
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(4, 6, 7, 3);   // sunlit top-left
+    ctx.fillStyle = '#5d6470'; ctx.fillRect(9, 9, 3, 4);   // shaded side
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(3, 13, 10, 1); // ground contact
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(4, 13, 2, 1); ctx.fillRect(11, 12, 1, 1); // moss
+  });
   atlas['t-shrine'] = tile(ctx => {
     fill(ctx, '#9aa0a6'); // stands on the stone forecourt
     ctx.fillStyle = '#878d93'; ctx.fillRect(0, 0, 16, 1);
