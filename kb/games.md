@@ -35,7 +35,7 @@ No npm deps (React only). All art in-code (CSP). Logical view **384×224** (24×
 - **Tex** (shore): cowboy hat ¥6,700 → permanent `player-hat`.
 - **Achievements**: 22, own system + toast UI, phone **Trophies** app. `deep` fires ONLY for `fm.table === 'deep'`; `broke` fires when `money < 100`.
 - **HUD bar**: fixed `h-12` gradient bar with chips (money / day+clock / energy meter / scene chip) + 📱 PHONE (unread badge) / mute / fullscreen. Fixed height matters — it stops the bar reflowing as fonts/icons settle, which was the title→game "jutter".
-- **Cheats** (phone Settings → **Developer codes** = `cheats` tab, `applyCheat`): `motherlode`, `redbull`, `midnight`, `country roads`, `rocks`, `gimmegimme`.
+- **Cheats** (phone Settings → **Developer codes** = `cheats` tab, `applyCheat`): `motherlode`, `redbull`, `midnight`, `sunrise` (7 AM), `nightfall` (10 PM), `country roads`, `rocks`, `gimmegimme`. Documented in README.
 
 ## Hard rules
 - Game has own achievement system in `lab-save` — self-contained.

@@ -36,6 +36,20 @@ with keyboard, touch, or a game controller. Fully offline; saves live in the dev
 | **Gamepad** | stick / d-pad | A | Y / Start | B |
 | **Touch** | on-screen pad | on-screen buttons | 📱 button | on-screen ✕ |
 
+## Cheat codes
+Open the phone (**P** / 📱) → **Codes** app, type a code, APPLY:
+
+| Code | Effect |
+|---|---|
+| `motherlode` | +¥50,000 |
+| `redbull` | Refill energy |
+| `rocks` | +10 of every mineral |
+| `gimmegimme` | Unlock all base furniture (into your boxes) |
+| `country roads` | Teleport home to the apartment |
+| `sunrise` | Set time to 7:00 AM (morning) |
+| `nightfall` | Set time to 10:00 PM (night) |
+| `midnight` | Set time to 1:30 AM |
+
 ## Quick start (dev)
 ```sh
 npm install

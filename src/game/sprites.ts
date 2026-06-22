@@ -222,11 +222,58 @@ const ACC = {
     up: ['.....cccccc.....', '....cccccccc....', '....bbbbbbbb....', 'cccccccccccccccc', '.cc..........cc.'],
     left: ['.....cccccc.....', '....cccccccc....', '....bbbbbbbb....', 'cccccccccccccccc', '.cc..........cc.'],
   }),
+  // Shoulder-length hair framing the face + falling down the back. Reads as a
+  // distinct (fem) silhouette over the shared 16px body. Hair-coloured overlay.
+  longhair: (c: string, dark: string): Accessory => ({
+    pal: { h: c, k: dark },
+    down: [
+      '................',
+      '................',
+      '..hh........hh..',
+      '..hh........hh..',
+      '..hh........hh..',
+      '..hh........hh..',
+      '..hh........hh..',
+      '..hh........hh..',
+      '..h..........h..',
+    ],
+    up: [
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '...hhhhhhhhhh...',
+      '..hhhhhhhhhhhh..',
+      '...hhhhhhhhhh...',
+      '....hhhhhhhh....',
+    ],
+    left: [
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '..........hhh...',
+      '..........hhh...',
+      '..........hh....',
+      '...........h....',
+    ],
+  }),
 };
 
 const PLAYER_PAL: CharPalette = {
   h: '#4a3322', k: '#352416', s: '#f0c8a0', e: '#222222',
   t: '#3d6e9e', u: '#2c5179', p: '#3b3b46', b: '#6e4a2f',
+};
+
+// The 'fem' new-game vibe: same in-code body, warmer brown long hair + a rose
+// top so it reads as a clearly different character from the masc default.
+const FEM_PAL: CharPalette = {
+  h: '#6e4a2f', k: '#4a3120', s: '#f0c8a0', e: '#222222',
+  t: '#cf5d8a', u: '#a8466a', p: '#3b3b46', b: '#6e4a2f',
 };
 
 // Palette + accessories per character — distinct outfits and silhouettes.
@@ -1109,7 +1156,7 @@ const buildMisc = (atlas: Atlas) => {
 // changes. Characters use it now; world tiles/props/maps will add rows later.
 export interface SheetDef {
   key: string;             // atlas key prefix; frames land at `${key}-${i}`
-  src: string;             // absolute path, e.g. /images/characters/walk-fem.png
+  src: string;             // absolute path, e.g. /images/title-bg.png
   fw: number; fh: number;  // source frame size (px)
   frames: number;          // horizontal frame count in the sheet
   out?: number;            // optional output HEIGHT px (nearest-neighbor downscale); width keeps aspect
@@ -1141,24 +1188,18 @@ export const loadSheets = (atlas: Atlas, defs: SheetDef[], done?: () => void): v
   }
 };
 
-// Player-character art (AI-generated, 64px source). South-facing only: the
-// renderer mirrors it for 'right' and reuses south for up/down/left (no back/
-// side art yet — mirror-only decision). Frames stay at FULL 64px resolution;
-// the renderer scales them down to PC_DRAW_H with smoothing on (a nearest-
-// neighbor pre-downscale crushed the detail). Temporary until world assets are
-// regenerated at matching scale.
-export const PC_DRAW_H = 32;   // logical px tall = 2 tiles (Stardew proportion); RR supersamples for detail
-export const PC_SHEETS: SheetDef[] = [
-  { key: 'pc-fem-idle',  src: '/images/characters/villager-fem.png',  fw: 128, fh: 128, frames: 1 },
-  { key: 'pc-fem-walk',  src: '/images/characters/walk-fem.png',      fw: 128, fh: 128, frames: 4 },
-  { key: 'pc-masc-idle', src: '/images/characters/villager-masc.png', fw: 128, fh: 128, frames: 1 },
-  { key: 'pc-masc-walk', src: '/images/characters/walk-masc.png',     fw: 128, fh: 128, frames: 4 },
-];
+// (Player characters are the in-code pixel-art bodies built in buildAtlas:
+// 'player'/'player-hat' = masc, 'player-fem'/'player-fem-hat' = fem. The earlier
+// 128px AI PNG player pipeline was dropped; loadSheets above stays for future
+// world/prop art.)
 
 export const buildAtlas = (): Atlas => {
   const atlas: Atlas = {};
+  // 'masc' vibe (also the legacy default 'player' key) + 'fem' vibe.
   addCharacter(atlas, 'player', PLAYER_PAL);
   addCharacter(atlas, 'player-hat', PLAYER_PAL, [ACC.cowboy('#b08a50', '#6e4a2f')]);
+  addCharacter(atlas, 'player-fem', FEM_PAL, [ACC.longhair('#6e4a2f', '#4a3120')]);
+  addCharacter(atlas, 'player-fem-hat', FEM_PAL, [ACC.longhair('#6e4a2f', '#4a3120'), ACC.cowboy('#b08a50', '#6e4a2f')]);
   for (const [key, def] of Object.entries(NPC_DEFS)) addCharacter(atlas, key, def.pal, def.acc);
   addMonster(atlas);
   addCrawler(atlas);

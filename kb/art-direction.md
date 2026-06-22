@@ -87,9 +87,9 @@ New generated art ships as **PNG sprite sheets in `public/images/`**, loaded by 
 `fw×fh`, optional nearest-neighbor downscale to `out` px height, and injects each frame into the
 **same atlas** the renderer blits, keyed `${key}-${i}`. Nothing downstream changes — the render
 loop just starts finding the new keys as they load. This is the **general pipeline for all
-AI-generated art**: characters use it now (`PC_SHEETS`); **world tiles, props, locations and maps
-will be regenerated through sprite-ai and added as new `SheetDef` rows** — no renderer changes
-needed, just manifest entries (+ map/tile wiring).
+AI-generated art**: **world tiles, props, locations and maps will be generated through sprite-ai
+and added as new `SheetDef` rows** — no renderer changes needed, just manifest entries (+ map/tile
+wiring). (Player characters tried this pipeline then reverted to in-code art — see below.)
 
 Source art is generated via the **sprite-ai MCP** (`mcp__sprite-ai__*`): `sprite_generate` (still,
 1 tok; tile/bg/ui/effect 4 tok), `sprite_generate_animation` (walk/idle/etc., ~14 tok per walk →
@@ -104,32 +104,34 @@ write a forceful pose prompt ("STRICTLY FROM BEHIND, back of head, NO face" / "S
 facing left, one eye and one ear visible, nose pointing left"). Trade-off: dropping the reference
 risks character drift, so keep outfit/skin/hair fully specified in the prompt.
 
-### Player characters (first consumer)
-Two AI-generated **128px** villagers in `public/images/characters/` — `villager-{fem,masc}.png`
-(idle) + `walk-{fem,masc}.png` (512×128, 4-frame walk). New game shows a **"what's your vibe?"**
-pick (not a gender — `save.vibe: 'fem' | 'masc'`) **plus a name input** (`save.name`, 16 chars,
-default "Neighbor"). In-world the renderer scales the full-res frame to `PC_DRAW_H` (=32, 2 tiles)
-**with smoothing on** (never pre-downscale character art — a nearest pre-downscale crushed detail),
-feet anchored on the tile baseline, centred on the 16px hitbox, **no drop shadow** (the scaled
-m-shadow read wrong under the tall sprite). Walking **mirrors on `right`** so left/right read as a
-turn (front art only). **Name usage:** address the player by `save.name`, never a pronoun — phone
-message bodies run a `{name}` substitution in `syncMessages` (`state.ts`); put `{name}` in any new
-player-facing copy.
+### Player characters (in-code pixel art)
+Both player looks are **in-code 16px pixel-art bodies** (`sprites.ts` `addCharacter` / `BODY_*`),
+the **same system as NPCs** — not PNGs. `masc` vibe = `player` / `player-hat` (the original body);
+`fem` vibe = `player-fem` / `player-fem-hat` (`FEM_PAL` warm-brown hair + rose top + the
+`ACC.longhair` overlay for a shoulder-length silhouette). True **4-direction** (up/down/left art,
+`right` = mirrored left) with a 2-frame walk bob and the `m-shadow` under the feet. The cowboy hat
+(`save.hat`) works on both via the `-hat` variants.
 
-**Per-character state / next steps:**
-- **masc** — regenerated as an adult man of colour (dark brown skin, black hair + full beard).
-  Has front (`villager-masc`/`walk-masc`) **plus `masc-back.png` + `masc-side.png` stills** ready
-  to animate into a **true 4-direction** set (down=front, up=back, left=side, right=side mirrored).
-  Engine is still front+mirror; per-direction sheet wiring is the next task.
-- **fem** — front-only; her idle reads **slightly left-facing**, so the right-mirror looks a touch
-  off. Regenerate her straight-on (and/or give her back/side) when revisited.
-- **cowboy hat** — no overlay for the PNG PCs yet; `save.hat` only shows on the legacy 16px
-  fallback. Needs a per-direction hat overlay PNG.
+New game shows a **"what's your vibe?"** pick (not a gender — `save.vibe: 'fem' | 'masc'`) **plus a
+name input** (`save.name`, 16 chars, default "Neighbor"); the picker thumbnails render the in-code
+sprite to a `<canvas>` via `drawVibeThumb` (no image asset). **Name usage:** address the player by
+`save.name`, never a pronoun — phone message bodies run a `{name}` substitution in `syncMessages`
+(`state.ts`); put `{name}` in any new player-facing copy.
+
+**History (don't repeat without buy-in):** a 128px AI-generated PNG villager set (`PC_SHEETS`,
+`villager-*.png`, `walk-*.png`, `masc-back/side.png`) was tried (commit 287b0d1) then **reverted** —
+the AI sprites kept missing the cozy style (googly eyes, child proportions, bowlegged walks). **To
+add a new player look, author an in-code palette + accessory overlay (like an NPC), not a PNG.**
+The `loadSheets` / `SheetDef` pipeline stays for **world / prop** art.
 
 ## Render resolution & scale (TARGET: 4× / Stardew proportion)
 
 Decision (2026-06-15): chase a Stardew-Valley look by raising the game's internal render
 resolution and authoring art larger, rather than shrinking characters into a 16px world.
+
+> **Update:** the **character** half of this (128px 2-tile players) was reverted — players are
+> in-code 16px again (see "Player characters" above). The `RR=2` render-resolution multiplier
+> stays in `engine.ts`, ready for hi-res **world/tile** art; the 64px-tile target below still holds.
 
 - **World logic stays in 16px-tile logical units** — `TILE=16`, camera, collision, and `save.px/py`
   are unchanged (no migration). The *renderer* maps logical → a higher-resolution buffer.

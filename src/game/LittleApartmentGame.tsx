@@ -8,8 +8,23 @@ import {
   cameraFor, sceneSize, isSolid, tileAt,
 } from './engine';
 import type { Dir, Vec, SceneDef, Interactable } from './engine';
-import { buildAtlas, loadSheets, PC_SHEETS, PC_DRAW_H } from './sprites';
+import { buildAtlas } from './sprites';
 import type { Atlas } from './sprites';
+
+// Lazily-built atlas just for the "what's your vibe?" picker thumbnails, so the
+// choices show the real in-code player sprites (not a PNG). Built once on first
+// thumbnail draw; pure offscreen-canvas work, safe to call on the title screen.
+let _thumbAtlas: Atlas | null = null;
+const drawVibeThumb = (el: HTMLCanvasElement | null, vibe: 'fem' | 'masc') => {
+  if (!el) return;
+  if (!_thumbAtlas) _thumbAtlas = buildAtlas();
+  const spr = _thumbAtlas[`${vibe === 'fem' ? 'player-fem' : 'player'}-down-0`];
+  const cx = el.getContext('2d');
+  if (!cx || !spr) return;
+  cx.imageSmoothingEnabled = false;
+  cx.clearRect(0, 0, el.width, el.height);
+  cx.drawImage(spr, 0, 0, el.width, el.height);
+};
 import { SCENES, SCENE_SIGNS, MANEKI_SLOT, ORE_SPOTS, CRAWLER_SPAWNS } from './maps';
 import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
@@ -360,7 +375,7 @@ const LittleApartmentGame: React.FC = () => {
   // Running inside the Tauri desktop/native shell (not a browser tab). The OS
   // window already owns fullscreen, so we fill it and drop the in-page FS UI.
   const [isDesktopApp] = useState(() => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
-  const [confirmMode, setConfirmMode] = useState<null | 'new' | 'delete'>(null);
+  const [confirmMode, setConfirmMode] = useState<null | 'delete'>(null);
   const [saveTick, setSaveTick] = useState(0); // bump to re-read the save after new/delete
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0 });
@@ -1446,12 +1461,11 @@ const LittleApartmentGame: React.FC = () => {
     }
     const p = posRef.current;
     const moving = movingRef.current;
-    // AI-generated player sprite (PC_SHEETS). South-facing art only: mirror it
-    // for 'right', reuse south otherwise. Falls back to the in-code 16px player
-    // until the PNG sheets finish loading (or if a sheet is missing).
+    // In-code 16px player art (buildAtlas). True 4-direction (up/down/left art,
+    // right = mirrored left) with a 2-frame walk bob. 'masc' vibe = 'player',
+    // 'fem' vibe = 'player-fem'; '-hat' variants when a hat is on.
     const vibe = saveRef.current.vibe ?? 'fem';
-    const pcKey = moving ? `pc-${vibe}-walk-${Math.floor(animRef.current * 8) % 4}` : `pc-${vibe}-idle-0`;
-    const pcSpr = atlas[pcKey];
+    const pcBase = vibe === 'fem' ? 'player-fem' : 'player';
     ents.push({
       y: p.y,
       draw: () => {
@@ -1466,38 +1480,10 @@ const LittleApartmentGame: React.FC = () => {
           ctx.drawImage(atlas['v-car'], Math.round(p.x) - cam.x - 8, Math.round(p.y) - cam.y);
           return;
         }
-        if (pcSpr) {
-          // Full-res 64px frame scaled to PC_DRAW_H at draw time WITH smoothing
-          // (nearest pre-downscale crushed the detail). Feet on the tile
-          // baseline (p.y+16), horizontally centred on the 16px hitbox.
-          const h = PC_DRAW_H;
-          const w = pcSpr.width * (h / pcSpr.height);
-          const cx = Math.round(p.x) - cam.x + 8;          // hitbox centre x
-          const baseY = Math.round(p.y) - cam.y + 16;       // tile/feet baseline
-          const dx = cx - w / 2;
-          const dy = baseY - h;
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          // (No drop shadow on the PC — the scaled m-shadow read wrong under the
-          // tall sprite; the art already has its own grounding.)
-          // Front-facing art only; mirror horizontally when walking RIGHT so left
-          // vs right read as a turn (no true side/back art yet).
-          if (dirRef.current === 'right') {
-            ctx.save();
-            ctx.translate(dx + w, dy);
-            ctx.scale(-1, 1);
-            ctx.drawImage(pcSpr, 0, 0, w, h);
-            ctx.restore();
-          } else {
-            ctx.drawImage(pcSpr, dx, dy, w, h);
-          }
-          ctx.imageSmoothingEnabled = false; // restore crisp pixel scaling for the rest of the world
-        } else {
-          ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y + 2);
-          const frame = moving ? (Math.floor(animRef.current * 7) % 2) : 0;
-          const playerKey = saveRef.current.hat ? 'player-hat' : 'player';
-          ctx.drawImage(atlas[`${playerKey}-${dirRef.current}-${frame}`], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y);
-        }
+        ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y + 2);
+        const frame = moving ? (Math.floor(animRef.current * 7) % 2) : 0;
+        const playerKey = saveRef.current.hat ? `${pcBase}-hat` : pcBase;
+        ctx.drawImage(atlas[`${playerKey}-${dirRef.current}-${frame}`], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y);
       },
     });
     ents.sort((a, b) => a.y - b.y).forEach(e => e.draw());
@@ -1894,7 +1880,7 @@ const LittleApartmentGame: React.FC = () => {
 
   useEffect(() => {
     if (screen !== 'playing') return;
-    if (!atlasRef.current) { atlasRef.current = buildAtlas(); loadSheets(atlasRef.current, PC_SHEETS); }
+    if (!atlasRef.current) { atlasRef.current = buildAtlas(); }
     // Canvas text doesn't trigger a webfont fetch on its own — kick the load so
     // the kanji/kana signs render in Naganoshi. The render loop redraws every
     // frame, so it swaps in as soon as the face is ready.
@@ -2146,6 +2132,14 @@ const LittleApartmentGame: React.FC = () => {
       case 'midnight':
         s.timeMin = 25 * 60 + 30;
         setCheatMsg('1:30 AM. Tick tock.');
+        break;
+      case 'sunrise':
+        s.timeMin = 7 * 60;        // 7:00 AM
+        setCheatMsg('7:00 AM. Rise and shine, sleepyhead.');
+        break;
+      case 'nightfall':
+        s.timeMin = 22 * 60;       // 10:00 PM
+        setCheatMsg('10:00 PM. The city lights come on.');
         break;
       case 'country roads': {
         // Take me home — to the apartment, right by the futon.
@@ -3247,17 +3241,20 @@ const LittleApartmentGame: React.FC = () => {
               />
             </div>
             <div className="flex gap-5 sm:gap-8">
-              {([
-                ['fem', '/images/characters/villager-fem.png'],
-                ['masc', '/images/characters/villager-masc.png'],
-              ] as const).map(([v, src]) => (
+              {(['fem', 'masc'] as const).map(v => (
                 <button
                   key={v}
                   data-nosfx
                   onClick={() => chooseVibe(v)}
                   className="flex flex-col items-center p-3 sm:p-4 border-2 border-[#ffd24a]/40 bg-black/40 hover:border-[#ffd24a] hover:bg-[#ffd24a]/10 transition-colors shadow-[4px_4px_0_#000]"
                 >
-                  <img src={src} alt="" aria-hidden width={176} height={176} style={{ imageRendering: 'pixelated' }} />
+                  <canvas
+                    ref={el => drawVibeThumb(el, v)}
+                    width={16}
+                    height={16}
+                    aria-hidden
+                    style={{ width: 176, height: 176, imageRendering: 'pixelated' }}
+                  />
                 </button>
               ))}
             </div>
@@ -3385,25 +3382,7 @@ const LittleApartmentGame: React.FC = () => {
                     <span className="opacity-60">Fish caught</span><span className="text-right">{Object.values(saved.fishLog).reduce((a: number, b: number) => a + b, 0)}</span>
                   </div>
 
-                  {confirmMode === null && (
-                    <div className="flex flex-col gap-2">
-                      <button data-nosfx className={`${btnCls} w-full py-1.5`} onClick={() => startGame(false)}>CONTINUE PLAYING</button>
-                      <button className={`${btnCls} w-full py-1.5`} onClick={() => setConfirmMode('new')}>START NEW GAME</button>
-                      <button className="border border-red-400/60 text-red-300 px-3 py-1.5 w-full font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => setConfirmMode('delete')}>DELETE SAVE</button>
-                    </div>
-                  )}
-
-                  {confirmMode === 'new' && (
-                    <div className="text-center">
-                      <p className="text-base text-[#e8e0d0]/90 mb-3">Start over? Your Day {saved.day} save will be <span className="text-red-300">erased</span>.</p>
-                      <div className="flex gap-2 justify-center">
-                        <button className={btnCls} onClick={() => setConfirmMode(null)}>CANCEL</button>
-                        <button data-nosfx className="border border-red-400/60 text-red-300 px-3 py-1 font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => { setConfirmMode(null); setManageOpen(false); setVibePick(true); }}>ERASE &amp; START</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {confirmMode === 'delete' && (
+                  {confirmMode === 'delete' ? (
                     <div className="text-center">
                       <p className="text-base text-[#e8e0d0]/90 mb-3">Delete your Day {saved.day} save for good? This <span className="text-red-300">cannot be undone</span>.</p>
                       <div className="flex gap-2 justify-center">
@@ -3411,12 +3390,16 @@ const LittleApartmentGame: React.FC = () => {
                         <button className="border border-red-400/60 text-red-300 px-3 py-1 font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={wipeSave}>DELETE FOREVER</button>
                       </div>
                     </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <button className="border border-red-400/60 text-red-300 px-3 py-1.5 w-full font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => setConfirmMode('delete')}>DELETE SAVE</button>
+                      <p className="text-sm opacity-60 text-center mt-1">Deleting returns you to the title — start a fresh game from there.</p>
+                    </div>
                   )}
                 </>
               ) : (
                 <div className="text-center">
-                  <p className="text-base opacity-70 mb-4">No save yet — start a new game from the title.</p>
-                  <button data-nosfx className={`${btnCls} w-full py-1.5`} onClick={() => { setManageOpen(false); setVibePick(true); }}>NEW GAME</button>
+                  <p className="text-base opacity-70">No save yet — start a new game from the title.</p>
                 </div>
               )}
             </div>
