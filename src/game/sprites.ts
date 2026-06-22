@@ -854,11 +854,36 @@ const buildTiles = (atlas: Atlas) => {
   atlas['ore-opal'] = ore('#b06ad0');
 
   // Shrine grounds
-  atlas['t-torii'] = tile(ctx => {
+  // Torii gate, built across a 2×2 footprint: the two LEG tiles below
+  // (t-torii) and the two TOP tiles above (t-torii-top = leg + crossbar), with
+  // the crossbar continuing over the walkable path tiles (t-torii-beam). All
+  // share one continuous vermillion beam so the gate reads as one structure.
+  const toriiBeam = (ctx: CanvasRenderingContext2D) => {
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 0, 16, 4);   // kasagi (top beam) body
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 1, 16, 2);   // beam face
+    ctx.fillStyle = '#d8584a'; ctx.fillRect(0, 1, 16, 1);   // top highlight
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 6, 16, 2);   // nuki (second rail)
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 6, 16, 1);
+  };
+  const toriiPost = (ctx: CanvasRenderingContext2D, top: number, h: number) => {
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(5, top, 6, h);  // post
+    ctx.fillStyle = '#d8584a'; ctx.fillRect(5, top, 1, h);  // lit edge
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(9, top, 2, h);  // shadow edge
+  };
+  atlas['t-torii'] = tile(ctx => {              // leg (lower half), solid
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 13, 6);
-    ctx.fillStyle = '#c0392b'; ctx.fillRect(1, 1, 14, 2); ctx.fillRect(2, 4, 12, 1);
-    ctx.fillRect(3, 3, 2, 13); ctx.fillRect(11, 3, 2, 13);
-    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(1, 2, 14, 1);
+    toriiPost(ctx, 0, 16);
+    ctx.fillStyle = '#7a241a'; ctx.fillRect(4, 13, 8, 3);   // base flare
+    ctx.fillStyle = '#1d1d1d'; ctx.fillRect(4, 15, 8, 1);   // ground contact
+  });
+  atlas['t-torii-top'] = tile(ctx => {          // leg top + crossbar, solid
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 17, 5);
+    toriiPost(ctx, 4, 12);
+    toriiBeam(ctx);
+  });
+  atlas['t-torii-beam'] = tile(ctx => {         // crossbar over the path, walkable
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 19, 5);
+    toriiBeam(ctx);
   });
   atlas['t-shrine'] = tile(ctx => {
     fill(ctx, '#9aa0a6'); // stands on the stone forecourt
@@ -893,9 +918,11 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillRect(5, 13, 6, 2);                              // base
   });
   atlas['t-shrine-roof'] = tile(ctx => {
-    fill(ctx, '#3a4d63');
-    ctx.fillStyle = '#4a6078'; for (let y = 0; y < 16; y += 4) ctx.fillRect(0, y, 16, 2);
-    ctx.fillStyle = '#2c3a4c'; ctx.fillRect(0, 14, 16, 2);
+    fill(ctx, '#3a4250');                                          // dark slate tiles
+    ctx.fillStyle = '#4a5466'; for (let y = 1; y < 16; y += 3) ctx.fillRect(0, y, 16, 1); // tile rows
+    ctx.fillStyle = '#525e72'; ctx.fillRect(0, 0, 16, 1);          // sunlit top edge
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 1, 16, 1);          // gold ridge cap
+    ctx.fillStyle = '#2c3340'; ctx.fillRect(0, 13, 16, 3);         // deep eave shadow
   });
   atlas['t-shrine-wall'] = tile(ctx => {
     fill(ctx, '#b04a3a'); // vermillion timber
