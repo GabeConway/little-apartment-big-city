@@ -481,6 +481,7 @@ const LittleApartmentGame: React.FC = () => {
   const lastSafeTileRef = useRef<Vec | null>(null);
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
   const shrineHealRef = useRef(0);   // accumulates real seconds for the very-slow shrine energy heal
+  const signGlowRef = useRef(new Map<object, HTMLCanvasElement>()); // cached neon-bloom sprites per sign (built once, not per frame)
   const djPickRef = useRef<string | null>(null);
 
   // ---- furniture Arrange mode (drag-and-drop placement) ----------------------
@@ -1462,30 +1463,32 @@ const LittleApartmentGame: React.FC = () => {
         for (const sg of signs) {
           if (!isLit(sg)) continue;
           const off = sg.blink && !neonOn; // mid-blink: stay dark
-          const { size, w, h } = dims(sg);
+          const { w, h } = dims(sg);
           const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
           const cx = sx - 2 + w / 2, cy = sy - 2 + h / 2;
           if (!off) {
             const r = Math.max(w, h) * 0.85 + 9;
-            const rgb = glowRgb(sg);
+            // Cached glow sprite per sign — built once, then blitted. Rebuilding a
+            // radial gradient every frame for every sign was the night FPS sink.
+            let glow = signGlowRef.current.get(sg);
+            if (!glow) {
+              const gs = Math.ceil(r * 2);
+              glow = document.createElement('canvas'); glow.width = gs; glow.height = gs;
+              const gctx = glow.getContext('2d')!;
+              const grd = gctx.createRadialGradient(gs / 2, gs / 2, 1, gs / 2, gs / 2, r);
+              grd.addColorStop(0, `rgba(${glowRgb(sg)},1)`);
+              grd.addColorStop(1, `rgba(${glowRgb(sg)},0)`);
+              gctx.fillStyle = grd; gctx.fillRect(0, 0, gs, gs);
+              signGlowRef.current.set(sg, glow);
+            }
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
-            const grd = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
-            grd.addColorStop(0, `rgba(${rgb},${0.36 * amt})`);
-            grd.addColorStop(1, `rgba(${rgb},0)`);
-            ctx.fillStyle = grd;
-            ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+            ctx.globalAlpha = 0.18 * amt; // softer bloom (was a heavy 0.36 + an extra additive text pass)
+            ctx.drawImage(glow, cx - r, cy - r);
             ctx.restore();
           }
-          // repaint over the tint so the sign itself isn't dimmed
+          // repaint the panel over the night tint so the sign isn't dimmed
           paint(sg);
-          if (!off) {
-            ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = 0.5 * amt;
-            paintText(sg, sx, sy, size, sg.color);
-            ctx.restore();
-          }
         }
       };
     }

@@ -404,15 +404,6 @@ export const MESSAGES: MessageDef[] = [
     ],
   },
   {
-    id: 'genji-fishing', from: 'Old Genji 🎣', avatar: '🎣',
-    when: c => c.canFish,
-    body: [
-      'kid. its genji. from the pier.',
-      'you got the hang of the rod. tide turns the rare ones bite — patience, not strength.',
-      'come by anytime. i am always here. i have nowhere else to be. 🌊',
-    ],
-  },
-  {
     id: 'tex-hat', from: "Tex's Hats 🤠", avatar: '🤠', company: true,
     when: c => c.hat,
     body: [
