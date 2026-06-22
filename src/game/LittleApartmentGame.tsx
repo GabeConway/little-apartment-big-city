@@ -3283,10 +3283,16 @@ const LittleApartmentGame: React.FC = () => {
             </button>
 
             <div className="relative flex flex-col items-center gap-4 w-full max-w-sm">
-              <div className="leading-none">
+              <div className="relative leading-none">
                 <p className="font-pixel text-[#9fc4e8] text-lg sm:text-2xl mb-1.5 drop-shadow-[2px_2px_0_#000]">a tiny life sim</p>
                 <h2 className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">LITTLE APARTMENT,</h2>
                 <h2 className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">BIG CITY</h2>
+                {/* Minecraft-style splash, tucked at the logo's lower-right corner */}
+                <div className="absolute -bottom-3 -right-2 sm:-bottom-4 sm:-right-6 pointer-events-none z-10">
+                  <p className="origin-center font-pixel text-[#ffd24a] text-xs sm:text-sm animate-splash drop-shadow-[1px_1px_0_#000] whitespace-nowrap">
+                    Made by TechProGabe!
+                  </p>
+                </div>
               </div>
 
               {/* phone setup checklist */}
@@ -3378,13 +3384,6 @@ const LittleApartmentGame: React.FC = () => {
               <p className="font-pixel text-[#e8e0d0]/70 text-sm sm:text-base drop-shadow-[1px_1px_0_#000]">{isCoarse ? 'On-screen controls once you start' : 'WASD / arrows move · E interact · Esc close'}</p>
             </div>
 
-            {/* Minecraft-style splash, tucked near the title (upper-left). Position
-                lives on the wrapper so it can't fight the rotate/scale animation. */}
-            <div className="absolute top-12 left-3 sm:top-16 sm:left-8 pointer-events-none z-10">
-              <p className="origin-center font-pixel text-[#ffd24a] text-xs sm:text-sm animate-splash drop-shadow-[1px_1px_0_#000] whitespace-nowrap">
-                Made by TechProGabe!
-              </p>
-            </div>
           </div>
           );
         })()}
