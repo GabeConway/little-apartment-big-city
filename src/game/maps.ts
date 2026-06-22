@@ -181,7 +181,7 @@ const city: SceneDef = {
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
   ],
   npcs: [
-    { id: 'kid', x: 17, y: 3, sprite: 'npc-kid', dir: 'down' },
+    { id: 'tony', x: 17, y: 3, sprite: 'npc-skater', dir: 'down' },
     { id: 'granny', x: 12, y: 16, sprite: 'npc-granny', dir: 'left' },
     // Yakuza enforcers blocking the alley to Downtown (removed once paid off).
     { id: 'yakuza', x: 30, y: 7, sprite: 'npc-yakuza', dir: 'left' },

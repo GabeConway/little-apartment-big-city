@@ -321,6 +321,7 @@ export interface PhoneMessage {
 export interface MsgCtx {
   day: number;
   timeMin: number;     // in-game clock (minutes since midnight) — for time-gated day-1 texts
+  leftKonbiniAt: number | null; // absolute minute you first left the konbini (job offer fires ~1h later)
   owned: string[];
   placedCount: number;
   money: number;
@@ -381,6 +382,16 @@ export const MESSAGES: MessageDef[] = [
       '♥ DOKI DOKI DISCOUNT ♥ — your home electronics superstore!',
       'TV, fridge, AC, microwave — everything to make 19 sqm feel like 20. New stock weekly.',
       'Show this text for... well, the same prices as everyone else. But we appreciate you. 🧡',
+    ],
+  },
+  {
+    id: 'konbini-job', from: 'Konbini 24h 🏪', avatar: '🏪', company: true,
+    // Fires ~1 in-game hour after you first leave the konbini; unlocks the shift.
+    when: c => c.leftKonbiniAt != null && c.day * 1440 + c.timeMin >= c.leftKonbiniAt + 60,
+    body: [
+      'Hey {name} — thanks for stopping by KONBINI 24H earlier.',
+      'We\'re always short a pair of hands on shift. Want work? Come to the counter and pick up a SHIFT — one a day, paid same-day in cash.',
+      'Tony out front vouched for you. Sort of. He said "that one seems chill." Good enough for us. 🏪',
     ],
   },
   {

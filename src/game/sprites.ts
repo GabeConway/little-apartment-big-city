@@ -302,6 +302,10 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#1d2430', k: '#10151e', s: '#f0c8a0', e: '#222', t: '#d05050', u: '#a83c3c', p: '#33508a', b: '#333' },
     acc: [ACC.cap('#33508a', '#24395f')],
   },
+  'npc-skater': { // Tony — skater bro: red beanie, grey hoodie, baggy jeans
+    pal: { h: '#3a2a1a', k: '#241a10', s: '#e8b890', e: '#222', t: '#6e7682', u: '#54595f', p: '#2f3a4a', b: '#1a1a1a' },
+    acc: [ACC.beanie('#d05050', '#9e3a3a')],
+  },
   'npc-oldman': { // shore fisherman — bucket hat, waders
     pal: { h: '#9a9a9a', k: '#7a7a7a', s: '#d8b088', e: '#222', t: '#5a6a4a', u: '#46543a', p: '#3a4250', b: '#2c3038' },
     acc: [ACC.bucket('#7a6a44')],

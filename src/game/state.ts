@@ -57,6 +57,7 @@ export interface GameSave {
   fishLog: Record<string, number>; // fish id -> total caught
   storySeen: string[];          // story beat ids already shown
   shiftDay: number;             // last day the konbini shift was worked (0 = never)
+  leftKonbiniAt: number | null; // absolute in-game minute you first left the konbini (job unlocks ~1h later)
   sketchyDay: number;           // last day a deal was bought from the sketchy guy
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
@@ -119,6 +120,7 @@ export const newSave = (): GameSave => ({
   fishLog: {},
   storySeen: [],
   shiftDay: 0,
+  leftKonbiniAt: null,
   sketchyDay: 0,
   ended: false,
   today: freshDayLog(3000),
@@ -319,6 +321,7 @@ export const gachaComplete = (s: GameSave): boolean =>
 const msgCtx = (s: GameSave): MsgCtx => ({
   day: s.day,
   timeMin: s.timeMin,
+  leftKonbiniAt: s.leftKonbiniAt,
   owned: s.owned,
   placedCount: Object.keys(s.placed).length,
   money: s.money,

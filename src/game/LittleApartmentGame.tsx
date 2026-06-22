@@ -207,12 +207,12 @@ interface Hud {
 // Every named character has a voice: several line-sets, picked at random per
 // chat, plus state-aware lines layered in by getNpcTalk().
 const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
-  kid: {
-    speaker: 'Hiro (age 9)',
+  tony: {
+    speaker: 'Tony',
     sets: [
-      ['The pawn shop gets different stuff every morning!', 'Yesterday they had a fridge for super cheap. Mom says it probably fell off a truck.'],
-      ['I beat the arcade game in Old Town once. The REAL high score is mine. Tell the machine that.'],
-      ['Do NOT go behind the konbini. Kenta went behind the konbini and now he only draws yellow hallways.'],
+      ['yooo. Tony. i basically live on this curb.', 'konbini\'s always hiring if you need cash, dude. tell em i sent you. or don\'t. whatever\'s chill.'],
+      ['ate it HARD on that rail yesterday. worth it though. the rail respects me now.', 'pawn shop flips fresh stuff every morning. early bird gets the discount fridge, my guy.'],
+      ['do NOT skate behind the konbini. my boy Kenta tried it. now he just draws yellow hallways. tragic.'],
     ],
   },
   granny: {
@@ -337,8 +337,8 @@ const npcDynamicLines = (id: string, s: GameSave): string[] => {
       return allFurnished(s) ? ['I saw your window from the street, dear. It finally looks lived-in. It looks loved.'] : [];
     case 'collector':
       return gachaComplete(s) ? ['You... completed the set? All ten? I must sit down. I AM sitting down. I must sit down further.'] : [];
-    case 'kid':
-      return s.hat ? ['WHOA. The cowboy hat. Tex only sells those to people he likes. Or anyone with money. Mostly that one.'] : [];
+    case 'tony':
+      return s.hat ? ["whoa, the cowboy hat. that's actually kinda sick on you, not gonna lie."] : [];
     default:
       return [];
   }
@@ -603,6 +603,11 @@ const LittleApartmentGame: React.FC = () => {
 
   const enterScene = useCallback((id: string, tx: number, ty: number, dir: Dir) => {
     const s = saveRef.current;
+    // First time you LEAVE the konbini: timestamp it so the job offer can text
+    // you about an hour later (see the 'konbini-job' message).
+    if (sceneRef.current.id === 'konbini' && id !== 'konbini' && s.leftKonbiniAt == null) {
+      s.leftKonbiniAt = s.day * 1440 + s.timeMin;
+    }
     sceneRef.current = SCENES[id];
     posRef.current = { x: tx * TILE, y: ty * TILE - 4 };
     dirRef.current = dir;
@@ -3066,12 +3071,16 @@ const LittleApartmentGame: React.FC = () => {
             </>
           )}
         <p className="text-base text-[#ffd24a]/80 mt-3">WORK</p>
-        <div className="flex items-center gap-3 py-1">
-          <p className="flex-grow text-lg opacity-80">One shift per day. Costs {shiftCost} energy.</p>
-          <button className={btnCls} disabled={shiftDone || s.energy < shiftCost} onClick={workShift}>
-            {shiftDone ? 'DONE TODAY' : `SHIFT +¥${SHIFT_PAY}`}
-          </button>
-        </div>
+        {s.messages.some(m => m.id === 'konbini-job') ? (
+          <div className="flex items-center gap-3 py-1">
+            <p className="flex-grow text-lg opacity-80">One shift per day. Costs {shiftCost} energy.</p>
+            <button className={btnCls} disabled={shiftDone || s.energy < shiftCost} onClick={workShift}>
+              {shiftDone ? 'DONE TODAY' : `SHIFT +¥${SHIFT_PAY}`}
+            </button>
+          </div>
+        ) : (
+          <p className="py-1 text-lg opacity-60">Not hiring walk-ins just yet. (They have your number — keep an eye on your phone.)</p>
+        )}
       </ShopFrame>
     );
   };
