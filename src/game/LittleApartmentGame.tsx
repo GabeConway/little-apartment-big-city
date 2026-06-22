@@ -466,6 +466,7 @@ const LittleApartmentGame: React.FC = () => {
   const sparkleRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const hurtCooldownRef = useRef(0);
   const lastSafeTileRef = useRef<Vec | null>(null);
+  const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
   const djPickRef = useRef<string | null>(null);
 
   // ---- furniture Arrange mode (drag-and-drop placement) ----------------------
@@ -590,6 +591,7 @@ const LittleApartmentGame: React.FC = () => {
     sceneRef.current = SCENES[id];
     posRef.current = { x: tx * TILE, y: ty * TILE - 4 };
     dirRef.current = dir;
+    warpCooldownRef.current = 0.6; // don't re-trigger a nearby warp for a beat after arriving
     s.scene = id; s.px = posRef.current.x; s.py = posRef.current.y; s.dir = dir;
     if (!s.visited.includes(id)) s.visited.push(id);
     checkMessages(); // visiting a place can unlock its texts (buzz if so)
@@ -1161,6 +1163,7 @@ const LittleApartmentGame: React.FC = () => {
     }
 
     // explore
+    if (warpCooldownRef.current > 0) warpCooldownRef.current = Math.max(0, warpCooldownRef.current - dt);
     const dir = input.currentDir();
     if (dir) {
       dirRef.current = dir;
@@ -1175,7 +1178,7 @@ const LittleApartmentGame: React.FC = () => {
 
       const ft = feetTile(posRef.current);
       const warp = sceneRef.current.warps.find(w => w.x === ft.x && w.y === ft.y);
-      if (warp) {
+      if (warp && warpCooldownRef.current <= 0) {
         // Can't drive indoors: the car auto-parks beside the door, never on it
         if (s.driving && !SCENES[warp.to].outdoor) {
           const spot = findParkSpot(sceneRef.current, lastSafeTileRef.current ?? ft);
