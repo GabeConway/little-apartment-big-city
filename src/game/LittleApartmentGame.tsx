@@ -152,7 +152,17 @@ const MUSIC_FADE_MS = 700;
 
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki';
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending';
+
+// Vending-machine sodas. Peepis pockets a can (drink later / feed The Manager,
+// as before); the rest are cracked open on the spot for an energy jolt.
+type Soda = { id: string; name: string; price: number; kind: 'pocket' | 'drink'; energy?: number; blurb: string };
+const SODAS: Soda[] = [
+  { id: 'peepis',  name: '"Diet Doctor Peepis"',   price: 150, kind: 'pocket',             blurb: 'Legally distinct, the can insists. Pocket it (+12 energy when you drink).' },
+  { id: 'doofert', name: '"Diet Mountain Doofert"', price: 150, kind: 'drink', energy: 12, blurb: 'EXTREME citrus. Tastes faintly of cleaning product. Cracked open now.' },
+  { id: 'conk',    name: '"Conk"',                  price: 120, kind: 'drink', energy: 8,  blurb: "It's a cola. It's just a cola. We're pretty sure." },
+  { id: 'zonked',  name: '"Zonked! Energy Drink"',  price: 250, kind: 'drink', energy: 25, blurb: 'Wings sold separately. A genuinely irresponsible jolt.' },
+];
 
 interface Crawler { x: number; y: number; hp: number; stepT: number; hurtT: number; dir: Dir }
 
@@ -698,14 +708,19 @@ const LittleApartmentGame: React.FC = () => {
   // Cans go in your pocket — drink them from the phone (P), or share one with
   // someone parched.
   const useVending = useCallback(() => {
+    setOverlayBoth({ type: 'shop', shop: 'vending' });
+  }, [setOverlayBoth]);
+
+  const buySoda = (soda: Soda) => {
     const s = saveRef.current;
-    if (s.money < 150) { showDialog(['The machine hums. You count your coins. Not today.']); return; }
-    s.money -= 150;
-    s.peepis += 1;
+    if (s.money < soda.price) return;
+    if (soda.kind === 'drink' && s.energy >= maxEnergy(s)) return;
+    s.money -= soda.price;
+    if (soda.kind === 'pocket') s.peepis += 1;
+    else s.energy = Math.min(maxEnergy(s), s.energy + (soda.energy ?? 0));
     sfxCoin();
-    persistSave(s); refreshHud();
-    showDialog([`CLUNK. A cold can of "Diet Doctor Peepis". Legally distinct, the can insists. You pocket it. (×${s.peepis})`]);
-  }, [showDialog, refreshHud]);
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
 
   const eatCoconut = () => {
     const s = saveRef.current;
@@ -2756,6 +2771,32 @@ const LittleApartmentGame: React.FC = () => {
     void shopTick;
     const s = saveRef.current;
     const close = () => setOverlayBoth(null);
+
+    if (ov.shop === 'vending') {
+      const full = s.energy >= maxEnergy(s);
+      return (
+        <ShopFrame title="VENDING MACHINE" subtitle="Ice cold. Mostly legal. Pick your poison." money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {SODAS.map(soda => {
+            const cantDrink = soda.kind === 'drink' && full;
+            return (
+              <div key={soda.id} className="flex items-center gap-3 py-1.5 border-b border-[#ffd24a]/15">
+                <div className="flex-grow">
+                  <p className="text-base text-[#ffd24a]">{soda.name}{soda.id === 'peepis' && s.peepis > 0 ? ` ×${s.peepis}` : ''}</p>
+                  <p className="text-sm opacity-60 leading-tight">{soda.blurb}</p>
+                </div>
+                <button
+                  className={`${btnCls} text-sm whitespace-nowrap`}
+                  disabled={s.money < soda.price || cantDrink}
+                  onClick={() => buySoda(soda)}
+                >
+                  {soda.kind === 'pocket' ? 'BUY' : cantDrink ? 'FULL' : 'DRINK'} · ¥{soda.price}
+                </button>
+              </div>
+            );
+          })}
+        </ShopFrame>
+      );
+    }
 
     if (ov.shop === 'denden') {
       return (
