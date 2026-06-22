@@ -6,6 +6,10 @@ dist/
 # playtest harness screenshots (scripts/playtest.mjs default output)
 playtest/
 
+# visual-baseline transient output (baselines themselves ARE committed)
+tests/visual/current/
+tests/visual/diff/
+
 # logs
 npm-debug.log*
 yarn-debug.log*

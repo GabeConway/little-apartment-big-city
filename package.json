@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "playtest": "node scripts/playtest.mjs",
+    "visual": "node scripts/visual-baseline.mjs",
+    "visual:update": "node scripts/visual-baseline.mjs --update",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
