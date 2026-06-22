@@ -224,10 +224,9 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'KOJIMA MOTORS', x: 11, y: 1, color: '#cfc4ab', bg: 'rgba(0,0,0,0.55)' },
     { text: 'しゅうり', x: 18, y: 0, color: '#ffd24a', bg: '#33302a', border: '#7a7468', vertical: true, font: 8 },
     { text: 'カラオケ', x: 20, y: 0, color: '#7ce8e0', bg: '#16121d', border: '#7ce8e0', vertical: true, font: 8, blink: true },
-    { text: 'ホテル', x: 23, y: 0, color: '#e857a8', bg: '#16121d', border: '#e857a8', vertical: true, font: 8 },
+    { text: 'ホテル', x: 22, y: 0, color: '#e857a8', bg: '#16121d', border: '#e857a8', vertical: true, font: 8 },
     { text: 'パチンコ', x: 24, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', vertical: true, font: 8, blink: true },
-    { text: 'いざかや', x: 27, y: 0, color: '#7ce8a0', bg: '#16121d', border: '#7ce8a0', vertical: true, font: 8 },
-    { text: 'ラーメン 24時', x: 20, y: 2, color: '#fff', bg: '#d05050', border: '#ffe9a0', font: 7, blink: true },
+    { text: 'いざかや', x: 26, y: 0, color: '#7ce8a0', bg: '#16121d', border: '#7ce8a0', vertical: true, font: 8 },
     { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
   ],
   shore: [

@@ -242,44 +242,6 @@ export const STORY_BEATS: StoryBeat[] = [
     ],
   },
   {
-    id: 'kitchen', title: 'A Working Kitchen', from: 'your journal',
-    when: owned => owned.includes('microwave') && owned.includes('fridge'),
-    lines: [
-      'The fridge hums in the corner and the microwave clock blinks the wrong time, and together they make this kitchen real.',
-      'Cooked my first hot meal at home tonight. Well — "cooked." The microwave did the hard part.',
-      'It tasted like progress.',
-    ],
-  },
-  {
-    id: 'ac', title: 'Cool Air', from: 'your journal',
-    when: owned => owned.includes('ac'),
-    lines: [
-      'The AC came to life with a click and a sigh, and the whole apartment exhaled with it.',
-      'The old man at the pier says the fish bite better when you are comfortable. I think he makes up half of what he says.',
-      'I believe him anyway.',
-    ],
-  },
-  {
-    id: 'tv', title: 'Voices in the Room', from: 'your journal',
-    when: owned => owned.includes('tv'),
-    lines: [
-      'Turned on the TV and the apartment filled with voices. A cooking show. A weather woman promising rain.',
-      'It is strange how much less alone a room feels when the weather woman is in it.',
-      'Grandma would say I should call home instead. She is right. I did.',
-    ],
-  },
-  {
-    id: 'halfway', title: 'Letter from Grandma', from: 'Grandma',
-    when: owned => owned.length >= 6,
-    lines: [
-      'Dear homemaker,',
-      'Six things! Your mother showed me the photo. The plant is crooked but the rest looks almost respectable.',
-      'When your grandfather and I had our first apartment, we owned a kettle, two cups, and an argument about everything else.',
-      'It became a home anyway. Yours will too. It already is, I think.',
-      '— Grandma',
-    ],
-  },
-  {
     id: 'almost', title: 'Almost There', from: 'your journal',
     when: owned => owned.length >= 9,
     lines: [
@@ -401,69 +363,6 @@ export const MESSAGES: MessageDef[] = [
       'Thanks for stopping by KONBINI 24H!',
       'Reminder: we buy fresh fish at the counter, and the back freezer is staff-only. Do not mind the humming.',
       'Try a cold "Diet Doctor Peepis" — now with 0% more doctor. 🥤',
-    ],
-  },
-  {
-    id: 'tex-hat', from: "Tex's Hats 🤠", avatar: '🤠', company: true,
-    when: c => c.hat,
-    body: [
-      'WELL HOWDY. Tex here. That hat looks RIGHT on you, partner.',
-      'A hat like that is a promise. Wear it into the bay. Wear it into the club. Wear it to sleep, I don\'t judge.',
-      'Yeehaw responsibly. 🐎',
-    ],
-  },
-  {
-    id: 'kojima-car', from: 'Kojima Motors 🚗', avatar: '🚗', company: true,
-    when: c => c.vehicles.includes('car'),
-    body: [
-      'KOJIMA MOTORS — congrats on the kei car! She is small but she has heart.',
-      'If you ever lose her downtown, we run a tow. ¥500 and no questions about WHY she is on the sidewalk.',
-      'Drive safe. Honk twice for us. 🔧',
-    ],
-  },
-  {
-    id: 'lulu-boat', from: 'Lulu 🌴', avatar: '🌴',
-    when: c => c.vehicles.includes('boat'),
-    body: [
-      'aloha~ it\'s Lulu from the Tiki Bar on Kiwami!',
-      'heard you got a boat. the coconuts are free if you shake the palms, the cocktails are not. 😌',
-      'sail out anytime, the island\'s always warm. 🍹',
-    ],
-  },
-  {
-    id: 'manager-wand', from: 'The Manager 🥤', avatar: '🥤',
-    when: c => c.wand,
-    body: [
-      '...you took the wand. good.',
-      'the deeper rock does not like visitors. the wand does not like the deeper rock. it works out.',
-      'thank you for the cold one. the shop is always open. it is always open. 🧊',
-    ],
-  },
-  {
-    id: 'dj-tanuki', from: 'DJ Tanuki 🎧', avatar: '🎧',
-    when: c => c.visited.includes('nightclub'),
-    body: [
-      'YOOO it\'s DJ TANUKI from CLUB KAIJU 🦖',
-      'i spin the places you\'ve BEEN, so go SEE things and i\'ll drop the track. the more you wander the fatter my crates.',
-      'pull up. the big guy in the back tips in fish. 🎶',
-    ],
-  },
-  {
-    id: 'landlord-furnished', from: 'Maison Kawa 🏢', avatar: '🏢', company: true,
-    when: c => c.placedCount >= 5,
-    body: [
-      'Doing our quarterly walkthrough — unit 204 is looking really put-together. 👏',
-      'A few residents take a decade to hang one poster. You\'ve made it a HOME.',
-      'No notes. Carry on. 🌇',
-    ],
-  },
-  {
-    id: 'grandma-proud', from: 'Grandma 💮', avatar: '💮',
-    when: c => c.placedCount >= 9,
-    body: [
-      'your mother showed me the new photos. oh, it is BEAUTIFUL.',
-      'when i was your age our whole apartment was a kettle and an argument. you have made something lovely.',
-      'i am proud of you. now go to bed at a reasonable hour. ❤️',
     ],
   },
 ];
