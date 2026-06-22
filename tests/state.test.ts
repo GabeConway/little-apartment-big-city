@@ -207,6 +207,11 @@ describe('morningT', () => {
 describe('phone messages', () => {
   it('delivers earned messages once and tracks unread', () => {
     const s = newSave();
+    // Day-1 store welcome texts are time-gated to buzz a few in-game minutes
+    // after waking, so nothing lands at the exact wake minute.
+    expect(syncMessages(s).length).toBe(0);
+    // ...a little later in the day they arrive.
+    s.timeMin += 30;
     const first = syncMessages(s);
     expect(first.length).toBeGreaterThan(0);
     expect(unreadCount(s)).toBe(s.messages.length);

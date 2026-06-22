@@ -320,6 +320,7 @@ export interface PhoneMessage {
 // Just enough of the save to decide delivery, passed by state.ts.
 export interface MsgCtx {
   day: number;
+  timeMin: number;     // in-game clock (minutes since midnight) — for time-gated day-1 texts
   owned: string[];
   placedCount: number;
   money: number;
@@ -344,11 +345,13 @@ export interface MessageDef {
 export const MESSAGES: MessageDef[] = [
   {
     id: 'welcome-landlord', from: 'Maison Kawa 🏢', avatar: '🏢', company: true,
-    when: () => true,
+    // Day 1: arrives a few in-game minutes after you wake (a phone buzz teaches
+    // you the notification + to check the 📱). Already available any later day.
+    when: c => c.day > 1 || c.timeMin >= 7 * 60 + 5,
     body: [
       'Welcome to MAISON KAWA, unit 204 — good to have you, {name}! This is the building line.',
-      'Hot water is on the meter, the recycling goes out Tuesday, and the wall to 205 is thinner than it looks. Please be a good neighbor.',
-      'Rent autodrafts each month — keep a little cushion in the bank. Enjoy your new home! 🌇',
+      'That buzz was your phone. Open it any time with the 📱 button (or press P) — messages, the ZamaZonk store, and your wallet all live in there.',
+      'Hot water is on the meter, recycling goes out Tuesday, and the wall to 205 is thinner than it looks. Rent autodrafts monthly — keep a cushion in the bank. Enjoy your new home! 🌇',
     ],
   },
   {
@@ -362,11 +365,13 @@ export const MESSAGES: MessageDef[] = [
   },
   {
     id: 'zamazonk-welcome', from: 'ZamaZonk 📦', avatar: '📦', company: true,
-    when: c => c.day >= 1,
+    // Day 1: lands a beat after the landlord text, so the second buzz reinforces
+    // "check your phone." Available on any later day too.
+    when: c => c.day > 1 || c.timeMin >= 7 * 60 + 15,
     body: [
       'Hello, valued human. This is ZamaZonk™ — the Everything Store. We got your number. We get everyone\'s number.',
-      'Furniture, delivered to your door by morning. Open your phone → the ZamaZonk app → tap to order. It is THAT easy. It is too easy. Keep tapping.',
-      'Why visit a store when a store can visit you, forever? 📦',
+      'How it works: open your phone (📱 / P) → tap the ZamaZonk app → pick furniture → it pays up front and arrives in your boxes by morning. Then open ARRANGE ROOM in your Bag to place it.',
+      'Why visit a store when a store can visit you, forever? Keep tapping. 📦',
     ],
   },
   {

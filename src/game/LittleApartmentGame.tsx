@@ -101,6 +101,7 @@ const sfxAchievement = () => playSfx('/sfx/achievement-unlocked.mp3');
 const sfxBackroomsWarp = () => playSfx('/sfx/backrooms-teleport.mp3');
 const sfxUiClick = () => playSfx('/sfx/ui-click.mp3', 0.4);
 const sfxGameStart = () => playSfx('/sfx/game-start.mp3');
+const sfxPhone = () => playSfx('/sfx/phone-notification.mp3');
 
 // ---- background music -------------------------------------------------------
 // Per-scene tracks; everywhere unlisted (city, badtown, gacha) falls back to the
@@ -483,6 +484,26 @@ const LittleApartmentGame: React.FC = () => {
   const [achToast, setAchToast] = useState<{ title: string; desc: string } | null>(null);
   const achTimerRef = useRef<number | null>(null);
 
+  // Phone-message toast (mirrors the achievement toast). Fired by checkMessages
+  // when a new text is delivered, with the notification sound.
+  const [msgToast, setMsgToast] = useState<{ from: string; count: number } | null>(null);
+  const msgTimerRef = useRef<number | null>(null);
+
+  // Deliver any newly-eligible phone messages; if any arrived, buzz + toast
+  // ("check your phone") and refresh the unread badge. Returns fresh count.
+  const checkMessages = useCallback((): number => {
+    const s = saveRef.current;
+    const fresh = syncMessages(s);
+    if (fresh.length === 0) return 0;
+    persistSave(s);
+    refreshHud();
+    sfxPhone();
+    setMsgToast({ from: fresh[fresh.length - 1].from, count: fresh.length });
+    if (msgTimerRef.current) window.clearTimeout(msgTimerRef.current);
+    msgTimerRef.current = window.setTimeout(() => setMsgToast(null), 4500);
+    return fresh.length;
+  }, []);
+
   // Cover the screen with a transition overlay, swap underneath while it's
   // opaque (coverMs), then uncover (totalMs). Timers cleared on unmount.
   const runTransition = useCallback((kind: 'start' | 'freezer', action: () => void, coverMs: number, totalMs: number) => {
@@ -558,7 +579,7 @@ const LittleApartmentGame: React.FC = () => {
     dirRef.current = dir;
     s.scene = id; s.px = posRef.current.x; s.py = posRef.current.y; s.dir = dir;
     if (!s.visited.includes(id)) s.visited.push(id);
-    syncMessages(s); // visiting a place can unlock its texts
+    checkMessages(); // visiting a place can unlock its texts (buzz if so)
     if (id !== 'nightclub') djPickRef.current = null; // the set ends when you leave
     if (id === 'mines') {
       oreNodesRef.current = oreNodesFor(s, ORE_SPOTS);
@@ -596,7 +617,7 @@ const LittleApartmentGame: React.FC = () => {
     }
     fulfillDeliveries(s); // ZamaZonk orders land in the boxes this morning
     checkStory();
-    syncMessages(s); // new day can trigger date-gated texts
+    checkMessages(); // new day can trigger date-gated texts (buzz if so)
     persistSave(s);
     refreshHud();
     setOverlayBoth({ type: 'endday', recap: pending.recap });
@@ -1072,7 +1093,7 @@ const LittleApartmentGame: React.FC = () => {
       const s2 = saveRef.current;
       const beforeChunk = Math.floor(s2.timeMin / 10);
       s2.timeMin += dt * TIME_RATE;
-      if (Math.floor(s2.timeMin / 10) !== beforeChunk) refreshHud();
+      if (Math.floor(s2.timeMin / 10) !== beforeChunk) { refreshHud(); checkMessages(); } // every 10 game-min: fire any time-gated texts
       if (s2.timeMin >= COLLAPSE_MIN) {
         doSleep(true); // 2 AM: you fade out, the city carries you home
         return;
@@ -3529,6 +3550,14 @@ const LittleApartmentGame: React.FC = () => {
           <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-[#16181d]/95 border-2 border-[#ffd24a] px-4 py-2 font-pixel text-center animate-toast-in z-20 pointer-events-none">
             <p className="text-[#ffd24a] text-lg leading-tight">🏆 {achToast.title}</p>
             <p className="text-[#e8e0d0]/70 text-sm leading-tight">{achToast.desc}</p>
+          </div>
+        )}
+
+        {/* phone-message toast — buzzes when a new text lands ("check your phone") */}
+        {msgToast && (
+          <div className={`absolute ${achToast ? 'top-16' : 'top-2'} left-1/2 -translate-x-1/2 bg-[#16181d]/95 border-2 border-[#7ce8a0] px-4 py-2 font-pixel text-center animate-toast-in z-20 pointer-events-none`}>
+            <p className="text-[#7ce8a0] text-lg leading-tight">📱 New message{msgToast.count > 1 ? `s (${msgToast.count})` : ''}</p>
+            <p className="text-[#e8e0d0]/70 text-sm leading-tight">{msgToast.from} — open your phone (P)</p>
           </div>
         )}
 

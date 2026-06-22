@@ -316,6 +316,7 @@ export const gachaComplete = (s: GameSave): boolean =>
 // on scene change, on waking, and at game start.
 const msgCtx = (s: GameSave): MsgCtx => ({
   day: s.day,
+  timeMin: s.timeMin,
   owned: s.owned,
   placedCount: Object.keys(s.placed).length,
   money: s.money,
