@@ -45,6 +45,7 @@ export interface GameSave {
   hat: boolean;                 // Tex's $67 cowboy hat (worn on the sprite)
   peepis: number;               // cans of "Diet Doctor Peepis" in your pocket
   monsterFed: boolean;          // gave The Manager a cold one; shop unlocked
+  gangPaid: boolean;            // paid off the yakuza blocking the way to Downtown
   minerals: Record<string, number>; // mineral id -> count
   wand: boolean;                // the magical girl wand
   visited: string[];            // scene ids seen (the DJ only plays places you know)
@@ -106,6 +107,7 @@ export const newSave = (): GameSave => ({
   hat: false,
   peepis: 0,
   monsterFed: false,
+  gangPaid: false,
   minerals: {},
   wand: false,
   visited: ['apartment'],

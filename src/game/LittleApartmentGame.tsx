@@ -559,7 +559,10 @@ const LittleApartmentGame: React.FC = () => {
     const set = new Set<string>();
     const scene = sceneRef.current;
     const s = saveRef.current;
-    for (const npc of scene.npcs) set.add(`${npc.x},${npc.y}`);
+    for (const npc of scene.npcs) {
+      if (npc.id === 'yakuza' && s.gangPaid) continue; // paid off — no longer blocks
+      set.add(`${npc.x},${npc.y}`);
+    }
     if (scene.id === 'apartment') {
       for (const itemId of Object.keys(s.placed)) {
         if (itemId === 'ac' || itemId === 'neon') continue; // wall mounts don't block
@@ -870,6 +873,20 @@ const LittleApartmentGame: React.FC = () => {
     const npc = scene.npcs.find(n => n.x === faced.x && n.y === faced.y);
     if (npc) {
       // Merchants open their stalls; everyone else just talks.
+      if (npc.id === 'yakuza') {
+        if (s.gangPaid) return; // already paid; he's on his way out
+        if (s.money < 5000) {
+          showDialog(['He looks you over, then at your wallet, unimpressed.', '"Toll to Downtown is five grand. Come back when you\'re holding."'], 'Enforcer');
+          return;
+        }
+        s.money -= 5000;
+        s.gangPaid = true;
+        sfxCoin();
+        computeSolids(); // the enforcers no longer block the alley
+        persistSave(s); refreshHud();
+        showDialog(['He counts the bills without looking, then tips his shades.', '"Pleasure. The district\'s open. Don\'t make me regret it."', 'The enforcers melt back into the neon. The way to Downtown is clear.'], 'Enforcer');
+        return;
+      }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
       if (npc.id === 'monster') { setOverlayBoth({ type: 'shop', shop: 'monster' }); return; }
       if (npc.id === 'tex') { setOverlayBoth({ type: 'shop', shop: 'hat' }); return; }
@@ -1178,6 +1195,12 @@ const LittleApartmentGame: React.FC = () => {
 
       const ft = feetTile(posRef.current);
       const warp = sceneRef.current.warps.find(w => w.x === ft.x && w.y === ft.y);
+      if (warp && warp.to === 'badtown' && !s.gangPaid) {
+        // The yakuza wall the alley off until you pay the toll.
+        warpCooldownRef.current = 0.4; // don't spam the line as you bump the edge
+        showDialog(['A yakuza enforcer steps into your path, gold watch glinting. "Private district."', 'Face one of them and press E to pay the ¥5,000 toll.'], 'Enforcer');
+        return;
+      }
       if (warp && warpCooldownRef.current <= 0) {
         // Can't drive indoors: the car auto-parks beside the door, never on it
         if (s.driving && !SCENES[warp.to].outdoor) {
@@ -1488,6 +1511,7 @@ const LittleApartmentGame: React.FC = () => {
     // entities, y-sorted
     const ents: { y: number; draw: () => void }[] = [];
     for (const npc of scene.npcs) {
+      if (npc.id === 'yakuza' && saveRef.current.gangPaid) continue; // paid off — gone
       ents.push({
         y: npc.y * TILE,
         draw: () => {

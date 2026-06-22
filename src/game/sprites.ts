@@ -290,6 +290,10 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#8a8a8a', k: '#6b6b6b', s: '#e8c098', e: '#222', t: '#7a3b3b', u: '#5c2c2c', p: '#3a3a3a', b: '#222' },
     acc: [ACC.shades('#16181d')],
   },
+  'npc-yakuza': { // Downtown enforcer — slicked black hair, black suit, shades
+    pal: { h: '#15151a', k: '#0a0a0d', s: '#caa27c', e: '#222', t: '#23272e', u: '#15171c', p: '#1a1d24', b: '#0d0d10' },
+    acc: [ACC.shades('#16181d')],
+  },
   'npc-granny': { // Granny Sato — silver hair, round glasses
     pal: { h: '#dcdcdc', k: '#b8b8b8', s: '#eec6a2', e: '#222', t: '#a86b8a', u: '#82506a', p: '#5a5a6a', b: '#444' },
     acc: [ACC.glasses('#6b5d4f', '#cfe2ee')],
