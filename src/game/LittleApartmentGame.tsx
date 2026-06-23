@@ -2083,8 +2083,9 @@ const LittleApartmentGame: React.FC = () => {
           w.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
           w.moving = true;
         } else {
-          // Dancers mostly stay put and dance in place; only occasionally shuffle.
-          w.moving = Math.random() < (DANCER_IDS.has(w.id) ? 0.22 : 0.6);
+          // Everyone mostly stands; only now and then do they amble a few steps.
+          // (Dancers bob in place even more.)
+          w.moving = Math.random() < (DANCER_IDS.has(w.id) ? 0.22 : 0.25);
           if (w.moving) w.dir = (['up', 'down', 'left', 'right'] as Dir[])[Math.floor(Math.random() * 4)];
         }
       }
