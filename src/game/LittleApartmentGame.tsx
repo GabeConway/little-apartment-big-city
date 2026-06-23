@@ -2768,7 +2768,8 @@ const LittleApartmentGame: React.FC = () => {
           const cx = Math.round(cat.x) - cam.x, cy = Math.round(cat.y) - cam.y;
           const bob = cat.sitting ? 0 : Math.round(Math.sin(animRef.current * 9) * 0.6);
           ctx.drawImage(atlas['m-shadow'], cx, cy + 3);
-          const key = cat.sitting ? `cat-sit-${cat.dir}` : `cat-${cat.dir}`;
+          const d = cat.dir === 'left' ? 'l' : 'r';
+          const key = cat.sitting ? `cat-sit-${d}` : `cat-${d}`;
           ctx.drawImage(atlas[key], cx, cy + bob);
         },
       });

@@ -208,22 +208,18 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: '< SHORE', x: 1, y: 15, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
     { text: 'DOWNTOWN >', x: 26, y: 8, color: '#e857a8', bg: 'rgba(0,0,0,0.55)', blink: true },
   ],
+  // Signs sit over the four venue facades of the 28-wide strip:
+  // club N (cols 1-4), garage G (cols 7-10), casino K (cols 13-16), museum U (cols 19-24).
   badtown: [
-    { text: '☄ クラブかいじゅう ☄', x: 1, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', blink: true, font: 8 },
-    { text: 'CLUB KAIJU', x: 2, y: 1, color: '#e857a8', bg: 'rgba(0,0,0,0.55)' },
-    { text: '怪', x: 8, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', vertical: true, font: 9, blink: true },
-    { text: 'こじまモータース', x: 11, y: 0, color: '#ffd24a', bg: '#33302a', border: '#7a7468', font: 8 },
-    { text: 'KOJIMA MOTORS', x: 11, y: 1, color: '#cfc4ab', bg: 'rgba(0,0,0,0.55)' },
-    { text: 'しゅうり', x: 18, y: 0, color: '#ffd24a', bg: '#33302a', border: '#7a7468', vertical: true, font: 8 },
-    { text: 'カラオケ', x: 20, y: 0, color: '#7ce8e0', bg: '#16121d', border: '#7ce8e0', vertical: true, font: 8, blink: true },
-    // Casino: one horizontal marquee sign sitting on the widened gold facade
-    // (x23–26), instead of the old crammed stack of vertical signs.
-    { text: 'カジノ', x: 23, y: 0, color: '#16181d', bg: '#ffd24a', border: '#c9a227', font: 8, blink: true },
-    { text: 'CASINO', x: 23, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
+    { text: 'クラブかいじゅう', x: 1, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', blink: true, font: 8 },
+    { text: 'CLUB KAIJU', x: 1, y: 1, color: '#e857a8', bg: 'rgba(0,0,0,0.55)' },
+    { text: 'こじまモータース', x: 7, y: 0, color: '#ffd24a', bg: '#33302a', border: '#7a7468', font: 8 },
+    { text: 'KOJIMA', x: 7, y: 1, color: '#cfc4ab', bg: 'rgba(0,0,0,0.55)' },
+    { text: 'カジノ', x: 13, y: 0, color: '#16181d', bg: '#ffd24a', border: '#c9a227', font: 8, blink: true },
+    { text: 'CASINO', x: 13, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
+    { text: 'はくぶつかん', x: 19, y: 0, color: '#16181d', bg: '#e8d8a0', border: '#c9a227', font: 8 },
+    { text: 'MUSEUM', x: 19, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
-    // Museum: gold marquee over the far-right storefront (door at x33-34, row2).
-    { text: 'はくぶつかん', x: 29, y: 0, color: '#16181d', bg: '#e8d8a0', border: '#c9a227', font: 8 },
-    { text: 'MUSEUM', x: 30, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
   ],
   museum: [
     { text: 'カワマチ びじゅつかん', x: 1, y: 9, color: '#3a3322', bg: '#e0d8c4', border: '#b08a50', font: 7 },
