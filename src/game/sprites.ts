@@ -354,6 +354,10 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#16181d', k: '#0c0d10', s: '#f0c8a0', e: '#222', t: '#f4f0e8', u: '#d8d2c4', p: '#c0392b', b: '#fff' },
     acc: [ACC.bowtie('#c0392b')],
   },
+  'npc-bingus': { // Bingus Doofelsmurt — eccentric museum curator: wild white hair, teal tweed, round glasses + a bowtie
+    pal: { h: '#e8e4dc', k: '#c4c0b6', s: '#eec6a2', e: '#222', t: '#2c7a6e', u: '#1f5a52', p: '#3a3322', b: '#4a3120' },
+    acc: [ACC.glasses('#c9a227', '#e8f0f4'), ACC.bowtie('#b06ad0')],
+  },
 };
 
 const drawOverlay = (canvas: HTMLCanvasElement, acc: Accessory, rows?: string[]) => {
@@ -1094,6 +1098,70 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#16181d'; ctx.fillRect(5, 5, 1, 1); ctx.fillRect(11, 5, 1, 1); ctx.fillRect(2, 9, 1, 1); ctx.fillRect(8, 9, 1, 1); // black cells
     ctx.fillStyle = '#e857a8'; ctx.fillRect(12, 3, 2, 1);   // stacked chips
     ctx.fillStyle = '#7ce8e0'; ctx.fillRect(12, 2, 2, 1);
+  });
+
+  // Museum (Bingus Doofelsmurt's gallery) — pale marble, cream walls, gilt frames
+  atlas['t-museum-floor'] = tile(ctx => {                    // pale marble with faint veins + tile seams
+    fill(ctx, '#d4ccba');
+    ctx.fillStyle = '#c6bda8';                                // seams (parquet/marble grid)
+    ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1); ctx.fillRect(8, 0, 1, 8); ctx.fillRect(3, 9, 1, 7);
+    speckle(ctx, '#e0d8c8', 29, 5);
+    ctx.fillStyle = '#bcb09a'; ctx.fillRect(2, 3, 3, 1); ctx.fillRect(11, 11, 3, 1); // hairline veins
+  });
+  // A museum wall + its picture rail + wainscot — the gallery's bones.
+  const museumWall = (ctx: CanvasRenderingContext2D) => {
+    fill(ctx, '#cfc4ab');                                     // cream plaster
+    ctx.fillStyle = '#bdb094'; ctx.fillRect(0, 0, 16, 3);     // top band
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 3, 16, 1);     // gold picture rail
+    ctx.fillStyle = '#a89a7c'; ctx.fillRect(0, 13, 16, 3);    // wainscot base
+  };
+  atlas['t-museum-wall'] = tile(museumWall);
+  // A floor plinth/pedestal (empty). Solid. Sits on the marble floor.
+  const plinth = (ctx: CanvasRenderingContext2D) => {
+    fill(ctx, '#d4ccba');                                     // floor under it
+    ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillRect(3, 14, 11, 2); // contact shadow
+    ctx.fillStyle = '#b8ae98'; ctx.fillRect(4, 4, 8, 11);     // column body
+    ctx.fillStyle = '#8a8070'; ctx.fillRect(4, 4, 1, 11);     // side shade
+    ctx.fillStyle = '#e0d8c4'; ctx.fillRect(3, 2, 10, 2);     // cap
+    ctx.fillStyle = '#cfc6b0'; ctx.fillRect(4, 4, 8, 1);      // cap underline highlight
+    ctx.fillStyle = '#9a907a'; ctx.fillRect(3, 14, 10, 1);    // base lip
+  };
+  atlas['t-pedestal'] = tile(plinth);
+  atlas['t-pedestal-full'] = tile(ctx => {                    // plinth + a generic gilded artifact on top
+    plinth(ctx);
+    ctx.fillStyle = '#8a6a30'; ctx.fillRect(6, 0, 5, 3);      // artifact (a small urn) base
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 0, 4, 2);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(6, 0, 2, 1);      // highlight
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(7, 0, 1, 1);      // sparkle
+  });
+  // A wall picture frame (empty), mounted on the museum wall row.
+  atlas['t-frame-empty'] = tile(ctx => {
+    museumWall(ctx);
+    ctx.fillStyle = '#8a6a30'; ctx.fillRect(3, 4, 10, 8);     // frame body
+    ctx.fillStyle = '#c9a227';                                // gilt edges
+    ctx.fillRect(3, 4, 10, 1); ctx.fillRect(3, 11, 10, 1); ctx.fillRect(3, 4, 1, 8); ctx.fillRect(12, 4, 1, 8);
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 5, 8, 6);      // blank canvas
+    ctx.fillStyle = '#b8ae98'; ctx.fillRect(7, 12, 2, 1);     // empty nameplate
+  });
+  atlas['t-frame-full'] = tile(ctx => {                       // frame + a little painting
+    museumWall(ctx);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(2, 3, 12, 10);    // gold frame
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 3, 12, 1);
+    ctx.fillStyle = '#8a6a30'; ctx.fillRect(3, 4, 10, 8);     // inner lip
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(4, 5, 8, 6);      // sky
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 6, 2, 2);      // sun
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(4, 9, 8, 2);      // hill
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 12, 4, 1);     // nameplate
+  });
+  // Museum exterior facade — neoclassical pale stone with seamless fluting,
+  // so a row of these reads as one stately storefront amid grimy Downtown.
+  atlas['t-museum-front'] = tile(ctx => {
+    fill(ctx, '#bcb4a4');
+    ctx.fillStyle = '#c8c0b0'; ctx.fillRect(0, 0, 16, 2);     // cornice
+    ctx.fillStyle = '#a89e8c'; ctx.fillRect(0, 2, 16, 1);     // cornice shadow
+    ctx.fillStyle = '#a89e8c'; for (let x = 2; x < 16; x += 4) ctx.fillRect(x, 3, 1, 12);     // flute shade
+    ctx.fillStyle = '#cec6b6'; for (let x = 3; x < 16; x += 4) ctx.fillRect(x, 3, 1, 12);     // flute highlight
+    ctx.fillStyle = '#8a8070'; ctx.fillRect(0, 15, 16, 1);    // base shadow
   });
 
   // Mines

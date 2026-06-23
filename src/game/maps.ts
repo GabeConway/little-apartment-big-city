@@ -2,6 +2,7 @@
 // Grids are strings; every row in a scene must be the same length.
 
 import type { SceneDef, TileDef } from './engine';
+import { MUSEUM_SLOTS } from './data';
 
 const T = (sprite: string, solid?: boolean): TileDef => (solid ? { sprite, solid } : { sprite });
 
@@ -213,6 +214,12 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'カジノ', x: 23, y: 0, color: '#16181d', bg: '#ffd24a', border: '#c9a227', font: 8, blink: true },
     { text: 'CASINO', x: 23, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
+    // Museum marquee over the bottom-left entrance.
+    { text: 'はくぶつかん', x: 0, y: 9, color: '#3a3322', bg: '#e8d8a0', border: '#b08a50', font: 8 },
+    { text: 'MUSEUM', x: 0, y: 10, color: '#e8d8a0', bg: 'rgba(0,0,0,0.55)' },
+  ],
+  museum: [
+    { text: 'カワマチ びじゅつかん', x: 1, y: 9, color: '#3a3322', bg: '#e0d8c4', border: '#b08a50', font: 7 },
   ],
   nightclub: [
     { text: 'バー', x: 1, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', font: 8, blink: true },
@@ -378,6 +385,7 @@ const BADTOWN_L = {
   'V': T('t-vending-dead', true),
   'D': T('t-door'),
   'K': T('t-casino-front', true), // gold marquee facade over the casino entrance
+  'U': T('t-museum-front', true), // neoclassical stone facade over the museum entrance
 };
 
 const badtown: SceneDef = {
@@ -396,10 +404,9 @@ const badtown: SceneDef = {
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
-    'pppppppppppppppppppppppppppp',
-    'pppppppppppppppppppppppppppp',
-    'ppppLpppppppLpppppppLppppppp',
-    'FFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+    'UUDDUppppppppppppppppppppppp',
+    'UUUUUpppppppLpppppppLppppppp',
+    'UUUUUFFFFFFFFFFFFFFFFFFFFFFF',
   ],
   warps: [
     { x: 0, y: 5, to: 'city', tx: 30, ty: 5, dir: 'left' },
@@ -412,6 +419,9 @@ const badtown: SceneDef = {
     { x: 15, y: 2, to: 'garage', tx: 9, ty: 7, dir: 'up' },
     { x: 24, y: 2, to: 'casino', tx: 7, ty: 7, dir: 'up' },
     { x: 25, y: 2, to: 'casino', tx: 8, ty: 7, dir: 'up' },
+    // Museum entrance (bottom-left): walk DOWN into the door from the plaza.
+    { x: 2, y: 11, to: 'museum', tx: 7, ty: 8, dir: 'up' },
+    { x: 3, y: 11, to: 'museum', tx: 8, ty: 8, dir: 'up' },
   ],
   interactables: [{ id: 'vending-dead', x: 22, y: 4, label: 'Vending machine?' }],
   npcs: [{ id: 'sketchy', x: 24, y: 11, sprite: 'npc-sketchy', dir: 'left' }],
@@ -804,6 +814,44 @@ const paris: SceneDef = {
   ],
 };
 
+// ---- The Museum (off the Downtown plaza) ----------------------------------------------
+// Bingus Doofelsmurt's gallery. Pedestals ('p') and wall frames ('A') are the
+// empty display slots (positions mirror MUSEUM_SLOTS in data.ts); the player
+// donates found objects to fill them. One generic 'museum-display' interactable
+// is generated per slot from MUSEUM_SLOTS so the data table is the single source.
+
+const museum: SceneDef = {
+  id: 'museum',
+  name: 'Kawamachi Museum',
+  legend: {
+    '#': T('t-museum-wall', true),
+    '.': T('t-museum-floor'),
+    'p': T('t-pedestal', true),     // empty display plinth (objects of interest)
+    'A': T('t-frame-empty', true),  // empty wall art frame
+    'D': T('t-door'),
+    'm': T('t-doormat'),
+  },
+  grid: [
+    '##A##A##A##A####',
+    '#..............#',
+    '#.p..p..p..p...#',
+    '#..............#',
+    '#.p..p..p..p...#',
+    '#..............#',
+    '#..............#',
+    '#..............#',
+    '#......mm......#',
+    '#######DD#######',
+  ],
+  warps: [
+    { x: 7, y: 9, to: 'badtown', tx: 2, ty: 10, dir: 'up' },
+    { x: 8, y: 9, to: 'badtown', tx: 3, ty: 10, dir: 'up' },
+  ],
+  // One interactable per display slot — id 'museum-display', resolved by tile.
+  interactables: MUSEUM_SLOTS.map(sl => ({ id: 'museum-display', x: sl.x, y: sl.y, label: sl.label })),
+  npcs: [{ id: 'bingus', x: 8, y: 6, sprite: 'npc-bingus', dir: 'down' }],
+};
+
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, island, deepsea, casino, paris,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, island, deepsea, casino, paris, museum,
 };
