@@ -397,38 +397,42 @@ const badtown: SceneDef = {
   name: 'Downtown',
   legend: BADTOWN_L,
   outdoor: true,
+  // Denser 28-wide neon strip: four venues (club / garage / casino / museum)
+  // packed close together, separated by neon (E) and grim (X) buildings.
   grid: [
-    'NNNNNNNNNNGGGGGGGGGGEEXKKKKXXUUUUUUUUU',
-    'NNNNNNNNNNGGGGGGGGGGEEXKKKKXXUUUUUUUUU',
-    'NNNDDNNNNNGGGGDDGGGGEEXKDDKXXUUUUDDUUU',
-    'ppqppppLppppppppLpppppqppppppppppppppp',
-    'ppppppppppppppppppppppVppppppppppppppp',
-    'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
-    'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
-    'pppppppppppppppppppppppppppppppppppppp',
-    'pppppppppppppppppppppppppppppppppppppp',
-    'pppppppppppppppppppppppppppppppppppppp',
-    'pppppppppppppppppppppppppppppppppppppp',
-    'ppppppppppppLpppppppLpppppppppppLppppp',
-    'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+    'ENNNNEEGGGGXEKKKKXEUUUUUUEEX',
+    'ENNNNEEGGGGXEKKKKXEUUUUUUEEX',
+    'ENDDNEEGDDGXEKDDKXEUUDDUUEEX',
+    'qppppLppppppqppppLqpppppppLp',
+    'ppppppVppppppppppppppppppppp',
+    'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
+    'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
+    'pppppppppppppppppppppppppppp',
+    'pppppppppppppppppppppppppppp',
+    'pppppppppppppppppppppppppppp',
+    'pppppppppppppppppppppppppppp',
+    'ppppppLpppppppLppppppLpppppp',
+    'FFFFFFFFFFFFFFFFFFFFFFFFFFFF',
   ],
   warps: [
     { x: 0, y: 5, to: 'city', tx: 30, ty: 5, dir: 'left' },
     { x: 0, y: 6, to: 'city', tx: 30, ty: 7, dir: 'left' },
     { x: 0, y: 8, to: 'city', tx: 30, ty: 8, dir: 'left' },
     { x: 0, y: 9, to: 'city', tx: 30, ty: 9, dir: 'left' },
-    { x: 3, y: 2, to: 'nightclub', tx: 7, ty: 8, dir: 'up' },
-    { x: 4, y: 2, to: 'nightclub', tx: 8, ty: 8, dir: 'up' },
-    { x: 14, y: 2, to: 'garage', tx: 8, ty: 7, dir: 'up' },
-    { x: 15, y: 2, to: 'garage', tx: 9, ty: 7, dir: 'up' },
-    { x: 24, y: 2, to: 'casino', tx: 7, ty: 7, dir: 'up' },
-    { x: 25, y: 2, to: 'casino', tx: 8, ty: 7, dir: 'up' },
-    // Museum: a proper top storefront on the far right — door on facade row 2,
-    // walk UP into it from the plaza (like the other downtown venues).
-    { x: 33, y: 2, to: 'museum', tx: 7, ty: 8, dir: 'up' },
-    { x: 34, y: 2, to: 'museum', tx: 8, ty: 8, dir: 'up' },
+    // Nightclub — door cols 2-3
+    { x: 2, y: 2, to: 'nightclub', tx: 7, ty: 8, dir: 'up' },
+    { x: 3, y: 2, to: 'nightclub', tx: 8, ty: 8, dir: 'up' },
+    // Garage — door cols 8-9
+    { x: 8, y: 2, to: 'garage', tx: 8, ty: 7, dir: 'up' },
+    { x: 9, y: 2, to: 'garage', tx: 9, ty: 7, dir: 'up' },
+    // Casino — door cols 14-15
+    { x: 14, y: 2, to: 'casino', tx: 7, ty: 7, dir: 'up' },
+    { x: 15, y: 2, to: 'casino', tx: 8, ty: 7, dir: 'up' },
+    // Museum — door cols 21-22
+    { x: 21, y: 2, to: 'museum', tx: 7, ty: 8, dir: 'up' },
+    { x: 22, y: 2, to: 'museum', tx: 8, ty: 8, dir: 'up' },
   ],
-  interactables: [{ id: 'vending-dead', x: 22, y: 4, label: 'Vending machine?' }],
+  interactables: [{ id: 'vending-dead', x: 6, y: 4, label: 'Vending machine?' }],
   npcs: [{ id: 'sketchy', x: 24, y: 11, sprite: 'npc-sketchy', dir: 'left' }],
 };
 
@@ -458,8 +462,8 @@ const nightclub: SceneDef = {
     '#######DD#######',
   ],
   warps: [
-    { x: 7, y: 9, to: 'badtown', tx: 3, ty: 3, dir: 'down' },
-    { x: 8, y: 9, to: 'badtown', tx: 4, ty: 3, dir: 'down' },
+    { x: 7, y: 9, to: 'badtown', tx: 2, ty: 3, dir: 'down' },
+    { x: 8, y: 9, to: 'badtown', tx: 3, ty: 3, dir: 'down' },
   ],
   interactables: [{ id: 'bar', x: 1, y: 2, w: 4, h: 1, label: 'Bar' }],
   npcs: [
@@ -502,8 +506,8 @@ const garage: SceneDef = {
     '########DD########',
   ],
   warps: [
-    { x: 8, y: 8, to: 'badtown', tx: 14, ty: 3, dir: 'down' },
-    { x: 9, y: 8, to: 'badtown', tx: 15, ty: 3, dir: 'down' },
+    { x: 8, y: 8, to: 'badtown', tx: 8, ty: 3, dir: 'down' },
+    { x: 9, y: 8, to: 'badtown', tx: 9, ty: 3, dir: 'down' },
   ],
   interactables: [{ id: 'shop-garage', x: 5, y: 5, w: 3, h: 1, label: 'Vehicles' }],
   npcs: [{ id: 'mechanic', x: 6, y: 4, sprite: 'npc-mechanic', dir: 'down' }],
@@ -800,8 +804,8 @@ const casino: SceneDef = {
     '#######DD#######',
   ],
   warps: [
-    { x: 7, y: 9, to: 'badtown', tx: 24, ty: 3, dir: 'down' },
-    { x: 8, y: 9, to: 'badtown', tx: 25, ty: 3, dir: 'down' },
+    { x: 7, y: 9, to: 'badtown', tx: 14, ty: 3, dir: 'down' },
+    { x: 8, y: 9, to: 'badtown', tx: 15, ty: 3, dir: 'down' },
   ],
   interactables: [
     { id: 'casino-slots', x: 1, y: 1, w: 14, h: 1, label: 'Slot machine' },
@@ -896,8 +900,8 @@ const museum: SceneDef = {
     '#######DD#######',
   ],
   warps: [
-    { x: 7, y: 9, to: 'badtown', tx: 33, ty: 3, dir: 'down' },
-    { x: 8, y: 9, to: 'badtown', tx: 34, ty: 3, dir: 'down' },
+    { x: 7, y: 9, to: 'badtown', tx: 21, ty: 3, dir: 'down' },
+    { x: 8, y: 9, to: 'badtown', tx: 22, ty: 3, dir: 'down' },
   ],
   // One interactable per display slot — id 'museum-display', resolved by tile.
   interactables: MUSEUM_SLOTS.map(sl => ({ id: 'museum-display', x: sl.x, y: sl.y, label: sl.label })),
