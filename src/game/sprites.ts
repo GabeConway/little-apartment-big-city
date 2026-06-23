@@ -1973,6 +1973,14 @@ const buildMisc = (atlas: Atlas) => {
     '................',
   ], CATPAL);
   atlas['cat-sit-r'] = catSitR; atlas['cat-sit-l'] = mirror(catSitR);
+
+  // ---- Hidden museum collectible: a small glinting curio on the ground --------
+  atlas['t-relic'] = tile(ctx => {
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 5, 2, 6); ctx.fillRect(5, 7, 6, 2); // 4-point star
+    ctx.fillStyle = '#fff6d6'; ctx.fillRect(7, 7, 2, 2);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 10, 4, 1);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(11, 4, 1, 1); ctx.fillRect(4, 11, 1, 1); ctx.fillRect(12, 11, 1, 1);
+  });
   atlas['m-bobber'] = strSprite([
     '.rr.',
     'rrrr',

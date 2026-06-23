@@ -143,6 +143,31 @@ export const MUSEUM_SLOTS: MuseumSlot[] = [
     blurb: 'Curatorial consensus has not been reached.' },
 ];
 
+// Where each museum collectible comes from. HIDDEN finds glint in a scene at a
+// fixed tile — walk onto/face it + E to pocket it (added to save.collectibles),
+// then donate it at the matching museum pedestal. The remaining four are rare
+// DROPS from activities (see the drop hooks in LittleApartmentGame.tsx). The
+// collectible id === the MUSEUM_SLOTS id it fills.
+export interface MuseumFind { slot: string; scene: string; x: number; y: number; }
+export const MUSEUM_FINDS: MuseumFind[] = [
+  { slot: 'arti-coin', scene: 'denden', x: 8, y: 7 },       // wedged under the electronics shelves
+  { slot: 'arti-token', scene: 'garage', x: 12, y: 6 },     // rolled under a workbench
+  { slot: 'arti-onigiri', scene: 'konbini', x: 11, y: 6 },  // behind the konbini coolers
+  { slot: 'art-bento', scene: 'pawn', x: 8, y: 5 },         // a canvas leaning in the pawn shop
+  { slot: 'art-madonna', scene: 'nightclub', x: 11, y: 8 }, // by the club's back wall
+  { slot: 'art-alley', scene: 'backrooms', x: 14, y: 4 },   // a painting that shouldn't be here
+  { slot: 'arti-rock', scene: 'island', x: 6, y: 4 },       // just lying in the island grass
+  { slot: 'art-cat', scene: 'paris', x: 8, y: 8 },          // propped on the Seine quay
+];
+// The four rare activity drops (collectible id → where it can drop). Used for
+// journal flavor; the actual rolls live in the drop hooks.
+export const MUSEUM_DROP_SOURCE: Record<string, string> = {
+  'arti-lure': 'a rare snag while fishing',
+  'arti-shard': 'deep in the mines (floor 6+)',
+  'arti-meteor': 'the deepest mines (floor 10+)',
+  'arti-capsule': 'a one-in-a-hundred gachapon capsule',
+};
+
 // In-game achievements — completely separate from the site-wide system in
 // utils/achievements.ts (which feeds the cake). These live in the game save.
 export interface GameAchievement { id: string; title: string; desc: string; hint: string }
@@ -174,6 +199,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'gunner', title: 'AK-67', desc: 'Claimed the machine gun from the deep.', hint: 'Descend far enough and The Manager makes an offer.' },
   { id: 'blessed', title: 'Five Thousand Yen Faith', desc: 'Earned the shrine\'s favor. The fish noticed.', hint: 'The little shrine in the park accepts offerings.' },
   { id: 'furnished', title: 'Welcome Home', desc: 'Furnished the whole apartment.', hint: 'The whole point.' },
+  { id: 'curator', title: 'The Whole Collection', desc: 'Filled every display in the Kawamachi Museum.', hint: 'Twelve empty displays. Twelve curios, hidden across the city and beyond.' },
   { id: 'broke', title: 'i dont have enough money for chicken nugget', desc: 'Dropped under ¥100. The nuggets remain a dream.', hint: 'Spend almost all of it.' },
 ];
 

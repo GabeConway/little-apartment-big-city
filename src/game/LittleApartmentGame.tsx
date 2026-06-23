@@ -33,7 +33,7 @@ import {
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
-  itemKind, MUSEUM_SLOTS, CROPS, FORAGE, forageById,
+  itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, CROPS, FORAGE, forageById,
 } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
@@ -43,7 +43,7 @@ import {
   clockLabel, nightT, morningT, COLLAPSE_MIN,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
-  shrineLuck, syncMessages, unreadCount,
+  shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
   errandFor, errandDoneToday,
@@ -1277,13 +1277,17 @@ const LittleApartmentGame: React.FC = () => {
     s.fishInv.push(fish.id);
     s.fishLog[fish.id] = (s.fishLog[fish.id] || 0) + 1;
     s.today.fishCaught += 1;
+    // Rare snag: Genji's Lost Lure, a museum curio.
+    const gotLure = !s.collectibles.includes('arti-lure') && !s.museum.donated.includes('arti-lure') && Math.random() < 0.05;
+    if (gotLure) s.collectibles.push('arti-lure');
     persistSave(s); refreshHud();
     sfxCatch();
     award('first-fish');
     if (deep) award('deep');
     if (fish.id === 'golden') award('golden');
     const flair = fish.id === 'golden' ? ' Genji will not believe this.' : fish.id === 'koi' ? ' Someone must miss it.' : '';
-    showDialog([`You caught a ${fish.name}! (worth ¥${fish.value})${flair}`]);
+    const lureLine = gotLure ? ['Snagged on the hook too: a battered old lure with "GENJI" scratched into it. The museum would treasure this.'] : [];
+    showDialog([`You caught a ${fish.name}! (worth ¥${fish.value})${flair}`, ...lureLine]);
   }, [refreshHud, showDialog, award]);
 
   const rollGacha = useCallback(() => {
@@ -1302,6 +1306,11 @@ const LittleApartmentGame: React.FC = () => {
     if (!wasComplete && gachaComplete(s)) {
       lines.push('That... was the last one. The machine hums approvingly. Something golden has appeared in your apartment.');
       award('gacha-set');
+    }
+    // One-in-a-hundred: an old, EMPTY capsule rattles out — a museum curio.
+    if (!s.collectibles.includes('arti-capsule') && !s.museum.donated.includes('arti-capsule') && Math.random() < 0.01) {
+      s.collectibles.push('arti-capsule');
+      lines.push('Wait — a second capsule jams out behind it, scuffed and ancient. Empty, but for a faded label. The museum has a pedestal for exactly this.');
     }
     persistSave(s); refreshHud();
     showDialog(lines);
@@ -1360,6 +1369,25 @@ const LittleApartmentGame: React.FC = () => {
       if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
         catRef.current.sitting = true; catRef.current.timer = 4; // he stops to address you
         showDialog(WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)], 'David');
+        return;
+      }
+    }
+
+    // Pocket a glinting museum curio you're standing on or facing.
+    {
+      const find = MUSEUM_FINDS.find(f => f.scene === scene.id
+        && !s.collectibles.includes(f.slot) && !s.museum.donated.includes(f.slot)
+        && ((f.x === faced.x && f.y === faced.y) || (f.x === feet.x && f.y === feet.y)));
+      if (find) {
+        const slot = MUSEUM_SLOTS.find(sl => sl.id === find.slot)!;
+        s.collectibles.push(find.slot);
+        sfxCatch();
+        persistSave(s); refreshHud();
+        showDialog([
+          `Something glints, half-forgotten. You pick it up: "${slot.label}".`,
+          slot.blurb,
+          'A curio if ever there was one. The Kawamachi Museum has an empty display just its size.',
+        ], 'A Curious Find');
         return;
       }
     }
@@ -1477,6 +1505,15 @@ const LittleApartmentGame: React.FC = () => {
           award('miner');
           if (node.mineral.id === 'starstone') award('astral');
         }
+        // Rare deep-mine museum curios: a humming shard (floor 6+), a meteorite (floor 10+).
+        const floor = mineFloorRef.current;
+        const tryMineCurio = (slot: string, chance: number, label: string) => {
+          if (s.collectibles.includes(slot) || s.museum.donated.includes(slot) || Math.random() >= chance) return;
+          s.collectibles.push(slot);
+          mineTextRef.current = { x: node.x * TILE, y: node.y * TILE - 8, text: label, color: '#ffe9a0', t: 1.6 };
+        };
+        if (floor >= 10) tryMineCurio('arti-meteor', 0.07, 'A meteorite?!');
+        else if (floor >= 6) tryMineCurio('arti-shard', 0.06, 'A humming shard!');
         persistSave(s); refreshHud();
         return;
       }
@@ -1905,11 +1942,32 @@ const LittleApartmentGame: React.FC = () => {
         if (!slot) break;
         if (s.museum.donated.includes(slot.id)) {
           showDialog([`"${slot.label}"`, slot.blurb], 'Museum');
+        } else if (s.collectibles.includes(slot.id)) {
+          // You're holding exactly the piece this display wants — donate it.
+          donateToMuseum(s, slot.id);
+          s.collectibles = s.collectibles.filter(c => c !== slot.id);
+          sfxCatch();
+          const done = museumComplete(s);
+          if (done) { s.money += 10000; award('curator'); }
+          persistSave(s); refreshHud();
+          if (done) {
+            showDialog([
+              `You set "${slot.label}" in place. It fits as though it had always belonged.`,
+              'Bingus Doofelsmurt goes very still. Then, quietly, he begins to weep.',
+              '"It is complete. After all these years — the Kawamachi Museum is WHOLE." He presses a thick envelope into your hands. (+¥10,000)',
+            ], 'Bingus');
+          } else {
+            const n = s.museum.donated.length;
+            showDialog([
+              `You donate "${slot.label}". Bingus cradles it like a newborn.`,
+              `"Magnificent! ${n} of ${MUSEUM_SLOTS.length} displays filled. The collection grows!"`,
+            ], 'Bingus');
+          }
         } else {
           const what = slot.kind === 'art' ? 'frame' : 'pedestal';
           showDialog([
             `An empty ${what}. A little brass plate reads: "${slot.label}".`,
-            'This display is empty — Bingus is waiting for the right piece.',
+            'This display is empty — Bingus is waiting for the right piece. (You\'ll know it when you find it.)',
           ], 'Museum');
         }
         break;
@@ -2464,6 +2522,15 @@ const LittleApartmentGame: React.FC = () => {
     if (scene.id === 'paris') {
       const e = atlas['eiffel-big'];
       ctx.drawImage(e, Math.round(13 * TILE - e.width / 2) - cam.x, 134 - e.height - cam.y);
+    }
+
+    // Hidden museum curios glint on the ground until pocketed.
+    for (const f of MUSEUM_FINDS) {
+      if (f.scene !== scene.id || saveRef.current.collectibles.includes(f.slot) || saveRef.current.museum.donated.includes(f.slot)) continue;
+      const by = Math.round(Math.sin(t * 3 + f.x) * 1.2);
+      ctx.globalAlpha = 0.7 + Math.sin(t * 5 + f.x) * 0.3;
+      ctx.drawImage(atlas['t-relic'], f.x * TILE - cam.x, f.y * TILE - cam.y + by);
+      ctx.globalAlpha = 1;
     }
 
     // soft shadows where walls meet walkable ground (cheap ambient occlusion)
@@ -5030,6 +5097,7 @@ const LittleApartmentGame: React.FC = () => {
       if (!s.monsterFed) {
         return (
           <ShopFrame title="THE MANAGER" subtitle={'"A customer! How wonderful. How rare. How... hm."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+            <img src={PORTRAIT_IMAGES['The Manager']} alt="The Manager" className="w-24 h-24 mx-auto mb-1" style={{ imageRendering: 'pixelated' }} />
             <p className="py-2 text-lg leading-snug opacity-90">
               "Forgive me — I would show you the inventory, truly, but I am simply <span className="text-[#b06ad0]">parched</span>.
               Absolutely parched. Centuries of dust in the throat."
@@ -5052,6 +5120,7 @@ const LittleApartmentGame: React.FC = () => {
       const sellableTotal = MINERALS.reduce((sum, m) => sum + mineralCount(m.id) * m.value, 0);
       return (
         <ShopFrame title="THE MANAGER" subtitle={'"Ahh. Crisp. Legally distinct. You are my favorite customer in nine hundred years."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <img src={PORTRAIT_IMAGES['The Manager']} alt="The Manager" className="w-20 h-20 float-right ml-2 mb-1" style={{ imageRendering: 'pixelated' }} />
           <p className="text-base text-[#b06ad0]/80">TOOLS &amp; WEAPONS — "For the work, and for the things that object to the work."</p>
           {(() => {
             const cur = s.pickaxe;
