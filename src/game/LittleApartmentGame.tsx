@@ -37,7 +37,7 @@ import type { StoryBeat, Fish } from './data';
 import {
   newSave, loadSave, persistSave, clearSave,
   maxEnergy, energyCost, sleep as passNight, pawnStockFor, buyFurniture, allFurnished,
-  sketchyOfferFor, gachaComplete,
+  allRaresOwned, sketchyOfferFor, gachaComplete,
   clockLabel, nightT, morningT, COLLAPSE_MIN,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   oreNodesFor, shrineLuck, syncMessages, unreadCount,
@@ -128,6 +128,9 @@ const SCENE_MUSIC: Record<string, string> = {
   island: '/music/island.mp3',
   deepsea: '/music/deep-sea.mp3',
   shrine: '/music/shrine.mp3',
+  paris: '/music/paris.mp3',
+  // the "loading Paris" hacker transition score (played manually over the hack screen)
+  'paris-transition': '/music/paris-transition.mp3',
 };
 
 // What the DJ can spin — places you've actually been.
@@ -145,13 +148,37 @@ const DJ_SETLIST: { scene: string; label: string }[] = [
   { scene: 'island', label: 'Kiwami Island breeze' },
   { scene: 'gacha', label: 'Gacha Gacha hall' },
   { scene: 'backrooms', label: 'the yellow hum (???)' },
+  { scene: 'paris', label: 'un café à Paris' },
 ];
 const MUSIC_VOL = 0.35;
 const MUSIC_FADE_MS = 700;
 
+// Fake-hacker terminal lines for the backrooms→Paris "the game got hacked"
+// transition. Purely cosmetic; scrolls past while Paris "loads". (Feature #21.)
+const HACK_LINES = [
+  '$ ./void_kernel --breach --target=GEO',
+  'mounting /dev/seam ... ok',
+  'bypassing konbini firewall ............ BYPASSED',
+  'decrypting tourist.manifest [Jean-Pierre] ... ok',
+  '! WARNING: reality checksum mismatch (0xC0FFEE)',
+  'resolving coordinates: 48.8584° N, 2.2945° E',
+  'rerouting through ZAMAZONK backbone .........',
+  '  >> node tokyo-204   [OK]',
+  '  >> node liminal-09  [OK]',
+  '  >> node PARIS-FR    [HANDSHAKE...]',
+  'streaming geometry: eiffel.mesh .... 41% .. 88% .. 100%',
+  'loading textures: cobblestone, seine, awning ... ok',
+  'spawning baguette_vendor.npc ... ok',
+  '! injecting accordion.wav into ambience',
+  'patching sky shader -> #bcd6ec ... ok',
+  'flushing yellow.hum from audio bus ... ok',
+  'rebuilding world tree ............... done',
+  'PARIS.EXE ready. dropping player in 3.. 2.. 1..',
+];
+
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki';
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending';
 
 interface Crawler { x: number; y: number; hp: number; stepT: number; hurtT: number; dir: Dir }
 
@@ -362,7 +389,7 @@ const LittleApartmentGame: React.FC = () => {
   // Windowed + forced scale: CSS width to size the layout box to the canvas
   // (so a forced scale isn't clipped at the 1000px cap). null = AUTO/filled.
   const [boxW, setBoxW] = useState<number | null>(null);
-  const [transition, setTransition] = useState<null | 'start' | 'freezer'>(null);
+  const [transition, setTransition] = useState<null | 'start' | 'freezer' | 'hack'>(null);
   const transTimers = useRef<number[]>([]);
   // Element fullscreen API exists on Android/desktop but NOT iOS Safari, which
   // only goes fullscreen via "Add to Home Screen". Used to pick the right CTA.
@@ -485,7 +512,7 @@ const LittleApartmentGame: React.FC = () => {
 
   // Cover the screen with a transition overlay, swap underneath while it's
   // opaque (coverMs), then uncover (totalMs). Timers cleared on unmount.
-  const runTransition = useCallback((kind: 'start' | 'freezer', action: () => void, coverMs: number, totalMs: number) => {
+  const runTransition = useCallback((kind: 'start' | 'freezer' | 'hack', action: () => void, coverMs: number, totalMs: number) => {
     transTimers.current.forEach(id => window.clearTimeout(id));
     transTimers.current = [];
     setTransition(kind);
@@ -656,17 +683,32 @@ const LittleApartmentGame: React.FC = () => {
     return bed ? { x: bed.x, y: bed.y, w: 2, h: 1 } : { x: 1, y: 1, w: 2, h: 1 };
   }, []);
 
-  // Cans go in your pocket — drink them from the phone (P), or share one with
-  // someone parched.
+  // The vending machine offers a couple of legally-distinct sodas; cans go in
+  // your pocket (drink from the phone, or share one with someone parched).
   const useVending = useCallback(() => {
+    setOverlayBoth({ type: 'shop', shop: 'vending' });
+  }, [setOverlayBoth]);
+
+  // Buy a soda into the pocket. 'peepis' has its own counter (legacy); every
+  // other can lives in s.sodas (e.g. the 'doofert' the Big Guy is after).
+  const buySoda = (id: string) => {
     const s = saveRef.current;
-    if (s.money < 150) { showDialog(['The machine hums. You count your coins. Not today.']); return; }
+    if (s.money < 150) return;
     s.money -= 150;
-    s.peepis += 1;
+    if (id === 'peepis') s.peepis += 1;
+    else s.sodas[id] = (s.sodas[id] ?? 0) + 1;
     sfxCoin();
-    persistSave(s); refreshHud();
-    showDialog([`CLUNK. A cold can of "Diet Doctor Peepis". Legally distinct, the can insists. You pocket it. (×${s.peepis})`]);
-  }, [showDialog, refreshHud]);
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const drinkDoofert = () => {
+    const s = saveRef.current;
+    if ((s.sodas.doofert ?? 0) <= 0 || s.energy >= maxEnergy(s)) return;
+    s.sodas.doofert -= 1;
+    s.energy = Math.min(maxEnergy(s), s.energy + 12);
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
 
   const eatCoconut = () => {
     const s = saveRef.current;
@@ -835,7 +877,24 @@ const LittleApartmentGame: React.FC = () => {
     if (npc) {
       // Merchants open their stalls; everyone else just talks.
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
-      if (npc.id === 'monster') { setOverlayBoth({ type: 'shop', shop: 'monster' }); return; }
+      if (npc.id === 'monster') {
+        // Once you own every one of his rares, The Manager lets you in on the
+        // secret: there's a way to Paris hidden in the backrooms. (Feature #19.)
+        if (s.monsterFed && allRaresOwned(s) && !s.parisRevealed) {
+          s.parisRevealed = true;
+          sfxCatch();
+          persistSave(s); refreshHud();
+          showDialog([
+            'The Manager goes still. "You have taken everything I had to sell. Every piece. Hm. Hmmm."',
+            '"Then I will tell you a secret, customer. That little tourist? Jean-Pierre? He did not come from your city at all."',
+            '"There is a SEAM in the wall — the top of this room. It opens to Paris. Real Paris. France. That is where he slipped in from."',
+            '"Go and see. Press yourself to the seam. It will... load." Its smile does something a smile should not do.',
+          ], 'The Manager');
+          return;
+        }
+        setOverlayBoth({ type: 'shop', shop: 'monster' });
+        return;
+      }
       if (npc.id === 'tex') { setOverlayBoth({ type: 'shop', shop: 'hat' }); return; }
       if (npc.id === 'dj') { setOverlayBoth({ type: 'shop', shop: 'dj' }); return; }
       if (npc.id === 'tiki') { setOverlayBoth({ type: 'shop', shop: 'tiki' }); return; }
@@ -850,6 +909,40 @@ const LittleApartmentGame: React.FC = () => {
           'Then a bar appears — HOLD E to raise the green zone, release to drop it. Keep the fish inside the zone until the catch meter fills.',
           '"The konbini buys whatever you pull out. Now go on. The water is not getting any younger, and neither am I."',
         ], 'Genji');
+        return;
+      }
+      // The Paris baguette vendor: hands you a baguette that heals a big chunk
+      // of energy (bigger than konbini food). (Feature #20.)
+      if (npc.id === 'baguette') {
+        if (s.money < 400) { showDialog(['"Une baguette, four hundred yen — oui, we take yen here, do not ask." He shrugs, very French.', 'You count your coins. Not today.'], 'Baguette Vendor'); return; }
+        if (s.energy >= maxEnergy(s)) { showDialog(['"You are already full of life, mon ami! Come back when ze city has tired you out."'], 'Baguette Vendor'); return; }
+        s.money -= 400;
+        s.energy = Math.min(maxEnergy(s), s.energy + 70);
+        sfxCatch();
+        persistSave(s); refreshHud();
+        showDialog(['He tears a baguette from the rack, still warm, and presses it into your arms.', 'You eat it on the spot, like a barbarian. It is the best thing you have ever tasted. (+70 energy)'], 'Baguette Vendor');
+        return;
+      }
+      // The Big Guy at Club Kaiju: brushes you off until you bring him a "Diet
+      // Mountain Doofert", then reveals the konbini freezer portal. (Feature #18.)
+      if (npc.id === 'kaiju' && !s.backroomsUnlocked) {
+        if ((s.sodas.doofert ?? 0) > 0) {
+          s.sodas.doofert -= 1;
+          s.backroomsUnlocked = true;
+          sfxCatch();
+          persistSave(s); refreshHud();
+          showDialog([
+            'You hold up the "Diet Mountain Doofert". The Big Guy\'s eyes go wide as manhole covers.',
+            'He drains the whole can in one pull, lets out a belch that resets the DJ\'s playlist, and finally crouches down to your level.',
+            '"...Okay. You\'re alright, little one. Listen — that konbini on Kawamachi St.? The walk-in freezer in back? It is not a freezer."',
+            '"Step through the cold. There is a whole place behind the city. The yellow place. Tell them the Big Guy sent you."',
+          ], 'The Big Guy');
+        } else {
+          showDialog([
+            'The Big Guy barely glances down from the dance floor. "Mnh. Busy. Dancing."',
+            'He sniffs the air, disappointed. "...You don\'t even have a Doofert. Diet Mountain. The good stuff. Bring me one, then we talk."',
+          ], 'The Big Guy');
+        }
         return;
       }
       const voice = NPC_VOICES[npc.id];
@@ -944,6 +1037,14 @@ const LittleApartmentGame: React.FC = () => {
         break;
       }
       case 'portal': {
+        // Sealed until the Big Guy at Club Kaiju lets you in on the secret.
+        if (!s.backroomsUnlocked) {
+          showDialog([
+            'You haul the walk-in freezer open. Cold air, frost, stacked drink crates — and a solid back wall behind them.',
+            'There is nothing here. Just a wall, and the hum of the compressors. Not yet, anyway.',
+          ]);
+          break;
+        }
         sfxBackroomsWarp();
         // Cold-flash teleport: swap to the backrooms while the screen is covered.
         runTransition('freezer', () => {
@@ -963,6 +1064,32 @@ const LittleApartmentGame: React.FC = () => {
       }
       case 'portal-exit':
         enterScene('konbini', 4, 2, 'down');
+        break;
+      case 'paris-portal': {
+        // The secret entrance only "loads" once The Manager has revealed it.
+        if (!s.parisRevealed) {
+          showDialog(['Just a hairline seam in the endless yellow wall. You press it. It does not give. Not yet.']);
+          break;
+        }
+        // The game gets "hacked": a long fake-terminal screen loads Paris while
+        // the transition score plays, then drops you into the map. (Feature #21.)
+        playMusicFor('paris-transition');
+        runTransition('hack', () => {
+          enterScene('paris', 12, 8, 'down');
+          if (!s.storySeen.includes('paris-intro')) {
+            s.storySeen.push('paris-intro');
+            persistSave(s);
+            showDialog([
+              'The terminal blinks out. The yellow hum is gone.',
+              'Cobblestones. A café. The smell of bread and river water. Above it all, impossibly, the Eiffel Tower.',
+              'Somewhere a long way from your little apartment, you are standing in Paris.',
+            ]);
+          }
+        }, 6000, 6600);
+        break;
+      }
+      case 'seine':
+        showDialog(['The Seine slides past, brown and unhurried, carrying the lights of the bridges.', 'You could stand here a while. You are, technically, very far from home.']);
         break;
       case 'descend':
         if (!s.wand) {
@@ -1008,7 +1135,7 @@ const LittleApartmentGame: React.FC = () => {
       case 'fish-tropical': startCast(faced, 'tropical'); break;
       case 'fish-spot': startCast(faced, 'shallow'); break;
     }
-  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, enterScene, refreshHud, runTransition, award]);
+  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, enterScene, refreshHud, runTransition, award, playMusicFor]);
 
   // ---- update -----------------------------------------------------------------
 
@@ -1582,6 +1709,8 @@ const LittleApartmentGame: React.FC = () => {
       if (scene.id === 'deepsea' && !label) label = (feet.y >= 10 || faced.y >= 11) ? 'Sail south to go home' : 'Drop a line';
       // the freezer keeps its secret until you've been through once
       if (it?.id === 'portal' && !saveRef.current.storySeen.includes('backrooms-intro')) label = npcT ? 'Talk' : undefined;
+      // the Paris seam looks like a blank wall until The Manager reveals it
+      if (it?.id === 'paris-portal' && !saveRef.current.parisRevealed) label = npcT ? 'Talk' : undefined;
       if (scene.id === 'mines') {
         const node = oreNodesRef.current.find(n => n.x === faced.x && n.y === faced.y);
         if (node) label = `Mine ${node.mineral.name}`;
@@ -2422,7 +2551,7 @@ const LittleApartmentGame: React.FC = () => {
               ));
             })()}
 
-        {(s.peepis > 0 || s.coconuts > 0) && (
+        {(s.peepis > 0 || s.coconuts > 0 || (s.sodas.doofert ?? 0) > 0) && (
           <>
             <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3">POCKET</p>
             {s.coconuts > 0 && (
@@ -2435,6 +2564,12 @@ const LittleApartmentGame: React.FC = () => {
               <div className="flex items-center gap-2 py-1">
                 <p className="flex-grow text-base opacity-80">"Diet Doctor Peepis" ×{s.peepis} <span className="opacity-50">(+12 en)</span></p>
                 <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={drinkPeepis}>DRINK</button>
+              </div>
+            )}
+            {(s.sodas.doofert ?? 0) > 0 && (
+              <div className="flex items-center gap-2 py-1">
+                <p className="flex-grow text-base opacity-80">"Diet Mountain Doofert" ×{s.sodas.doofert} <span className="opacity-50">(+12 en)</span></p>
+                <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s)} onClick={drinkDoofert}>DRINK</button>
               </div>
             )}
           </>
@@ -2688,6 +2823,28 @@ const LittleApartmentGame: React.FC = () => {
     void shopTick;
     const s = saveRef.current;
     const close = () => setOverlayBoth(null);
+
+    if (ov.shop === 'vending') {
+      const doofert = s.sodas.doofert ?? 0;
+      return (
+        <ShopFrame title="VENDING MACHINE" subtitle="Cold cans, legally distinct. ¥150 each — they go in your pocket." money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+            <div className="flex-grow min-w-0">
+              <p className="text-xl leading-tight">"Diet Doctor Peepis" ×{s.peepis}</p>
+              <p className="text-sm opacity-60 leading-tight">The can insists it is legally distinct. Drink it later for +12 energy.</p>
+            </div>
+            <button className={`${btnCls} shrink-0`} disabled={s.money < 150} onClick={() => buySoda('peepis')}>¥150</button>
+          </div>
+          <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+            <div className="flex-grow min-w-0">
+              <p className="text-xl leading-tight">"Diet Mountain Doofert" ×{doofert}</p>
+              <p className="text-sm opacity-60 leading-tight">EXTREME citrus. +12 energy — and they say a certain Big Guy downtown is mad for it.</p>
+            </div>
+            <button className={`${btnCls} shrink-0`} disabled={s.money < 150} onClick={() => buySoda('doofert')}>¥150</button>
+          </div>
+        </ShopFrame>
+      );
+    }
 
     if (ov.shop === 'denden') {
       return (
@@ -3662,6 +3819,12 @@ const LittleApartmentGame: React.FC = () => {
               .lab-transition-freezer .lab-trans-inner{animation:labShake 220ms steps(2) infinite}
               .lab-blink{animation:labBlink 700ms steps(2,end) infinite}
               .lab-glitch{animation:labGlitch 280ms steps(2,end) infinite}
+              @keyframes labHackFade { 0%{opacity:0} 3%{opacity:1} 92%{opacity:1} 100%{opacity:0} }
+              @keyframes labHackScroll { 0%{transform:translateY(40%)} 100%{transform:translateY(-62%)} }
+              @keyframes labHackBar { 0%{width:0%} 20%{width:18%} 45%{width:42%} 70%{width:75%} 90%{width:96%} 100%{width:100%} }
+              .lab-transition-hack{background:#04080a;animation:labHackFade 6600ms linear forwards}
+              .lab-hack-scroll{animation:labHackScroll 6200ms linear forwards}
+              .lab-hack-bar{width:0%;animation:labHackBar 6000ms ease-in-out forwards}
             `}</style>
             <div className={`lab-transition lab-transition-${transition}`}>
               {transition === 'start' ? (
@@ -3669,6 +3832,26 @@ const LittleApartmentGame: React.FC = () => {
                   <p className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">LITTLE APARTMENT,</p>
                   <p className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">BIG CITY</p>
                   <p className="font-pixel text-[#9fc4e8] text-base mt-3 lab-blink">starting…</p>
+                </div>
+              ) : transition === 'hack' ? (
+                <div className="lab-trans-inner absolute inset-0 overflow-hidden bg-[#04080a]">
+                  <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(#7cff9a 0 1px, transparent 1px 3px)' }} />
+                  <div className="absolute inset-0 px-3 sm:px-8 py-3 font-pixel text-[#7cff9a] text-xs sm:text-base leading-snug text-left">
+                    <p className="text-[#7ce8e0] mb-2 lab-glitch tracking-widest">ZAMAZONK://VOID-KERNEL — UNAUTHORIZED GEO-BREACH</p>
+                    <div className="lab-hack-scroll">
+                      {HACK_LINES.concat(HACK_LINES).map((l, i) => (
+                        <p key={i} className={l.startsWith('!') ? 'text-[#e0552e]' : ''}>
+                          {l}{i % HACK_LINES.length === HACK_LINES.length - 1 ? <span className="lab-blink"> █</span> : null}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="absolute bottom-0 inset-x-0 px-3 sm:px-8 py-3 bg-black/70 border-t border-[#7cff9a]/30">
+                    <p className="font-pixel text-[#7cff9a] text-sm sm:text-lg lab-glitch">LOADING PARIS.EXE …</p>
+                    <div className="mt-1 h-3 border border-[#7cff9a]/60">
+                      <div className="h-full bg-[#7cff9a] lab-hack-bar" />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="lab-trans-inner text-center px-4">
