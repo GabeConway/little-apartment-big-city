@@ -7,7 +7,7 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS,
+  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, FORAGE,
 } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
@@ -74,6 +74,8 @@ export interface GameSave {
   lotteryDay: number;           // day a konbini lottery ticket was bought (0 = none); resolves next morning
   leftKonbiniAt: number | null; // absolute in-game minute you first left the konbini (job unlocks ~1h later)
   sketchyDay: number;           // last day a deal was bought from the sketchy guy
+  forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
+  foragedSpots: number[];       // indices of today's shore finds already grabbed
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
   messages: PhoneMessage[];     // smartphone texts delivered so far
@@ -166,6 +168,8 @@ export const newSave = (): GameSave => ({
   lotteryDay: 0,
   leftKonbiniAt: null,
   sketchyDay: 0,
+  forageDay: 0,
+  foragedSpots: [],
   ended: false,
   today: freshDayLog(3000),
   messages: [],
@@ -286,6 +290,29 @@ export const pawnStockFor = (s: GameSave): PawnOffer[] => {
     picks.push({ itemId: f.id, price: Math.round((f.price * PAWN_DISCOUNT * wobble) / 10) * 10 });
   }
   return picks;
+};
+
+// Shore foraging: a daily-seeded scatter of beach finds on the walkable sand —
+// ungated early money (instant cash on pickup). Resets each new day (cf.
+// mineLayoutFor / pawnStockFor). `foragedSpots` holds the indices already grabbed
+// today, so finds you skip stay put but ones you took don't respawn until morning.
+export interface ForageSpot { x: number; y: number; kind: string }
+export const shoreForageFor = (s: GameSave): ForageSpot[] => {
+  if (s.forageDay !== s.day) { s.forageDay = s.day; s.foragedSpots = []; }
+  const rand = mulberry32(s.day * 2246822519 + 71);
+  // walkable beach sand on the shore map (rows 5-8, cols 1..22)
+  const tiles: { x: number; y: number }[] = [];
+  for (let y = 5; y <= 8; y++) for (let x = 1; x <= 22; x++) tiles.push({ x, y });
+  for (let i = tiles.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; }
+  const count = 4 + Math.floor(rand() * 3); // 4-6 finds a day
+  const totalW = FORAGE.reduce((a, f) => a + f.weight, 0);
+  const spots: ForageSpot[] = [];
+  for (let i = 0; i < count; i++) {
+    let r = rand() * totalW, kind = FORAGE[0].id;
+    for (const f of FORAGE) { r -= f.weight; if (r <= 0) { kind = f.id; break; } }
+    spots.push({ x: tiles[i].x, y: tiles[i].y, kind });
+  }
+  return spots;
 };
 
 export const buyFurniture = (s: GameSave, itemId: string, price: number): boolean => {

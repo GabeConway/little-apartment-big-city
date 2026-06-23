@@ -776,6 +776,33 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#5a3c24'; ctx.fillRect(4, 13, 8, 1);
   });
 
+  // Shore foraging finds — small props drawn over the sand (transparent bg, so
+  // the beach shows through). Each sits low-center on its tile.
+  atlas['t-forage-shell'] = tile(ctx => {            // spiral shell
+    ctx.fillStyle = '#e8d2b0'; ctx.fillRect(6, 8, 5, 5);
+    ctx.fillStyle = '#d8b890'; ctx.fillRect(6, 8, 5, 2); ctx.fillRect(6, 8, 2, 5);
+    ctx.fillStyle = '#c99a78'; ctx.fillRect(8, 10, 2, 2);
+    ctx.fillStyle = '#fff4e4'; ctx.fillRect(7, 9, 1, 1);
+  });
+  atlas['t-forage-wood'] = tile(ctx => {             // driftwood stick
+    ctx.fillStyle = '#a98a68'; ctx.fillRect(4, 10, 9, 3);
+    ctx.fillStyle = '#c4a884'; ctx.fillRect(4, 10, 9, 1);
+    ctx.fillStyle = '#856648'; ctx.fillRect(4, 12, 9, 1);
+    ctx.fillStyle = '#6e5238'; ctx.fillRect(7, 11, 1, 1); ctx.fillRect(10, 11, 1, 1);
+  });
+  atlas['t-forage-glass'] = tile(ctx => {            // sea glass
+    ctx.fillStyle = '#7ec8a0'; ctx.fillRect(6, 9, 4, 4);
+    ctx.fillStyle = '#a4e4c0'; ctx.fillRect(6, 9, 4, 1); ctx.fillRect(6, 9, 1, 4);
+    ctx.fillStyle = '#5aa080'; ctx.fillRect(9, 12, 1, 1);
+    ctx.fillStyle = '#e8fff4'; ctx.fillRect(7, 10, 1, 1);
+  });
+  atlas['t-forage-coin'] = tile(ctx => {             // lost coins
+    ctx.fillStyle = '#caa23a'; ctx.fillRect(5, 9, 4, 4); ctx.fillRect(8, 10, 4, 4);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 9, 4, 1); ctx.fillRect(8, 10, 4, 1);
+    ctx.fillStyle = '#8a6a1e'; ctx.fillRect(5, 12, 4, 1); ctx.fillRect(8, 13, 4, 1);
+    ctx.fillStyle = '#fff4c4'; ctx.fillRect(6, 10, 1, 1); ctx.fillRect(9, 11, 1, 1);
+  });
+
   // Shop interiors
   atlas['t-shopfloor'] = tile(ctx => {
     fill(ctx, '#d8d2c4');

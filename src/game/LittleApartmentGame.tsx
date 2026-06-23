@@ -33,7 +33,7 @@ import {
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
-  itemKind, MUSEUM_SLOTS, CROPS,
+  itemKind, MUSEUM_SLOTS, CROPS, FORAGE, forageById,
 } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
@@ -45,7 +45,7 @@ import {
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
   shrineLuck, syncMessages, unreadCount,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
-  isRainyDay, plantCrop, harvestCrop, plotReady, growGreenhouse,
+  isRainyDay, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
@@ -1290,6 +1290,29 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // Shore: grab a daily beach find for instant cash (ungated early money).
+    if (scene.id === 'shore') {
+      const spots = shoreForageFor(s);
+      const idx = spots.findIndex((sp, i) =>
+        !s.foragedSpots.includes(i) &&
+        ((sp.x === faced.x && sp.y === faced.y) || (sp.x === feet.x && sp.y === feet.y)));
+      if (idx >= 0) {
+        const spot = spots[idx];
+        const kind = forageById(spot.kind);
+        const value = Math.round((kind.min + Math.random() * (kind.max - kind.min)) / 10) * 10;
+        s.money += value;
+        s.foragedSpots.push(idx);
+        mineTextRef.current = { x: spot.x * TILE, y: spot.y * TILE, text: `+¥${value.toLocaleString()}`, color: '#ffd24a', t: 1.1 };
+        sfxCoin();
+        if (!s.storySeen.includes('forage-howto')) {
+          s.storySeen.push('forage-howto');
+          showDialog([`${kind.name} — ${kind.blurb} (+¥${value.toLocaleString()})`, 'The bay washes up small finds like this every day. Comb the sand each morning for easy pocket money.']);
+        }
+        persistSave(s); refreshHud();
+        return;
+      }
+    }
+
     // Mines: descend the (randomly-placed) ladder, mine ore / free a geode, or
     // let your weapon do the talking.
     if (scene.id === 'mines') {
@@ -2375,6 +2398,16 @@ const LittleApartmentGame: React.FC = () => {
     }
     if (sparkleRef.current) {
       ctx.drawImage(atlas['m-sparkle'], Math.round(sparkleRef.current.x) - cam.x, Math.round(sparkleRef.current.y) - cam.y + 2);
+    }
+    // Shore: scatter today's uncollected beach finds on the sand.
+    if (scene.id === 'shore') {
+      const spots = shoreForageFor(saveRef.current);
+      const taken = saveRef.current.foragedSpots;
+      for (let i = 0; i < spots.length; i++) {
+        if (taken.includes(i)) continue;
+        const sp = spots[i];
+        ctx.drawImage(atlas[forageById(sp.kind).sprite], sp.x * TILE - cam.x, sp.y * TILE - cam.y);
+      }
     }
     if (mineTextRef.current) {
       const mt = mineTextRef.current;
@@ -4023,6 +4056,7 @@ const LittleApartmentGame: React.FC = () => {
       const fishCount = Object.values(s.fishLog).reduce((a, b) => a + b, 0);
       const goals: { text: string; done: boolean }[] = [];
       goals.push({ text: `Furnish the apartment — ${placedBase}/${FURNITURE.length} placed`, done: placedBase >= FURNITURE.length });
+      if (s.money < 5000) goals.push({ text: 'Short on cash? Comb the beach each morning — the bay washes up finds worth quick yen', done: false });
       if (!s.canFish) goals.push({ text: 'Meet Genji on Sumikawa Shore — learn to fish', done: false });
       else if (s.fishRod < 1) goals.push({ text: "Buy Genji's upgraded rod (bigger fish, deeper water)", done: false });
       if (s.canFish && !s.fishLog['golden']) goals.push({ text: 'Land the legendary Golden Carp', done: false });

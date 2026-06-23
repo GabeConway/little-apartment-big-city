@@ -334,6 +334,20 @@ export const RODS: Rod[] = [
 ];
 export const rodInfo = (tier: number): Rod => RODS[Math.max(0, Math.min(RODS.length - 1, tier))];
 
+// ---- Shore foraging ---------------------------------------------------------
+// Ungated EARLY money: the beach washes up small finds each day, grabbed for
+// instant cash (no rod, no job, day 1). Placement is seeded per day in state.ts
+// (shoreForageFor); this is the kind table — name, sprite, yen range, spawn
+// weight, flavor. Add a kind here + a matching sprite to expand the loot.
+export interface ForageKind { id: string; name: string; sprite: string; min: number; max: number; weight: number; blurb: string }
+export const FORAGE: ForageKind[] = [
+  { id: 'shell', name: 'Spiral Shell', sprite: 't-forage-shell', min: 40, max: 90, weight: 5, blurb: 'A perfect little spiral. The konbini resells these to tourists.' },
+  { id: 'wood', name: 'Driftwood', sprite: 't-forage-wood', min: 30, max: 70, weight: 4, blurb: 'Smooth, salt-bleached. Someone always wants kindling.' },
+  { id: 'glass', name: 'Sea Glass', sprite: 't-forage-glass', min: 90, max: 170, weight: 3, blurb: 'A frosted bead of green, tumbled soft by the bay.' },
+  { id: 'coin', name: 'Lost Coins', sprite: 't-forage-coin', min: 220, max: 420, weight: 1, blurb: "Someone's loss, your gain — sand-polished yen." },
+];
+export const forageById = (id: string): ForageKind => FORAGE.find(f => f.id === id) ?? FORAGE[0];
+
 export const fishById = (id: string): Fish =>
   (FISH.find(f => f.id === id) ?? DEEP_FISH.find(f => f.id === id) ?? TROPICAL_FISH.find(f => f.id === id))!;
 
