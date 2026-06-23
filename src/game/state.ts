@@ -50,6 +50,7 @@ export interface GameSave {
   minerals: Record<string, number>; // mineral id -> count
   wand: boolean;                // the magical girl wand
   visited: string[];            // scene ids seen (the DJ only plays places you know)
+  metStores: string[];          // store ids you've interacted with (gave your number → they can text you)
   donated: number;              // total yen offered at the shrine
   minedDay: number;             // day the mined-node list belongs to
   minedNodes: string[];         // "x,y" ore nodes already mined today
@@ -114,6 +115,7 @@ export const newSave = (): GameSave => ({
   minerals: {},
   wand: false,
   visited: ['apartment'],
+  metStores: [],
   donated: 0,
   minedDay: 0,
   minedNodes: [],
@@ -324,6 +326,7 @@ const msgCtx = (s: GameSave): MsgCtx => ({
   day: s.day,
   timeMin: s.timeMin,
   leftKonbiniAt: s.leftKonbiniAt,
+  metStores: s.metStores,
   owned: s.owned,
   placedCount: Object.keys(s.placed).length,
   money: s.money,

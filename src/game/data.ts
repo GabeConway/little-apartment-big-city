@@ -284,6 +284,7 @@ export interface MsgCtx {
   day: number;
   timeMin: number;     // in-game clock (minutes since midnight) — for time-gated day-1 texts
   leftKonbiniAt: number | null; // absolute minute you first left the konbini (job offer fires ~1h later)
+  metStores: string[];          // store ids you've introduced yourself to (gave your number)
   owned: string[];
   placedCount: number;
   money: number;
@@ -339,7 +340,7 @@ export const MESSAGES: MessageDef[] = [
   },
   {
     id: 'dokidoki-promo', from: 'Doki Doki Discount 🛒', avatar: '🛒', company: true,
-    when: c => c.visited.includes('city'),
+    when: c => c.metStores.includes('denden'),
     body: [
       '♥ DOKI DOKI DISCOUNT ♥ — your home electronics superstore!',
       'TV, fridge, AC, microwave — everything to make 19 sqm feel like 20. New stock weekly.',
@@ -358,7 +359,7 @@ export const MESSAGES: MessageDef[] = [
   },
   {
     id: 'konbini-coupon', from: 'Konbini 24h 🏪', avatar: '🏪', company: true,
-    when: c => c.visited.includes('konbini'),
+    when: c => c.metStores.includes('konbini'),
     body: [
       'Thanks for stopping by KONBINI 24H!',
       'Reminder: we buy fresh fish at the counter, and the back freezer is staff-only. Do not mind the humming.',

@@ -1081,8 +1081,30 @@ const LittleApartmentGame: React.FC = () => {
       case 'ascend':
         enterScene('backrooms', 12, 9, 'down');
         break;
-      case 'shop-denden': setOverlayBoth({ type: 'shop', shop: 'denden' }); break;
-      case 'shop-konbini': setOverlayBoth({ type: 'shop', shop: 'konbini' }); break;
+      case 'shop-denden':
+        if (!s.metStores.includes('denden')) {
+          s.metStores.push('denden'); persistSave(s); refreshHud();
+          showDialog([
+            '"Irasshaimase! Welcome to DOKI DOKI DISCOUNT — your home electronics superstore!"',
+            '"TVs, fridges, ACs, microwaves. Everything to make 19 square meters feel like 20."',
+            '"Mind if we take your number? For deals. Definitely just deals. 🛒"',
+          ], 'Doki Doki Discount');
+          break;
+        }
+        setOverlayBoth({ type: 'shop', shop: 'denden' });
+        break;
+      case 'shop-konbini':
+        if (!s.metStores.includes('konbini')) {
+          s.metStores.push('konbini'); persistSave(s); refreshHud();
+          showDialog([
+            '"Welcome to KONBINI 24H! Hot food, cold drinks, and we buy fresh fish at the counter."',
+            '"The back freezer is staff-only. Do not mind the humming."',
+            '"We will text you the good stuff — what is your number? 🏪"',
+          ], 'Konbini 24h');
+          break;
+        }
+        setOverlayBoth({ type: 'shop', shop: 'konbini' });
+        break;
       case 'shop-pawn': setOverlayBoth({ type: 'shop', shop: 'pawn' }); break;
       case 'shop-garage': setOverlayBoth({ type: 'shop', shop: 'garage' }); break;
       case 'boat': setOverlayBoth({ type: 'shop', shop: 'boat' }); break;
