@@ -231,8 +231,8 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
   ],
   nightclub: [
-    { text: 'バー', x: 1, y: 1, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', font: 8, blink: true },
-    { text: '☄ KAIJU ☄', x: 9, y: 1, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 7, blink: true },
+    { text: 'バー', x: 1, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', font: 8, blink: true },
+    { text: '☄ KAIJU ☄', x: 9, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 7, blink: true },
   ],
   shore: [
     { text: "ぼうし TEX'S HATS", x: 4, y: 2, color: '#e8e0d0', bg: '#6e4a2f', border: '#b08a50', font: 7 },

@@ -677,6 +677,7 @@ const LittleApartmentGame: React.FC = () => {
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
   const shrineHealRef = useRef(0);   // accumulates real seconds for the very-slow shrine energy heal
   const signGlowRef = useRef(new Map<object, HTMLCanvasElement>()); // cached neon-bloom sprites per sign (built once, not per frame)
+  const glowSpriteRef = useRef(new Map<string, HTMLCanvasElement>()); // cached radial light sprites (club lights, street lamps) — built once, blitted per frame
   const wanderersRef = useRef<Wanderer[]>([]); // live positions of gently-pacing NPCs in the current scene
   const djPickRef = useRef<string | null>(null);
 
@@ -1587,7 +1588,8 @@ const LittleApartmentGame: React.FC = () => {
           w.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
           w.moving = true;
         } else {
-          w.moving = Math.random() < 0.6;
+          // Dancers mostly stay put and dance in place; only occasionally shuffle.
+          w.moving = Math.random() < (DANCER_IDS.has(w.id) ? 0.22 : 0.6);
           if (w.moving) w.dir = (['up', 'down', 'left', 'right'] as Dir[])[Math.floor(Math.random() * 4)];
         }
       }
@@ -2161,30 +2163,60 @@ const LittleApartmentGame: React.FC = () => {
     // Club Kaiju: a dim room lit by sweeping colored spotlights + a disco-ball
     // glow, with the occasional strobe flash. The dance-floor tiles already
     // ripple colors; this is the lighting on top.
+    // Pre-rendered radial light sprite, built once per color and cached —
+    // blitting these is far cheaper than createRadialGradient + full-screen fill
+    // every frame (which tanked the club's FPS). Shared by the club + lamps.
+    const glow = (rgb: string): HTMLCanvasElement => {
+      const cache = glowSpriteRef.current;
+      let c = cache.get(rgb);
+      if (!c) {
+        const S = 96;
+        c = document.createElement('canvas'); c.width = S; c.height = S;
+        const gx = c.getContext('2d')!;
+        const rg = gx.createRadialGradient(S / 2, S / 2, 2, S / 2, S / 2, S / 2);
+        rg.addColorStop(0, `rgba(${rgb},1)`); rg.addColorStop(1, `rgba(${rgb},0)`);
+        gx.fillStyle = rg; gx.fillRect(0, 0, S, S);
+        cache.set(rgb, c);
+      }
+      return c;
+    };
+
+    // Downtown street lamps cast a soft warm glow from each lamp head.
+    if (scene.id === 'badtown') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const lamp = glow('255,233,160');
+      for (let ty = ty0; ty <= ty1; ty++) {
+        const row = scene.grid[ty];
+        for (let tx = tx0; tx <= tx1; tx++) {
+          if (row[tx] !== 'L') continue;
+          const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 3;
+          ctx.globalAlpha = 0.20 + 0.04 * Math.sin(t * 2 + tx);  // faint flicker
+          ctx.drawImage(lamp, gx - 22, gy - 22, 44, 44);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
     if (scene.id === 'nightclub') {
-      ctx.fillStyle = 'rgba(10, 8, 22, 0.34)';       // dim the room so the lights pop
+      ctx.fillStyle = 'rgba(10, 8, 22, 0.34)';       // dim the room so the lights pop (one cheap fill)
       ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const beams: [string, number][] = [['232,87,168', 0], ['124,232,224', 2.1], ['255,210,74', 4.2], ['176,106,208', 1.0]];
+      const beams: [string, number][] = [['232,87,168', 0], ['124,232,224', 2.1], ['255,210,74', 4.2]];
       const bx = 11 * TILE - cam.x + 8, by = 2 * TILE - cam.y + 8; // origin near the DJ booth
       for (const [rgb, ph] of beams) {
         const fx = bx + Math.sin(t * 0.8 + ph) * 90;             // sweep across the floor
         const fy = by + 96 + Math.sin(t * 0.5 + ph) * 16;
-        const a = 0.12 + 0.07 * Math.sin(t * 3 + ph);
-        const g = ctx.createRadialGradient(fx, fy, 3, fx, fy, 64);
-        g.addColorStop(0, `rgba(${rgb},${a})`);
-        g.addColorStop(1, `rgba(${rgb},0)`);
-        ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+        ctx.globalAlpha = 0.18 + 0.1 * Math.sin(t * 3 + ph);
+        ctx.drawImage(glow(rgb), fx - 48, fy - 48, 96, 96);      // only a 96px blit, not the whole screen
       }
-      const dbx = 8 * TILE - cam.x, dby = 1 * TILE - cam.y + 4; // disco-ball glow, top-center
-      const da = 0.18 + 0.1 * Math.sin(t * 6);
-      const dg = ctx.createRadialGradient(dbx, dby, 1, dbx, dby, 28);
-      dg.addColorStop(0, `rgba(230,240,255,${da})`); dg.addColorStop(1, 'rgba(230,240,255,0)');
-      ctx.fillStyle = dg; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      const dbx = 8 * TILE - cam.x, dby = 1 * TILE - cam.y + 4;  // disco-ball glow, top-center
+      ctx.globalAlpha = 0.22 + 0.12 * Math.sin(t * 6);
+      ctx.drawImage(glow('230,240,255'), dbx - 32, dby - 32, 64, 64);
+      ctx.globalAlpha = 1;
       ctx.restore();
-      const strobe = (t % 2.4) < 0.05 ? 0.16 : 0;                // brief strobe flash
-      if (strobe > 0) { ctx.fillStyle = `rgba(255,255,255,${strobe})`; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH); }
     }
 
     // Mines: claustrophobic dark — you only see a few tiles around you (the wand
