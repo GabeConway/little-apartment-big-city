@@ -873,7 +873,7 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker });
   }, [setOverlayBoth]);
 
-  // Typewriter: reveal the current dialog line char-by-char (~36 cps). Restarts
+  // Typewriter: reveal the current dialog line char-by-char (~83 cps). Restarts
   // whenever the overlay (line/idx) changes; cleared on unmount/overlay change.
   useEffect(() => {
     if (overlay?.type !== 'dialog') { typedRef.current = 0; return; }
@@ -885,7 +885,7 @@ const LittleApartmentGame: React.FC = () => {
       typedRef.current = Math.min(full.length, typedRef.current + 1);
       setTyped(typedRef.current);
       if (typedRef.current >= full.length) window.clearInterval(id);
-    }, 28);
+    }, 12);
     return () => window.clearInterval(id);
   }, [overlay]);
 
@@ -5067,7 +5067,7 @@ const LittleApartmentGame: React.FC = () => {
               <div className="flex items-end gap-2">
                 {hasPortrait && (
                   imgSrc
-                    ? <img src={imgSrc} alt={overlay.speaker} className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 self-end" style={{ imageRendering: 'pixelated' }} />
+                    ? <img src={imgSrc} alt={overlay.speaker} className="w-28 h-28 sm:w-36 sm:h-36 shrink-0 self-end" style={{ imageRendering: 'pixelated' }} />
                     : <div className={`${panelCls} p-1 shrink-0 self-end`}>
                         <DialogPortrait speaker={overlay.speaker!} />
                       </div>
