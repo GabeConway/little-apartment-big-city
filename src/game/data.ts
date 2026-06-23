@@ -75,6 +75,52 @@ export const itemKind = (id: string): SpotKind => {
   return 'single';
 };
 
+// ---- The Museum (Downtown) --------------------------------------------------
+// Bingus Doofelsmurt's gallery. The player finds objects out in the world and
+// DONATES them to fill these display slots, Stardew-community-center style.
+// This is the FRAMEWORK: the slots are empty placeholders. Actual collectible
+// items get wired to `accepts` later; for now nothing fills them.
+//   kind 'artifact' = a floor pedestal/plinth (single object of interest)
+//   kind 'art'      = a wall-mounted picture frame (an art piece)
+//   x, y            = the pedestal/frame tile in the `museum` scene (maps.ts)
+//   accepts         = the item id a slot wants (added when collectibles land)
+export interface MuseumSlot {
+  id: string;
+  label: string;
+  kind: 'artifact' | 'art';
+  accepts?: string;
+  x: number; y: number;
+  blurb: string;
+}
+export const MUSEUM_SLOTS: MuseumSlot[] = [
+  // Wall art (the back wall, row 0)
+  { id: 'art-alley', label: 'The Vanishing Alley', kind: 'art', x: 2, y: 0,
+    blurb: 'A back-street that, per the placard, "is no longer there, and possibly never was."' },
+  { id: 'art-madonna', label: 'Neon Madonna', kind: 'art', x: 5, y: 0,
+    blurb: 'Painted entirely in colors that only exist after midnight.' },
+  { id: 'art-bento', label: 'Still Life with Konbini Bento', kind: 'art', x: 8, y: 0,
+    blurb: 'Bingus calls it "the most honest meal ever committed to canvas."' },
+  { id: 'art-cat', label: 'Portrait of a Stray, Unbothered', kind: 'art', x: 11, y: 0,
+    blurb: 'The cat is not looking at you. The cat will never look at you.' },
+  // Pedestals — objects of interest (rows 2 and 4)
+  { id: 'arti-coin', label: 'First Coin of the Realm', kind: 'artifact', x: 2, y: 2,
+    blurb: '"The very first ¥1 anyone ever dropped in a vending machine here." Provenance: dubious.' },
+  { id: 'arti-token', label: 'The Unbreakable Token', kind: 'artifact', x: 5, y: 2,
+    blurb: 'A vending token that has outlived three vending machines.' },
+  { id: 'arti-onigiri', label: 'Fossilized Onigiri', kind: 'artifact', x: 8, y: 2,
+    blurb: 'Left in a coat pocket. Geologically speaking, it is now a mineral.' },
+  { id: 'arti-rock', label: 'A Perfectly Ordinary Rock', kind: 'artifact', x: 11, y: 2,
+    blurb: '"Allegedly," reads the placard, in Bingus\'s nervous handwriting.' },
+  { id: 'arti-lure', label: "Genji's Lost Lure", kind: 'artifact', x: 2, y: 4,
+    blurb: 'It caught everything but the one fish he wanted.' },
+  { id: 'arti-shard', label: 'Shard of the Deep', kind: 'artifact', x: 5, y: 4,
+    blurb: 'Still faintly humming. Bingus keeps it under glass, just in case.' },
+  { id: 'arti-capsule', label: 'The Last Gachapon Capsule', kind: 'artifact', x: 8, y: 4,
+    blurb: 'Empty. The figure inside it has been missing for three years. Mr. Maeda wept.' },
+  { id: 'arti-meteor', label: 'Meteorite (or Burnt Toast)', kind: 'artifact', x: 11, y: 4,
+    blurb: 'Curatorial consensus has not been reached.' },
+];
+
 // In-game achievements — completely separate from the site-wide system in
 // utils/achievements.ts (which feeds the cake). These live in the game save.
 export interface GameAchievement { id: string; title: string; desc: string; hint: string }

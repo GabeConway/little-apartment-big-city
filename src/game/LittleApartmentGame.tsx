@@ -32,7 +32,7 @@ import {
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
-  itemKind,
+  itemKind, MUSEUM_SLOTS,
 } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
@@ -142,6 +142,7 @@ const SCENE_MUSIC: Record<string, string> = {
   island: '/music/island.mp3',
   deepsea: '/music/deep-sea.mp3',
   shrine: '/music/shrine.mp3',
+  museum: '/music/shrine.mp3', // quiet gallery ambiance (reuses the calm shrine track)
   paris: '/music/paris.mp3',
   // the "loading Paris" hacker transition score (played manually over the hack screen)
   'paris-transition': '/music/paris-transition.mp3',
@@ -1330,6 +1331,23 @@ const LittleApartmentGame: React.FC = () => {
         }
         return;
       }
+      // Bingus the curator: introduces the museum + reports donation progress.
+      if (npc.id === 'bingus') {
+        const have = s.museum.donated.length;
+        const total = MUSEUM_SLOTS.length;
+        const intro = have === 0
+          ? 'AH! A visitor! Welcome, welcome, to the Kawamachi Museum! I am Bingus Doofelsmurt, curator, founder, and — at present — sole staff.'
+          : 'Welcome BACK! The collection grows, doesn\'t it? Squint and you can almost feel it becoming important.';
+        const lines = [
+          intro,
+          have >= total
+            ? 'And it is COMPLETE. Every plinth filled, every frame occupied. I may weep. I am weeping. Do not look at me.'
+            : `The displays are, ah, "between acquisitions." ${have} of ${total} filled. The rest await the RIGHT piece.`,
+          'Out there in the city — alleys, shores, the deep places — are objects of true significance. Find them, bring them to me, and I shall give them the pedestal they deserve.',
+        ];
+        showDialog(lines, 'Bingus Doofelsmurt');
+        return;
+      }
       const voice = NPC_VOICES[npc.id];
       if (voice) {
         const set = voice.sets[Math.floor(Math.random() * voice.sets.length)];
@@ -1576,6 +1594,22 @@ const LittleApartmentGame: React.FC = () => {
       case 'casino-roulette': startRoulette(); break;
       case 'fish-tropical': startCast(faced, 'tropical'); break;
       case 'fish-spot': startCast(faced, 'shallow'); break;
+      case 'museum-display': {
+        // Find the slot at the faced (or feet) tile.
+        const slot = MUSEUM_SLOTS.find(sl =>
+          (sl.x === faced.x && sl.y === faced.y) || (sl.x === feet.x && sl.y === feet.y));
+        if (!slot) break;
+        if (s.museum.donated.includes(slot.id)) {
+          showDialog([`"${slot.label}"`, slot.blurb], 'Museum');
+        } else {
+          const what = slot.kind === 'art' ? 'frame' : 'pedestal';
+          showDialog([
+            `An empty ${what}. A little brass plate reads: "${slot.label}".`,
+            'This display is empty — Bingus is waiting for the right piece.',
+          ], 'Museum');
+        }
+        break;
+      }
     }
   }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, enterScene, refreshHud, runTransition, award, playMusicFor, reachFloor]);
 
@@ -1944,6 +1978,18 @@ const LittleApartmentGame: React.FC = () => {
         // scatter detail variants through large grass/sand fields
         else if ((key === 't-grass' || key === 't-sand') && (tx * 7 + ty * 13) % 5 === 0) key = `${key}-v1`;
         ctx.drawImage(atlas[key], tx * TILE - cam.x, ty * TILE - cam.y);
+      }
+    }
+
+    // Museum: overlay a FILLED display sprite onto any slot the player has
+    // donated to (empty slots keep their plain pedestal/frame tile). Donations
+    // are empty by default, so this draws nothing until collectibles land.
+    if (scene.id === 'museum') {
+      const donated = saveRef.current.museum.donated;
+      for (const slot of MUSEUM_SLOTS) {
+        if (!donated.includes(slot.id)) continue;
+        const key = slot.kind === 'art' ? 't-frame-full' : 't-pedestal-full';
+        ctx.drawImage(atlas[key], slot.x * TILE - cam.x, slot.y * TILE - cam.y);
       }
     }
 

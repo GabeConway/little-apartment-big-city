@@ -7,7 +7,7 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind, MESSAGES, furnitureById,
+  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS,
 } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
@@ -80,6 +80,7 @@ export interface GameSave {
   forceRain: boolean;           // cheat: force rain for the current day (cleared next morning)
   rainCleared: boolean;         // a shrine offering made the rain suddenly stop today (cleared next morning)
   shrineDay: number;            // last day an offering was made at the shrine (0 = never); one per day
+  museum: { donated: string[] }; // MUSEUM_SLOTS ids the player has donated a piece to (empty by default)
 }
 
 // A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
@@ -160,6 +161,7 @@ export const newSave = (): GameSave => ({
   forceRain: false,
   rainCleared: false,
   shrineDay: 0,
+  museum: { donated: [] },
 });
 
 export const loadSave = (): GameSave | null => {
@@ -302,6 +304,22 @@ export const placeItem = (s: GameSave, itemId: string, x: number, y: number): vo
 export const unplaceItem = (s: GameSave, itemId: string): void => {
   delete s.placed[itemId];
 };
+
+// ---- the museum --------------------------------------------------------------------
+// The player donates found objects to fill Bingus Doofelsmurt's display slots.
+// Collectible items get wired later; this helper is ready for them now. Donating
+// records the SLOT id (must be a real MUSEUM_SLOTS slot), dedupes, and persists.
+// Returns true if it was a fresh donation.
+export const donateToMuseum = (s: GameSave, slotId: string): boolean => {
+  if (!MUSEUM_SLOTS.some(sl => sl.id === slotId)) return false;
+  if (s.museum.donated.includes(slotId)) return false;
+  s.museum.donated.push(slotId);
+  persistSave(s);
+  return true;
+};
+
+export const museumComplete = (s: GameSave): boolean =>
+  MUSEUM_SLOTS.every(sl => s.museum.donated.includes(sl.id));
 
 // Shrine luck: tier 1 at ¥5,000 donated, tier 2 at ¥20,000. Each tier makes
 // the rarer (valuable) fish noticeably more willing to bite.
