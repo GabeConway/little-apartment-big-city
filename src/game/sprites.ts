@@ -1633,12 +1633,47 @@ const buildTiles = (atlas: Atlas) => {
     speckle(ctx, '#bfb18e', 61, 7);
     ctx.fillStyle = '#7cb86a'; ctx.fillRect(2, 13, 1, 1); ctx.fillRect(13, 3, 1, 1);
   });
-  // Empty soil plot (raised bed): dark tilled earth with furrows.
+  // Empty soil plot (raised wooden bed): tilled earth with furrows + plank frame.
   atlas['t-gh-soil'] = tile(ctx => {
     fill(ctx, '#5a3c24');
-    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(0, 0, 16, 2);
-    ctx.fillStyle = '#4a3120'; ctx.fillRect(0, 14, 16, 2); ctx.fillRect(2, 5, 12, 1); ctx.fillRect(2, 9, 12, 1); // rim + furrows
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 2, 12, 2);                              // freshly turned topsoil
+    ctx.fillStyle = '#4a3120'; ctx.fillRect(3, 7, 10, 1); ctx.fillRect(3, 11, 10, 1);  // furrows
     speckle(ctx, '#6e4a2f', 67, 8); speckle(ctx, '#3a2716', 71, 6);
+    ctx.fillStyle = '#8a5a2a'; ctx.fillRect(0, 0, 16, 2); ctx.fillRect(0, 0, 2, 16); ctx.fillRect(14, 0, 2, 16); ctx.fillRect(0, 14, 16, 2); // raised plank frame
+    ctx.fillStyle = '#a5703a'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 0, 1, 16);   // plank highlight (top-left light)
+    ctx.fillStyle = '#6e4421'; ctx.fillRect(15, 0, 1, 16); ctx.fillRect(0, 15, 16, 1); // plank shadow (bottom-right)
+  });
+  // Glass roof / skylight (top edge): bright overhead panes, mullion grid + ridge beam.
+  atlas['t-gh-roof'] = tile(ctx => {
+    fill(ctx, '#bfe3d3');
+    ctx.fillStyle = '#d8f1e6'; ctx.fillRect(0, 0, 16, 5);                              // sky glow up high
+    ctx.fillStyle = '#e8f4ec'; ctx.fillRect(2, 1, 4, 3); ctx.fillRect(10, 1, 4, 3);    // pane glints
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(0, 7, 16, 2); ctx.fillRect(7, 0, 2, 16);   // mullions (ridge + rafter)
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(0, 11, 16, 2);                             // lit ridge beam
+    ctx.fillStyle = '#c4bca8'; ctx.fillRect(0, 14, 16, 2);                             // shadow where roof meets wall
+  });
+  // Potted plant (decor, solid): leafy foliage in a terracotta pot.
+  atlas['t-gh-plant'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');
+    ctx.fillStyle = '#bfb18e'; ctx.fillRect(0, 13, 16, 1);                             // floor contact shadow
+    ctx.fillStyle = '#3a6e3a'; ctx.fillRect(3, 2, 10, 7);                              // dense foliage
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(2, 4, 12, 4);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(4, 2, 3, 3); ctx.fillRect(9, 3, 4, 3); ctx.fillRect(2, 6, 3, 2);
+    ctx.fillStyle = '#8fc24f'; ctx.fillRect(5, 2, 1, 1); ctx.fillRect(10, 3, 1, 1);    // leaf highlights
+    ctx.fillStyle = '#b5642f'; ctx.fillRect(4, 9, 8, 5);                               // terracotta pot
+    ctx.fillStyle = '#c97a3e'; ctx.fillRect(4, 9, 8, 1); ctx.fillRect(5, 9, 1, 4);     // rim + left highlight
+    ctx.fillStyle = '#8a4a22'; ctx.fillRect(4, 13, 8, 1); ctx.fillRect(10, 10, 2, 3);  // base + right shadow
+  });
+  // Hanging fern basket (decor, solid): trailing fronds on a chain from the roof.
+  atlas['t-gh-vine'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');
+    ctx.fillStyle = '#9a9488'; ctx.fillRect(7, 0, 1, 3); ctx.fillRect(8, 0, 1, 3);     // chain to the roof
+    ctx.fillStyle = '#8a5a2a'; ctx.fillRect(4, 3, 8, 3);                               // woven basket
+    ctx.fillStyle = '#a5703a'; ctx.fillRect(4, 3, 8, 1);                               // basket rim
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(3, 5, 10, 3);                              // fern crown
+    ctx.fillStyle = '#3da26b'; ctx.fillRect(2, 6, 3, 4); ctx.fillRect(11, 6, 3, 4); ctx.fillRect(6, 7, 4, 5); // trailing fronds
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(3, 8, 2, 3); ctx.fillRect(11, 8, 2, 2); ctx.fillRect(7, 10, 2, 3);
+    ctx.fillStyle = '#8fc24f'; ctx.fillRect(2, 6, 1, 1); ctx.fillRect(13, 6, 1, 1); ctx.fillRect(8, 7, 1, 1); // frond highlights
   });
   // Sprinkler valve: standpipe + red hand-wheel.
   atlas['t-gh-sprinkler'] = tile(ctx => {
