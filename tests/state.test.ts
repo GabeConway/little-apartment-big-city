@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   newSave, freshDayLog, maxEnergy, energyCost, sleep, clockLabel, nightT,
   buyFurniture, shrineLuck, gachaComplete, pawnStockFor, sketchyOfferFor,
-  allFurnished, itemFootprintW, spotFree, placeItem, unplaceItem,
+  allFurnished, itemFootprintW, placeItem, unplaceItem,
   WAKE_MIN, type GameSave,
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor,
@@ -235,13 +235,13 @@ describe('placement helpers', () => {
   it('reports footprint width by item kind', () => {
     expect(itemFootprintW('bed')).toBeGreaterThanOrEqual(1);
   });
-  it('place/unplace round-trips and spotFree reflects occupancy', () => {
+  it('place/unplace round-trips in s.placed', () => {
     const s: GameSave = newSave();
-    expect(spotFree(s, 2, 2)).toBe(true);
+    expect(s.placed['lamp']).toBeUndefined();
     placeItem(s, 'lamp', 2, 2);
-    expect(spotFree(s, 2, 2)).toBe(false);
+    expect(s.placed['lamp']).toEqual({ x: 2, y: 2 });
     unplaceItem(s, 'lamp');
-    expect(spotFree(s, 2, 2)).toBe(true);
+    expect(s.placed['lamp']).toBeUndefined();
   });
   it('allFurnished is false on a fresh save', () => {
     expect(allFurnished(newSave())).toBe(false);

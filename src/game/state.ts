@@ -10,7 +10,7 @@ import {
   itemKind, MESSAGES, furnitureById,
 } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
-import { APARTMENT_SLOTS, RARE_SLOTS, PLACEMENT_SPOTS, SCENES } from './maps';
+import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
 
 export const WAKE_MIN = 7 * 60;       // days start at 7:00 AM
 export const COLLAPSE_MIN = 26 * 60;  // 2:00 AM — you fade out and wake up at home
@@ -279,12 +279,6 @@ export const allRaresOwned = (s: GameSave): boolean =>
 
 export const itemFootprintW = (id: string): number => (itemKind(id) === 'wide' ? 2 : 1);
 
-export const spotFree = (s: GameSave, x: number, y: number): boolean =>
-  !Object.values(s.placed).some(p => p.x === x && p.y === y);
-
-export const freeSpotsFor = (s: GameSave, itemId: string) =>
-  PLACEMENT_SPOTS.filter(spot => spot.kind === itemKind(itemId) && spotFree(s, spot.x, spot.y));
-
 export const placeItem = (s: GameSave, itemId: string, x: number, y: number): void => {
   s.placed[itemId] = { x, y };
 };
@@ -292,9 +286,6 @@ export const placeItem = (s: GameSave, itemId: string, x: number, y: number): vo
 export const unplaceItem = (s: GameSave, itemId: string): void => {
   delete s.placed[itemId];
 };
-
-export const spotLabelAt = (x: number, y: number): string =>
-  PLACEMENT_SPOTS.find(p => p.x === x && p.y === y)?.label ?? `(${x},${y})`;
 
 // Shrine luck: tier 1 at ¥5,000 donated, tier 2 at ¥20,000. Each tier makes
 // the rarer (valuable) fish noticeably more willing to bite.
@@ -308,22 +299,6 @@ import { MINERALS } from './data';
 import type { Mineral } from './data';
 
 export interface OreNode { x: number; y: number; mineral: Mineral; amount: number }
-
-export const oreNodesFor = (s: GameSave, candidates: { x: number; y: number }[]): OreNode[] => {
-  if (s.minedDay !== s.day) { s.minedDay = s.day; s.minedNodes = []; }
-  const rand = mulberry32(s.day * 31337 + 11);
-  const nodes: OreNode[] = [];
-  for (const c of candidates) {
-    if (rand() < 0.65) {
-      const total = MINERALS.reduce((sum, m) => sum + m.weight, 0);
-      let r = rand() * total;
-      let mineral = MINERALS[0];
-      for (const m of MINERALS) { r -= m.weight; if (r <= 0) { mineral = m; break; } }
-      nodes.push({ x: c.x, y: c.y, mineral, amount: 1 });
-    }
-  }
-  return nodes.filter(n => !s.minedNodes.includes(`${n.x},${n.y}`));
-};
 
 // ---- daily mine layout ------------------------------------------------------------
 // The mine is regenerated fresh every in-game DAY: ore nodes and crawlers are

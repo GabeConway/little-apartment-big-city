@@ -82,28 +82,6 @@ export const RARE_SLOTS: FurnitureSlot[] = [
 // Completing the gachapon set materializes a golden maneki-neko by the desk.
 export const MANEKI_SLOT = { x: 3, y: 4 };
 
-// Placement spots — any compatible item can be placed at any free spot.
-export interface PlacementSpot { x: number; y: number; kind: 'wall' | 'wide' | 'single'; label: string }
-export const PLACEMENT_SPOTS: PlacementSpot[] = [
-  { x: 4, y: 0, kind: 'wall', label: 'wall, by the window' },
-  { x: 6, y: 0, kind: 'wall', label: 'wall, center' },
-  { x: 10, y: 0, kind: 'wall', label: 'wall, east side' },
-  { x: 1, y: 1, kind: 'wide', label: 'the tatami nook' },
-  { x: 5, y: 3, kind: 'wide', label: 'middle of the room' },
-  { x: 7, y: 5, kind: 'wide', label: 'open floor, center' },
-  { x: 6, y: 1, kind: 'single', label: 'north wall, left' },
-  { x: 8, y: 1, kind: 'single', label: 'north wall, center' },
-  { x: 9, y: 1, kind: 'single', label: 'north wall, right' },
-  { x: 11, y: 1, kind: 'single', label: 'kitchen, left' },
-  { x: 13, y: 1, kind: 'single', label: 'kitchen, corner' },
-  { x: 14, y: 1, kind: 'single', label: 'kitchen, by the wall' },
-  { x: 1, y: 4, kind: 'single', label: 'west wall nook' },
-  { x: 1, y: 6, kind: 'single', label: 'southwest corner' },
-  { x: 3, y: 6, kind: 'single', label: 'open floor, south' },
-  { x: 11, y: 5, kind: 'single', label: 'open floor, east' },
-  { x: 14, y: 7, kind: 'single', label: 'by the door' },
-];
-
 const apartment: SceneDef = {
   id: 'apartment',
   name: 'Apt. 203',
@@ -611,18 +589,6 @@ const mines: SceneDef = {
   interactables: [{ id: 'ascend', x: 1, y: 1, label: 'Climb up' }],
   npcs: [],
 };
-
-// Candidate ore-node positions (must be floor tiles); a seeded daily subset spawns.
-export const ORE_SPOTS: { x: number; y: number }[] = [
-  { x: 5, y: 2 }, { x: 12, y: 2 }, { x: 17, y: 3 }, { x: 4, y: 4 }, { x: 9, y: 4 },
-  { x: 14, y: 5 }, { x: 2, y: 7 }, { x: 7, y: 7 }, { x: 17, y: 8 }, { x: 5, y: 10 },
-  { x: 9, y: 11 }, { x: 14, y: 11 }, { x: 17, y: 11 }, { x: 2, y: 11 },
-];
-
-// Crawler spawn points
-export const CRAWLER_SPAWNS: { x: number; y: number }[] = [
-  { x: 15, y: 3 }, { x: 8, y: 8 }, { x: 9, y: 10 },
-];
 
 // ---- Shrine grounds ------------------------------------------------------------------
 

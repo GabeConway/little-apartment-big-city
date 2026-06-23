@@ -563,12 +563,6 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#6da3cf'; ctx.fillRect(9, 3, 2, 1); ctx.fillRect(2, 10, 2, 1);
     ctx.fillStyle = '#244c75'; ctx.fillRect(0, 15, 16, 1);
   });
-  atlas['t-railing'] = tile(ctx => {
-    fill(ctx, '#cdbb8e');
-    ctx.fillStyle = '#566270'; ctx.fillRect(0, 6, 16, 2);
-    ctx.fillRect(2, 6, 2, 10); ctx.fillRect(12, 6, 2, 10);
-  });
-
   // Building facades (used as solid wall rows in the city) — ledge, lit/dark
   // windows, sills, and a roofline strip for depth.
   const facade = (base: string, dark: string, win: string, lit: string, seed: number) => tile(ctx => {
@@ -647,8 +641,6 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#8a96a0'; ctx.fillRect(0, 13, 16, 3);
   });
 
-  atlas['t-black'] = tile(ctx => fill(ctx, '#0a0a0c'));
-
   // Bad side of town
   atlas['t-sidewalk-bad'] = tile(ctx => {
     fill(ctx, '#6e7276');
@@ -685,12 +677,6 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#e857a8'; ctx.fillRect(2, 5, 3, 2); ctx.fillRect(6, 7, 2, 3);
     ctx.fillStyle = '#7ce8a0'; ctx.fillRect(9, 4, 4, 2); ctx.fillRect(12, 8, 2, 2);
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 10, 6, 1);
-  });
-  atlas['t-trash'] = tile(ctx => {
-    fill(ctx, '#6e7276');
-    ctx.fillStyle = '#2c3038'; ctx.fillRect(2, 6, 7, 8); ctx.fillRect(8, 9, 6, 5);
-    ctx.fillStyle = '#3c424a'; ctx.fillRect(3, 7, 3, 3); ctx.fillRect(9, 10, 3, 2);
-    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(5, 5, 2, 2); // something growing
   });
   atlas['t-bld-neon'] = tile(ctx => { // Kabukicho wall of stacked signboards
     fill(ctx, '#1d1826');
