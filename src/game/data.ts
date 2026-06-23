@@ -254,6 +254,17 @@ export const TROPICAL_FISH: Fish[] = [
   { id: 'golden', name: 'Golden Carp', value: 1800, weight: 2, difficulty: 1, sprite: 'fish-golden' },
 ];
 
+// ---- Fishing rods -----------------------------------------------------------
+// Genji gives you tier 0 (a worn bamboo rod) the first time you meet him; he
+// SELLS tier 1 once you've fished a while. Tuning of the minigame effects lives
+// in fishing.ts (ROD_TIERS); this is just the shop-facing name/price/blurb.
+export interface Rod { tier: number; name: string; price: number; blurb: string }
+export const RODS: Rod[] = [
+  { tier: 0, name: 'Worn Bamboo Rod', price: 0, blurb: "Genji's spare. Pulls the shallows in just fine." },
+  { tier: 1, name: "Genji's Carbon Rod", price: 6000, blurb: 'A wider catch zone, a faster reel, and enough backbone to drag up the deep monsters. The rod he never used to chase the carp.' },
+];
+export const rodInfo = (tier: number): Rod => RODS[Math.max(0, Math.min(RODS.length - 1, tier))];
+
 export const fishById = (id: string): Fish =>
   (FISH.find(f => f.id === id) ?? DEEP_FISH.find(f => f.id === id) ?? TROPICAL_FISH.find(f => f.id === id))!;
 
@@ -389,12 +400,12 @@ export interface MessageDef {
 
 export const MESSAGES: MessageDef[] = [
   {
-    id: 'welcome-landlord', from: 'Maison Kawa 🏢', avatar: '🏢', company: true,
+    id: 'welcome-landlord', from: 'Nakatomi Apartments 🏢', avatar: '🏢', company: true,
     // Day 1: arrives ~7:30 AM, a little after you wake (a phone buzz teaches you
     // the notification + to check the 📱). Available any later day.
     when: c => c.day > 1 || c.timeMin >= 7 * 60 + 30,
     body: [
-      'Welcome to MAISON KAWA, unit 204 — good to have you, {name}! This is the building line.',
+      'Welcome to NAKATOMI APARTMENTS, unit 204 — good to have you, {name}! This is the building line.',
       'That buzz was your phone. Open it any time with the 📱 button (or press P) — messages, the ZamaZonk store, and your wallet all live in there.',
       'Hot water is on the meter, recycling goes out Tuesday, and the wall to 205 is thinner than it looks. Rent autodrafts monthly — keep a cushion in the bank. Enjoy your new home! 🌇',
     ],

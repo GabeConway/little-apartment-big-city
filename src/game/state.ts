@@ -66,6 +66,7 @@ export interface GameSave {
   minedDay: number;             // day the mined-node list belongs to
   minedNodes: string[];         // "x,y" ore nodes already mined today
   canFish: boolean;             // learned to fish from Genji at the shore
+  fishRod: number;              // fishing-rod tier (0 = Genji's starter; 1 = his upgraded rod)
   fishInv: string[];            // fish ids, unsold
   fishLog: Record<string, number>; // fish id -> total caught
   storySeen: string[];          // story beat ids already shown
@@ -146,6 +147,7 @@ export const newSave = (): GameSave => ({
   minedDay: 0,
   minedNodes: [],
   canFish: false,
+  fishRod: 0,
   fishInv: [],
   fishLog: {},
   storySeen: [],
@@ -592,7 +594,7 @@ export const fulfillDeliveries = (s: GameSave): string[] => {
     pushMessage(s, {
       id: `zz-deliver-${s.day}`, from: 'ZamaZonk 📦', avatar: '📦', company: true,
       body: [
-        `Delivered to MAISON KAWA 204: ${names}.`,
+        `Delivered to NAKATOMI APARTMENTS 204: ${names}.`,
         'It is in your boxes. Open your phone → Arrange to set it down.',
         'Rate your driver 5 stars or the algorithm remembers. 🙂',
       ],

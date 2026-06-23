@@ -114,7 +114,14 @@ const apartment: SceneDef = {
 const city: SceneDef = {
   id: 'city',
   name: 'Kawamachi St.',
-  legend: OUTDOOR,
+  legend: {
+    ...OUTDOOR,
+    'H': T('t-apt-wall', true),    // Nakatomi Apartments facade (home building)
+    'N': T('t-nakatomi-l', true),  // sign over the door: "NAKA"
+    'K': T('t-nakatomi-r', true),  // sign over the door: "TOMI"
+    'p': T('t-planter', true),     // flowering planter flanking the entrance
+    'F': T('t-grass-v2'),          // clover/daisy grass detail (walkable)
+  },
   outdoor: true,
   grid: [
     'BBBBBBBBBBAAAAAAAAAACCCCCCCQQQQQ',
@@ -128,13 +135,13 @@ const city: SceneDef = {
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'gTggggwwggggggggggggggggggggggfg',
-    'ggQQQQQQQQgggggggggggggggggggggg',
-    'ggQQQQQQQQgggggggggggggggggggggg',
-    'ggQQQQDDQQggggggggggTgggggggggfg',
-    'ggggggwwgggggggggggfgfgggggggggg',
+    'ggHHHHHHHHgggggggggggggggggggggg',
+    'ggHHHHNKHHgggggggggggggggggggggg',
+    'ggHHHHDDHHggggggggggTgggggggggfg',
+    'gggggpwwpggggggggggfgfgggggggggg',
     'wwwwwwwwgggggggggggggggnmmnggggg',
     'wwwwwwwwggggggggggggggojggjo~~gg',
-    'gggggggggggggggggggggggggggg~~gg',
+    'ggggFgggggggggFggggggggggggg~~gg',
   ],
   warps: [
     { x: 4, y: 2, to: 'denden', tx: 8, ty: 8, dir: 'up' },
@@ -602,23 +609,27 @@ const shrine: SceneDef = {
     'T': T('t-tree', true),
     'g': T('t-grass'),
     'p': T('t-stonepath'),
+    'q': T('t-sakura-petals'),     // fallen petals beside the path (walkable)
     'R': T('t-shrine-roof', true),
     'W': T('t-shrine-wall', true),
     'h': T('t-shrine', true),
     'k': T('t-komainu', true),
     'L': T('t-lantern', true),
+    'O': T('t-toro', true),        // stone ishidoro lantern
+    'C': T('t-sakura', true),      // cherry-blossom tree
+    'M': T('t-maple', true),       // autumn maple
   },
   outdoor: true,
   grid: [
-    'TTTTTTTTTTTTTTTTTTTT',
+    'TTCTTTTMTTTTMTTTTCTT',
     'TTTTTRRRRRRRRRRTTTTT',
     'TggggRRRRRRRRRRggggT',
     'TggggWWWWWWWWWWggggT',
     'TgggggggghhggggggggT',
-    'TggggkgggppgggkggggT',
-    'TgggLggggppggggLgggT',
-    'TggggggggppggggggggT',
-    'TggggggggppggggggggT',
+    'TggggOgggppgggOggggT',
+    'TgggkgggqppqgggkgggT',
+    'TggLgggggppgggggLggT',
+    'TgggggggqppqgggggggT',
     'TggggggggppggggggggT',
     'TTTTTTTTTppTTTTTTTTT',
   ],

@@ -29,6 +29,7 @@ import { SCENES, SCENE_SIGNS, MANEKI_SLOT } from './maps';
 import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
+  RODS, rodInfo,
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
@@ -48,7 +49,7 @@ import {
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
-import { startFishing, updateFishing, ZONE_H } from './fishing';
+import { startFishing, updateFishing } from './fishing';
 import type { FishingState } from './fishing';
 
 // ---- tiny sfx -------------------------------------------------------------
@@ -195,7 +196,7 @@ const HACK_LINES = [
 
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza'
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji'
   | 'casino' | 'blackjack' | 'slots' | 'roulette';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
@@ -315,7 +316,7 @@ type Overlay =
   | { type: 'menu'; tab: PhoneApp; thread?: string }
   | { type: 'ending' };
 
-type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk';
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal';
 
 const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
 
@@ -348,7 +349,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   granny: {
     speaker: 'Granny Sato',
     sets: [
-      ['Maison Kawa? I have lived there forty years. Thin walls, good light.', 'A home is not bought in a day, dear. It is bought one small thing at a time.'],
+      ['Nakatomi Apartments? I have lived there forty years. Thin walls, good light.', 'A home is not bought in a day, dear. It is bought one small thing at a time.'],
       ['The man at the pawn shop was a jazz pianist, you know. Ask him about it. Watch his face.'],
       ['Downtown used to be even louder, if you can believe it. The club is still there. So is everything else, in its way.'],
     ],
@@ -474,6 +475,88 @@ const npcDynamicLines = (id: string, s: GameSave): string[] => {
   }
 };
 
+// ---- dialogue portraits -----------------------------------------------------
+// Stardew-style speaker portraits, drawn entirely in-code with 2D ops (NO PNG,
+// NO sprites.ts dependency — fully self-contained so we can swap to a generated
+// PNG later). A registry maps a dialog `speaker` string to a draw function that
+// paints onto a 64×64 canvas; the panel only renders when the speaker is mapped.
+type PortraitDraw = (ctx: CanvasRenderingContext2D, S: number) => void;
+
+// Granny Sato: silver bun, round gold glasses, kind elderly face. Palette spirit
+// matches the on-map `npc-granny` sprite (silver hair, warm skin, plum kimono).
+const drawGrannyPortrait: PortraitDraw = (ctx, S) => {
+  // Work on a 16×16 logical grid scaled up to S, so blocks land on clean pixels.
+  const u = S / 16;
+  const px = (x: number, y: number, w: number, h: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(Math.round(x * u), Math.round(y * u), Math.ceil(w * u), Math.ceil(h * u));
+  };
+  // warm backdrop
+  px(0, 0, 16, 16, '#2a2230');
+  px(0, 12, 16, 4, '#3a2f3e');
+  // plum kimono shoulders
+  px(2, 13, 12, 3, '#6e3a64');
+  px(3, 12, 10, 2, '#7d4673');
+  px(7, 13, 2, 3, '#c9b06a'); // collar knot
+  // silver hair (bun + sides)
+  px(3, 1, 10, 4, '#cfcad6');
+  px(2, 3, 12, 5, '#cfcad6');
+  px(6, 0, 4, 2, '#e4e0ea'); // bun highlight
+  px(6, 0, 4, 1, '#bdb7c6');
+  // face
+  px(4, 4, 8, 7, '#e8c4a0');
+  px(4, 10, 8, 1, '#d9b48f'); // chin shade
+  // rosy cheeks
+  px(4, 8, 1, 2, '#dd9b86');
+  px(11, 8, 1, 2, '#dd9b86');
+  // round gold glasses
+  px(4, 6, 3, 3, '#caa23a');
+  px(9, 6, 3, 3, '#caa23a');
+  px(5, 7, 1, 1, '#3a2b1a'); // eye L
+  px(10, 7, 1, 1, '#3a2b1a'); // eye R
+  px(7, 7, 2, 1, '#caa23a'); // bridge
+  // gentle smile + nose
+  px(7, 9, 1, 1, '#c98f72');
+  px(6, 10, 4, 1, '#b06a55');
+};
+
+const PORTRAITS: Record<string, PortraitDraw> = {
+  'Granny Sato': drawGrannyPortrait, // fallback if the PNG is ever missing
+};
+
+// Generated/authored portrait PNGs (preferred over the in-code draw above).
+// These already include their own frame + name label, so the dialog box skips
+// its panel frame and speaker caption when one is shown.
+const PORTRAIT_IMAGES: Record<string, string> = {
+  'Granny Sato': '/images/portraits/granny-soto.png',
+};
+
+// Renders a registered speaker portrait into an inline pixel-art canvas. Returns
+// null (no panel) when the speaker has no portrait registered.
+const DialogPortrait: React.FC<{ speaker: string }> = ({ speaker }) => {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const draw = PORTRAITS[speaker];
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !draw) return;
+    const ctx = el.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, el.width, el.height);
+    draw(ctx, el.width);
+  }, [draw, speaker]);
+  if (!draw) return null;
+  return (
+    <canvas
+      ref={ref}
+      width={64}
+      height={64}
+      className="w-20 h-20 sm:w-24 sm:h-24"
+      style={{ imageRendering: 'pixelated' }}
+    />
+  );
+};
+
 const PLAYER_SPEED = 72; // px/s
 
 // Club patrons that dance/bob in place and bust the occasional move across the
@@ -536,6 +619,10 @@ const LittleApartmentGame: React.FC = () => {
   const [confirmMode, setConfirmMode] = useState<null | 'delete'>(null);
   const [saveTick, setSaveTick] = useState(0); // bump to re-read the save after new/delete
   const [overlay, setOverlay] = useState<Overlay | null>(null);
+  // Dialogue typewriter: how many chars of the current dialog line are revealed.
+  // Mirrored into a ref so the keyboard/click advance path can read it synchronously.
+  const [typed, setTyped] = useState(0);
+  const typedRef = useRef(0);
   const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0 });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette() }); // live casino game state
@@ -785,6 +872,22 @@ const LittleApartmentGame: React.FC = () => {
   const showDialog = useCallback((lines: string[], speaker?: string) => {
     setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker });
   }, [setOverlayBoth]);
+
+  // Typewriter: reveal the current dialog line char-by-char (~36 cps). Restarts
+  // whenever the overlay (line/idx) changes; cleared on unmount/overlay change.
+  useEffect(() => {
+    if (overlay?.type !== 'dialog') { typedRef.current = 0; return; }
+    const full = overlay.lines[overlay.idx] ?? '';
+    typedRef.current = 0;
+    setTyped(0);
+    if (full.length === 0) return;
+    const id = window.setInterval(() => {
+      typedRef.current = Math.min(full.length, typedRef.current + 1);
+      setTyped(typedRef.current);
+      if (typedRef.current >= full.length) window.clearInterval(id);
+    }, 28);
+    return () => window.clearInterval(id);
+  }, [overlay]);
 
   // Record the deepest floor reached and fire the one-off depth milestones
   // (achievements + the AK-67 unlock once you survive floor GUN_UNLOCK_FLOOR).
@@ -1296,6 +1399,9 @@ const LittleApartmentGame: React.FC = () => {
         ], 'Genji');
         return;
       }
+      // Already learned: Genji runs a tiny tackle stall — he'll sell the rod he
+      // never used to chase the carp (deeper water, bigger fish, faster reel).
+      if (npc.id === 'old-man') { setOverlayBoth({ type: 'shop', shop: 'genji' }); return; }
       // The Paris baguette vendor: hands you a baguette that heals a big chunk
       // of energy (bigger than konbini food). (Feature #20.)
       if (npc.id === 'baguette') {
@@ -1584,6 +1690,10 @@ const LittleApartmentGame: React.FC = () => {
   const advanceDialog = useCallback(() => {
     const ov = overlayRef.current;
     if (!ov || ov.type !== 'dialog') return;
+    // Stardew behavior: while still typing, the first press snaps the line fully
+    // revealed; only once fully shown does a press advance to the next line.
+    const full = (ov.lines[ov.idx] ?? '').length;
+    if (typedRef.current < full) { typedRef.current = full; setTyped(full); return; }
     if (ov.idx + 1 < ov.lines.length) setOverlayBoth({ ...ov, idx: ov.idx + 1 });
     else setOverlayBoth(null);
   }, [setOverlayBoth]);
@@ -1722,11 +1832,15 @@ const LittleApartmentGame: React.FC = () => {
       } else if (fm.phase === 'bite') {
         fm.t -= dt;
         if (input.consumeInteract()) {
-          // shrine favor: the valuable fish bite more often
-          const luck = shrineLuck(saveRef.current);
+          // shrine favor: the valuable fish bite more often. The upgraded rod
+          // (tier 1+) also draws the bigger, rarer fish toward the hook.
+          const sNow = saveRef.current;
+          const luck = shrineLuck(sNow);
+          const rodPull = sNow.fishRod >= 1 ? 1 : 0;
           const base = fm.table === 'deep' ? DEEP_FISH : fm.table === 'tropical' ? TROPICAL_FISH : FISH;
-          const table = luck === 0 ? base : base.map(f => (f.value >= 500 ? { ...f, weight: f.weight * (1 + 0.5 * luck) } : f));
-          fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table)), tile: fm.tile, table: fm.table };
+          const boost = 0.5 * luck + 0.6 * rodPull;
+          const table = boost === 0 ? base : base.map(f => (f.value >= 500 ? { ...f, weight: f.weight * (1 + boost) } : f));
+          fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table), sNow.fishRod), tile: fm.tile, table: fm.table };
         } else if (fm.t <= 0) {
           fishModeRef.current = null;
           sfxMiss();
@@ -2369,7 +2483,10 @@ const LittleApartmentGame: React.FC = () => {
         ctx.globalAlpha = 0.18 + 0.1 * Math.sin(t * 3 + ph);
         ctx.drawImage(glow(rgb), fx - 48, fy - 48, 96, 96);      // only a 96px blit, not the whole screen
       }
-      const dbx = 8 * TILE - cam.x, dby = 1 * TILE - cam.y + 4;  // disco-ball glow, top-center
+      // disco-ball glow: drifts in a slow circle (driven by the same clock as the
+      // beams) so its spot sweeps the floor instead of sitting dead-center.
+      const dbx = 8 * TILE - cam.x + Math.cos(t * 0.9) * 36;
+      const dby = 1 * TILE - cam.y + 4 + 40 + Math.sin(t * 0.7) * 24;
       ctx.globalAlpha = 0.22 + 0.12 * Math.sin(t * 6);
       ctx.drawImage(glow('230,240,255'), dbx - 32, dby - 32, 64, 64);
       ctx.globalAlpha = 1;
@@ -2480,27 +2597,44 @@ const LittleApartmentGame: React.FC = () => {
 
     // fishing reel UI
     if (fm && fm.phase === 'reel') {
+      const st = fm.st;
       const barX = VIEW_PW - 26, barY = 12, barH = VIEW_PH - 36, barW = 8;
+      // panel (wider on the left to seat the tension gauge)
       ctx.fillStyle = 'rgba(10,10,12,0.85)';
-      ctx.fillRect(barX - 14, barY - 6, 36, barH + 22);
+      ctx.fillRect(barX - 20, barY - 6, 42, barH + 22);
       ctx.fillStyle = '#1d2430';
       ctx.fillRect(barX, barY, barW, barH);
-      // catch zone (zonePos is the bottom edge in 0..1, bar is drawn top-down)
-      const zoneTopPx = barY + (1 - (fm.st.zonePos + ZONE_H)) * barH;
-      ctx.fillStyle = '#3da26b';
-      ctx.fillRect(barX, zoneTopPx, barW, ZONE_H * barH);
-      // fish marker
-      const fy = barY + (1 - fm.st.fishPos) * barH - 3;
-      ctx.drawImage(atlas[fm.st.fish.sprite], barX - 12, fy, 12, 6);
-      // progress
-      const progH = Math.round(fm.st.progress * barH);
+      // catch zone (zonePos is the bottom edge in 0..1; bar drawn top-down). It
+      // reddens as TENSION rises so you feel the line about to slip.
+      const zoneTopPx = barY + (1 - (st.zonePos + st.zoneH)) * barH;
+      const tNorm = Math.min(1, st.tension);
+      const zr = Math.round(61 + tNorm * 170), zg = Math.round(162 - tNorm * 90), zb = Math.round(107 - tNorm * 60);
+      ctx.fillStyle = `rgb(${zr},${zg},${zb})`;
+      ctx.fillRect(barX, zoneTopPx, barW, st.zoneH * barH);
+      // fish marker — flashes brighter mid-lunge so a hard dart reads instantly.
+      const fy = barY + (1 - st.fishPos) * barH - 3;
+      if (st.lunging > 0) { ctx.fillStyle = 'rgba(255,90,90,0.9)'; ctx.fillRect(barX - 1, fy - 1, barW + 2, 8); }
+      ctx.drawImage(atlas[st.fish.sprite], barX - 12, fy, 12, 6);
+      // landing meter (progress) on the right edge of the main bar
+      const progH = Math.round(st.progress * barH);
       ctx.fillStyle = '#2a3340';
       ctx.fillRect(barX + barW + 3, barY, 4, barH);
-      ctx.fillStyle = fm.st.progress > 0.6 ? '#ffd24a' : '#c97a4a';
+      ctx.fillStyle = st.progress > 0.6 ? '#ffd24a' : '#c97a4a';
       ctx.fillRect(barX + barW + 3, barY + (barH - progH), 4, progH);
+      // tension gauge (left of the bar) — fills + reddens; warns before a snap.
+      const tx = barX - 8;
+      ctx.fillStyle = '#2a2330';
+      ctx.fillRect(tx, barY, 3, barH);
+      const tH = Math.round(tNorm * barH);
+      ctx.fillStyle = tNorm > 0.75 ? '#ff5a5a' : tNorm > 0.4 ? '#ffb24a' : '#9ad0c0';
+      ctx.fillRect(tx, barY + (barH - tH), 3, tH);
+      // stamina pips under the bar — the fish tiring out (your fight turning).
+      const tired = 1 - st.stamina;
+      ctx.fillStyle = '#1a2028'; ctx.fillRect(barX - 12, barY + barH + 4, barW + 12, 3);
+      ctx.fillStyle = '#7ce8a0'; ctx.fillRect(barX - 12, barY + barH + 4, Math.round((barW + 12) * tired), 3);
       ctx.font = 'bold 6px monospace';
       ctx.fillStyle = '#e8e0d0';
-      ctx.fillText('HOLD E', barX - 12, barY + barH + 9);
+      ctx.fillText('HOLD E', barX - 12, barY + barH + 13);
     } else if (fm) {
       ctx.font = 'bold 6px monospace';
       ctx.fillStyle = 'rgba(10,10,12,0.8)';
@@ -3117,6 +3251,25 @@ const LittleApartmentGame: React.FC = () => {
     );
   };
 
+  // Genji's upgraded rod (tier 1). One-time purchase; bumps the save's fishRod.
+  const buyRod = () => {
+    const s = saveRef.current;
+    const next = rodInfo(s.fishRod + 1);
+    if (s.fishRod >= next.tier || s.money < next.price) return; // already top tier / broke
+    s.money -= next.price;
+    s.fishRod = next.tier;
+    sfxBuy();
+    persistSave(s);
+    refreshHud();
+    setShopTick(v => v + 1);
+    setOverlayBoth(null);
+    showDialog([
+      'Genji weighs the rod once, then holds it out. "Carbon. Light as a wish, strong as a grudge."',
+      '"I bought it to finally land that golden carp. Never had the nerve to swim where it lives. You might."',
+      '(Upgraded rod equipped — wider catch zone, faster reel, and the deep monsters are in reach now.)',
+    ], 'Genji');
+  };
+
   const buyFood = (foodId: string) => {
     const s = saveRef.current;
     const food = KONBINI_FOOD.find(f => f.id === foodId)!;
@@ -3715,6 +3868,42 @@ const LittleApartmentGame: React.FC = () => {
       </div>
     );
 
+    // Journal: a "what do I do?" board. Goals are DERIVED from the live save so a
+    // lost player can always check next steps. Keep the list small + extensible —
+    // add a push() as new systems land.
+    const journalApp = (() => {
+      const placedBase = FURNITURE.filter(f => Boolean(s.placed[f.id])).length;
+      const fishCount = Object.values(s.fishLog).reduce((a, b) => a + b, 0);
+      const goals: { text: string; done: boolean }[] = [];
+      goals.push({ text: `Furnish the apartment — ${placedBase}/${FURNITURE.length} placed`, done: placedBase >= FURNITURE.length });
+      if (!s.canFish) goals.push({ text: 'Meet Genji on Sumikawa Shore — learn to fish', done: false });
+      else if (s.fishRod < 1) goals.push({ text: "Buy Genji's upgraded rod (bigger fish, deeper water)", done: false });
+      if (s.canFish && !s.fishLog['golden']) goals.push({ text: 'Land the legendary Golden Carp', done: false });
+      if (!s.vehicles.includes('boat')) goals.push({ text: 'Buy a skiff at Kojima Motors — reach deep water', done: false });
+      if (s.deepestFloor < 5) goals.push({ text: 'Descend to mine floor 5', done: false });
+      const locked = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id)).slice(0, 4);
+      return (
+        <div className="px-3 py-2">
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">CURRENT GOALS</p>
+          {goals.length === 0
+            ? <p className="py-1 text-base opacity-50">Nothing pressing. Enjoy the city.</p>
+            : goals.map((g, i) => (
+                <div key={i} className="flex items-start gap-2 py-1 border-b border-white/10">
+                  <span className="shrink-0">{g.done ? '✅' : '▢'}</span>
+                  <p className={`text-base leading-tight ${g.done ? 'opacity-50 line-through' : ''}`}>{g.text}</p>
+                </div>
+              ))}
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3 mb-1">NEXT STEPS</p>
+          {locked.length === 0
+            ? <p className="py-1 text-base opacity-50">Every trophy earned. Legendary.</p>
+            : locked.map(a => (
+                <p key={a.id} className="text-sm py-1 border-b border-white/10 opacity-70 leading-tight">🔎 {a.hint}</p>
+              ))}
+          <p className="text-xs opacity-40 mt-3 italic">Day {s.day} · ¥{s.money.toLocaleString()} · {fishCount} fish caught</p>
+        </div>
+      );
+    })();
+
     // ---- app icon grid (home screen) -----------------------------------------
     const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: React.ReactNode; label: string; bg: string; badge?: number; onClick: () => void }) => (
       <button onClick={onClick} className="flex flex-col items-center gap-1 group">
@@ -3731,7 +3920,7 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
-      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk',
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal',
     };
 
     return (
@@ -3767,6 +3956,7 @@ const LittleApartmentGame: React.FC = () => {
             <div className="grid grid-cols-3 gap-y-5 gap-x-2 px-4 pt-3 pb-6 justify-items-center">
               <AppIcon icon="🧳" label="Bag" bg="linear-gradient(160deg,#c9952f,#8a5a1f)" onClick={() => open('inventory')} />
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
+              <AppIcon icon="📓" label="Journal" bg="linear-gradient(160deg,#4a6ea0,#28406a)" onClick={() => open('journal')} />
               {s.zamazonkApp && (
                 <AppIcon
                   icon={<img src={ZAMAZONK_LOGO} alt="" className="w-full h-full object-contain p-0.5" />}
@@ -3795,6 +3985,7 @@ const LittleApartmentGame: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               {ov.tab === 'inventory' && inventoryApp}
+              {ov.tab === 'journal' && journalApp}
               {ov.tab === 'messages' && messagesApp}
               {ov.tab === 'zamazonk' && zamazonkApp}
               {ov.tab === 'achievements' && trophiesApp}
@@ -4295,6 +4486,29 @@ const LittleApartmentGame: React.FC = () => {
               ? <span className="text-[#3da26b] text-base shrink-0">ON YOUR HEAD</span>
               : <button className={`${btnCls} shrink-0`} disabled={s.money < 6700} onClick={buyHat}>¥6,700</button>}
           </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'genji') {
+      const owned = rodInfo(s.fishRod);
+      const next = s.fishRod + 1 < RODS.length ? rodInfo(s.fishRod + 1) : null;
+      return (
+        <ShopFrame title="GENJI'S TACKLE" subtitle={'"Forty years on this shore. Ask me anything but the carp."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-base text-[#ffd24a]/80 mt-1">YOUR ROD</p>
+          <p className="text-lg py-0.5 opacity-80">{owned.name}</p>
+          <p className="text-base text-[#ffd24a]/80 mt-3">FOR SALE</p>
+          {next ? (
+            <div className="flex items-center gap-3 py-1.5">
+              <div className="flex-grow min-w-0">
+                <p className="text-xl leading-tight">{next.name}</p>
+                <p className="text-sm opacity-60 leading-tight">{next.blurb}</p>
+              </div>
+              <button className={`${btnCls} shrink-0`} disabled={s.money < next.price} onClick={buyRod}>¥{next.price.toLocaleString()}</button>
+            </div>
+          ) : (
+            <p className="py-1 text-lg opacity-60">"That's the best rod I have, friend. The rest is up to the water."</p>
+          )}
         </ShopFrame>
       );
     }
@@ -4840,16 +5054,33 @@ const LittleApartmentGame: React.FC = () => {
           </div>
         )}
 
-        {/* dialogue */}
-        {overlay?.type === 'dialog' && (
-          <div className="absolute inset-x-2 bottom-2 cursor-pointer" onClick={advanceDialog}>
-            <div className={`${panelCls} px-4 py-2.5`}>
-              {overlay.speaker && <p className="text-[#ffd24a] text-base mb-0.5">{overlay.speaker}</p>}
-              <p className="text-xl leading-snug">{overlay.lines[overlay.idx]}</p>
-              <p className="text-right text-sm opacity-40 mt-1">{overlay.idx + 1}/{overlay.lines.length} · E ▸</p>
+        {/* dialogue — typewriter reveal + optional Stardew-style portrait */}
+        {overlay?.type === 'dialog' && (() => {
+          const line = overlay.lines[overlay.idx] ?? '';
+          const shown = line.slice(0, typed);
+          const done = typed >= line.length;
+          const imgSrc = overlay.speaker ? PORTRAIT_IMAGES[overlay.speaker] : undefined;
+          const hasDrawPortrait = Boolean(overlay.speaker && PORTRAITS[overlay.speaker]);
+          const hasPortrait = Boolean(imgSrc) || hasDrawPortrait;
+          return (
+            <div className="absolute inset-x-2 bottom-2 cursor-pointer" onClick={advanceDialog}>
+              <div className="flex items-end gap-2">
+                {hasPortrait && (
+                  imgSrc
+                    ? <img src={imgSrc} alt={overlay.speaker} className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 self-end" style={{ imageRendering: 'pixelated' }} />
+                    : <div className={`${panelCls} p-1 shrink-0 self-end`}>
+                        <DialogPortrait speaker={overlay.speaker!} />
+                      </div>
+                )}
+                <div className={`${panelCls} px-4 py-2.5 flex-grow min-w-0`}>
+                  {overlay.speaker && !imgSrc && <p className="text-[#ffd24a] text-base mb-0.5">{overlay.speaker}</p>}
+                  <p className="text-xl leading-snug">{shown}<span className="opacity-0">{line.slice(typed)}</span></p>
+                  <p className="text-right text-sm opacity-40 mt-1">{overlay.idx + 1}/{overlay.lines.length} · {done ? 'E ▸' : '…'}</p>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* shops */}
         {overlay?.type === 'shop' && (
