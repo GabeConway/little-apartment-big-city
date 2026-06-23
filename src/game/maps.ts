@@ -196,7 +196,6 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'PAWN', x: 22, y: 1, color: '#e89a7c', bg: 'rgba(0,0,0,0.55)' },
     { text: 'ガチャ', x: 27, y: 0, color: '#fff', bg: '#e857a8', border: '#ffd5ec', blink: true, font: 8 },
     { text: 'GACHA!', x: 27, y: 1, color: '#e857a8', bg: 'rgba(0,0,0,0.55)' },
-    { text: 'メゾンかわ MAISON KAWA', x: 2, y: 12, color: '#cfc4ab', bg: '#3a362f', border: '#5d6470' },
     { text: '⛩ SHRINE', x: 22, y: 14, color: '#e8a0a0', bg: 'rgba(0,0,0,0.35)' },
     { text: '< SHORE', x: 1, y: 15, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
     { text: 'DOWNTOWN >', x: 26, y: 8, color: '#e857a8', bg: 'rgba(0,0,0,0.55)', blink: true },
