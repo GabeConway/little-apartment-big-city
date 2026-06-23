@@ -8,6 +8,18 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 
 > History below (Parts A–v3.6) = as-built record from `personalsite` era. Part A ("Games section") portfolio-only, no longer applies to standalone repo.
 
+## Feature pass (2026-06-23) — buildings, dialogue, fishing, art
+- [x] **Nakatomi Apartments** rename (Die Hard nod): facade `t-apt-wall` + gold tile sign `t-nakatomi-l/r` (in-tile FONT3x5 micro-font) + planters; removed the old overlapping `MAISON KAWA` SCENE_SIGNS entry.
+- [x] **Torii** slimmed (thinner posts/base); **shrine grounds** glow-up (sakura/maple/toro lanterns/komainu/stone path/upgraded offering box); **water** depth (layered bands + shimmer/foam); **grass** depth (extra speckle + `t-grass-v2` clover/daisy).
+- [x] **Club Kaiju** stuck disco-ball light fixed — now drifts in a slow circle off the anim clock like the beams.
+- [x] **Dialogue typewriter** (~83 cps, E snaps line full then advances) + **Stardew portraits** (`PORTRAIT_IMAGES`/`PORTRAITS`); Granny Sato PNG portrait `public/images/portraits/granny-soto.png`.
+- [x] **Journal** phone app (📓) — live goals/next-steps, extensible.
+- [x] **Fishing overhaul** (`fishing.ts`: catch-zone + lunge/stamina/tension) + **rod tiers** (`save.fishRod`, `RODS`); Genji sells the Carbon Rod (¥6,000, `genji` shop).
+- [x] **Community Greenhouse** (`greenhouse` scene off shrine) — Granny Soto, sunflower MVP, sprinkler toggle, day-cycle growth (`growGreenhouse` in `finishSleep`); `CROPS`/`GREENHOUSE_PLOTS`, built to extend to a farming sim. Music `greenhouse.mp3`.
+- [x] **Kawamachi Museum** (`museum` scene in Downtown) — Bingus Doofelsmurt, 12 `MUSEUM_SLOTS` Stardew-CC donation framework, `save.museum.donated`, `donateToMuseum` ready for future collectibles. Music `museum.mp3`.
+- [x] Built via parallel worktree subagents + merge; all 88 tests pass, tsc/build clean, playtested each scene (shrine/greenhouse/museum/city/shore/Journal/dialogue).
+- [ ] **Future**: museum collectible items (wire `donateToMuseum` to found objects); more greenhouse crops; portraits for more NPCs.
+
 ## Part A — Games section (done earlier, unchanged)
 - [x] Navbar Games tab, `/games` hub (hash views), `/about-me` redirect, GabeOsDesk extraction, link repoints, InterestsPage deleted
 - [x] Game logo on hub card (`public/images/game-logo.png`, downscaled 1024→512)
