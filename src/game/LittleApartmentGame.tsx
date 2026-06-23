@@ -331,6 +331,40 @@ type FishMode =
   | { phase: 'bite'; t: number; tile: Vec; table: FishTable }
   | { phase: 'reel'; st: FishingState; tile: Vec; table: FishTable };
 
+// ---- Konbini shift minigame: "Register Rush" --------------------------------
+// Replaces the old instant time-skip shift. Serve SHIFT_CUSTOMERS customers; each
+// is a 3-step QTE: SCAN (press E once per item) → BAG (press ↓) → CHANGE (match
+// the arrow prompts in order). Beat the per-customer timer. A wrong key or a
+// timeout = fumble: no tip + combo resets, but the shift always finishes (cozy).
+// Pay = a base share per clean serve + speed/combo tips, capped at SHIFT_PAY_CAP.
+const SHIFT_CUSTOMERS = 6;
+const SHIFT_PAY_CAP = 2400;
+const SHIFT_DIRS: Dir[] = ['left', 'right', 'up', 'down'];
+const ARROW_GLYPH: Record<Dir, string> = { left: '←', right: '→', up: '↑', down: '↓' };
+type ShiftPhase = 'scan' | 'bag' | 'change';
+interface ShiftCustomer { items: number; scanned: number; change: Dir[]; changeIdx: number }
+interface ShiftGame {
+  idx: number; phase: ShiftPhase; cust: ShiftCustomer;
+  timer: number; maxTimer: number;
+  combo: number; served: number; earned: number;
+  flash: number; flashGood: boolean; flashText: string;
+  lastDir: Dir | null;
+}
+const makeShiftCustomer = (n: number): ShiftCustomer => {
+  const items = Math.min(4, 2 + (n >= 3 ? 1 : 0) + (Math.random() < 0.5 ? 1 : 0));
+  const change: Dir[] = [];
+  const len = 2 + (n >= 4 ? 1 : 0);
+  for (let i = 0; i < len; i++) change.push(SHIFT_DIRS[Math.floor(Math.random() * 4)]);
+  return { items, scanned: 0, change, changeIdx: 0 };
+};
+const shiftTimerFor = (n: number, c: ShiftCustomer): number =>
+  Math.max(2.4, c.items * 0.7 + c.change.length * 0.8 + 2.0 - n * 0.25);
+const makeShiftGame = (): ShiftGame => {
+  const cust = makeShiftCustomer(0);
+  const t = shiftTimerFor(0, cust);
+  return { idx: 0, phase: 'scan', cust, timer: t, maxTimer: t, combo: 0, served: 0, earned: 0, flash: 0, flashGood: false, flashText: '', lastDir: null };
+};
+
 interface Projectile { x: number; y: number; dx: number; dy: number; t: number; pierce?: boolean; dmg?: number; gun?: boolean }
 
 interface Hud {
@@ -763,6 +797,7 @@ const LittleApartmentGame: React.FC = () => {
   const solidsRef = useRef(new Set<string>());
   const overlayRef = useRef<Overlay | null>(null);
   const fishModeRef = useRef<FishMode | null>(null);
+  const shiftRef = useRef<ShiftGame | null>(null);
   const pendingBeatsRef = useRef<StoryBeat[]>([]);
   const sleepTimerRef = useRef<number | null>(null);
   const oreNodesRef = useRef<OreNode[]>([]);
@@ -2022,6 +2057,68 @@ const LittleApartmentGame: React.FC = () => {
       return;
     }
 
+    // Konbini shift minigame: "Register Rush" (QTE scan → bag → change).
+    const sg = shiftRef.current;
+    if (sg) {
+      const finishShift = () => {
+        const sv = saveRef.current;
+        const pay = Math.min(SHIFT_PAY_CAP, Math.round(sg.earned));
+        sv.money += pay; sv.shiftDay = sv.day; sv.shiftsWorked += 1; sv.today.shifts += 1;
+        if (sv.shiftsWorked >= 5) award('shift-5');
+        shiftRef.current = null;
+        sfxCoin(); persistSave(sv); refreshHud();
+        const grade = sg.served >= SHIFT_CUSTOMERS ? 'A flawless rush — the manager almost smiles.'
+          : sg.served >= SHIFT_CUSTOMERS - 2 ? 'Solid shift. The register balances and the queue stayed calm.'
+          : 'A rough rush. The regulars forgive you. Mostly.';
+        showDialog([`Shift over — ${sg.served}/${SHIFT_CUSTOMERS} customers rung up clean. (+¥${pay.toLocaleString()})`, grade]);
+      };
+      if (input.consumeCancel()) { finishShift(); return; }
+      input.consumeInventory();
+      const ePress = input.consumeInteract();
+      const d = input.currentDir();
+      const dirPress = d && d !== sg.lastDir ? d : null;
+      sg.lastDir = d;
+      if (sg.flash > 0) sg.flash -= dt;
+      sg.timer -= dt;
+
+      const advance = (gain: number, good: boolean, text: string) => {
+        sg.earned += gain;
+        sg.flash = 0.6; sg.flashGood = good; sg.flashText = text;
+        sg.idx += 1;
+        if (sg.idx >= SHIFT_CUSTOMERS) { finishShift(); return; }
+        sg.cust = makeShiftCustomer(sg.idx);
+        sg.timer = shiftTimerFor(sg.idx, sg.cust); sg.maxTimer = sg.timer;
+        sg.phase = 'scan';
+      };
+      const fumble = () => { sg.combo = 0; sfxMiss(); advance(0, false, 'FUMBLE!'); };
+      const serve = () => {
+        sg.served += 1;
+        const tip = Math.round(Math.min(140, sg.combo * 14 + (sg.timer / sg.maxTimer) * 80));
+        const gain = Math.round(SHIFT_PAY / SHIFT_CUSTOMERS) + tip;
+        sg.combo += 1;
+        sfxBuy();
+        advance(gain, true, `+¥${gain.toLocaleString()}`);
+      };
+
+      if (sg.timer <= 0) { fumble(); }
+      else if (sg.phase === 'scan') {
+        if (ePress) { sfxBite(); sg.cust.scanned += 1; if (sg.cust.scanned >= sg.cust.items) sg.phase = 'bag'; }
+        else if (dirPress) fumble();
+      } else if (sg.phase === 'bag') {
+        if (dirPress === 'down') sg.phase = 'change';
+        else if (ePress || dirPress) fumble();
+      } else {
+        if (ePress) fumble();
+        else if (dirPress) {
+          if (dirPress === sg.cust.change[sg.cust.changeIdx]) {
+            sg.cust.changeIdx += 1;
+            if (sg.cust.changeIdx >= sg.cust.change.length) serve();
+          } else fumble();
+        }
+      }
+      return;
+    }
+
     const s = saveRef.current;
     if (sceneRef.current.id === 'apartment' && allFurnished(s) && !s.ended) {
       setOverlayBoth({ type: 'ending' });
@@ -2844,6 +2941,74 @@ const LittleApartmentGame: React.FC = () => {
       ctx.fillStyle = fm.phase === 'bite' ? '#ffd24a' : '#9fc4e8';
       ctx.fillText(msg, VIEW_PW / 2 - msg.length * 2, 10);
     }
+
+    // Konbini shift minigame: "Register Rush" UI (full-screen over the konbini).
+    const sg = shiftRef.current;
+    if (sg) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(8,10,14,0.93)'; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 10px monospace'; ctx.fillStyle = '#ffd24a';
+      ctx.fillText('REGISTER RUSH', VIEW_PW / 2, 16);
+      ctx.font = 'bold 6px monospace'; ctx.fillStyle = '#9fc4e8';
+      ctx.fillText(`Customer ${Math.min(sg.idx + 1, SHIFT_CUSTOMERS)}/${SHIFT_CUSTOMERS}    combo x${sg.combo}    earned ¥${sg.earned.toLocaleString()}`, VIEW_PW / 2, 26);
+
+      // per-customer timer bar
+      const tw = VIEW_PW - 40, frac = Math.max(0, sg.timer / sg.maxTimer);
+      ctx.fillStyle = '#2a3340'; ctx.fillRect(20, 32, tw, 4);
+      ctx.fillStyle = frac > 0.4 ? '#7ce8a0' : frac > 0.2 ? '#ffb24a' : '#ff5a5a';
+      ctx.fillRect(20, 32, Math.round(tw * frac), 4);
+
+      // little customer at the counter
+      ctx.fillStyle = '#caa6d8'; ctx.fillRect(VIEW_PW / 2 - 5, 50, 10, 8);   // body
+      ctx.fillStyle = '#e8c4a0'; ctx.fillRect(VIEW_PW / 2 - 4, 44, 8, 7);    // head
+      ctx.fillStyle = '#3a2b1a'; ctx.fillRect(VIEW_PW / 2 - 3, 46, 2, 1); ctx.fillRect(VIEW_PW / 2 + 1, 46, 2, 1); // eyes
+
+      const cy = VIEW_PH / 2 + 4;
+      if (sg.phase === 'scan') {
+        ctx.font = 'bold 9px monospace'; ctx.fillStyle = '#e8e0d0';
+        ctx.fillText('SCAN', VIEW_PW / 2, cy - 16);
+        const n = sg.cust.items, bw = 16, gap = 6, totW = n * bw + (n - 1) * gap, x0 = (VIEW_PW - totW) / 2;
+        for (let i = 0; i < n; i++) {
+          const x = x0 + i * (bw + gap);
+          ctx.fillStyle = i < sg.cust.scanned ? '#3a4450' : '#caa23a';
+          ctx.fillRect(x, cy - 6, bw, 13);
+          ctx.fillStyle = '#1d2430';
+          for (let b = 0; b < 4; b++) ctx.fillRect(x + 3 + b * 3, cy - 4, 1, 9); // barcode stripes
+        }
+        ctx.font = 'bold 8px monospace'; ctx.fillStyle = '#ffd24a';
+        ctx.fillText(`press [E]  ×${sg.cust.items - sg.cust.scanned}`, VIEW_PW / 2, cy + 24);
+      } else if (sg.phase === 'bag') {
+        ctx.font = 'bold 9px monospace'; ctx.fillStyle = '#e8e0d0';
+        ctx.fillText('BAG IT', VIEW_PW / 2, cy - 10);
+        ctx.font = 'bold 16px monospace'; ctx.fillStyle = '#7ce8a0';
+        ctx.fillText('↓', VIEW_PW / 2, cy + 12);
+        ctx.font = 'bold 7px monospace'; ctx.fillStyle = '#9fc4e8';
+        ctx.fillText('press DOWN', VIEW_PW / 2, cy + 26);
+      } else {
+        ctx.font = 'bold 9px monospace'; ctx.fillStyle = '#e8e0d0';
+        ctx.fillText('MAKE CHANGE', VIEW_PW / 2, cy - 16);
+        const arr = sg.cust.change, gap = 18, x0 = VIEW_PW / 2 - ((arr.length - 1) * gap) / 2;
+        ctx.font = 'bold 15px monospace';
+        for (let i = 0; i < arr.length; i++) {
+          ctx.fillStyle = i < sg.cust.changeIdx ? '#3a4450' : i === sg.cust.changeIdx ? '#ffd24a' : '#9fc4e8';
+          ctx.fillText(ARROW_GLYPH[arr[i]], x0 + i * gap, cy + 4);
+        }
+        ctx.font = 'bold 7px monospace'; ctx.fillStyle = '#9fc4e8';
+        ctx.fillText('press the arrows in order', VIEW_PW / 2, cy + 24);
+      }
+
+      if (sg.flash > 0) {
+        ctx.globalAlpha = Math.min(1, sg.flash * 2.2);
+        ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = sg.flashGood ? '#7ce8a0' : '#ff6a6a';
+        ctx.fillText(sg.flashText, VIEW_PW / 2, VIEW_PH - 18);
+        ctx.globalAlpha = 1;
+      }
+      ctx.font = 'bold 6px monospace'; ctx.globalAlpha = 0.5; ctx.fillStyle = '#e8e0d0';
+      ctx.fillText('[E] scan · [↓] bag · arrows = change · Esc clocks out', VIEW_PW / 2, VIEW_PH - 6);
+      ctx.restore();
+    }
   }, []);
 
   // ---- lifecycle --------------------------------------------------------------
@@ -3491,20 +3656,18 @@ const LittleApartmentGame: React.FC = () => {
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
   };
 
+  // Clock in: close the shop UI and start the "Register Rush" minigame. Pay,
+  // shiftDay, etc. are settled when the shift finishes (see the update loop).
   const workShift = () => {
     const s = saveRef.current;
     const cost = energyCost(s, SHIFT_COST);
     if (s.shiftDay === s.day || s.energy < cost) return;
     s.energy -= cost;
-    s.money += SHIFT_PAY;
-    s.shiftDay = s.day;
-    s.shiftsWorked += 1;
-    s.today.shifts += 1;
-    if (s.shiftsWorked >= 5) award('shift-5');
-    sfxCoin();
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
     setOverlayBoth(null);
-    showDialog([`You stock shelves and work the register for a few hours. (+¥${SHIFT_PAY})`]);
+    const sg = makeShiftGame();
+    sg.lastDir = inputRef.current.currentDir(); // ignore a direction already held on clock-in
+    shiftRef.current = sg;
   };
 
   // Pay off the yakuza: they stay put while the screen blacks out, then they're

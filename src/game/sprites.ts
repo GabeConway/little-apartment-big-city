@@ -805,6 +805,7 @@ const buildTiles = (atlas: Atlas) => {
 
   // Odd-jobs notice board — corkboard on two posts, pinned papers. Solid; faced.
   atlas['t-board'] = tile(ctx => {
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 51, 6); speckle(ctx, '#4d7440', 23, 4); // grass base (no black edges)
     ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 12, 2, 4); ctx.fillRect(12, 12, 2, 4); // posts
     ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 1, 14, 11);                            // frame
     ctx.fillStyle = '#c79a5a'; ctx.fillRect(2, 2, 12, 9);                             // cork
@@ -1193,13 +1194,14 @@ const buildTiles = (atlas: Atlas) => {
   });
   // Museum exterior facade — neoclassical pale stone with seamless fluting,
   // so a row of these reads as one stately storefront amid grimy Downtown.
-  atlas['t-museum-front'] = tile(ctx => {
-    fill(ctx, '#bcb4a4');
-    ctx.fillStyle = '#c8c0b0'; ctx.fillRect(0, 0, 16, 2);     // cornice
-    ctx.fillStyle = '#a89e8c'; ctx.fillRect(0, 2, 16, 1);     // cornice shadow
-    ctx.fillStyle = '#a89e8c'; for (let x = 2; x < 16; x += 4) ctx.fillRect(x, 3, 1, 12);     // flute shade
-    ctx.fillStyle = '#cec6b6'; for (let x = 3; x < 16; x += 4) ctx.fillRect(x, 3, 1, 12);     // flute highlight
-    ctx.fillStyle = '#8a8070'; ctx.fillRect(0, 15, 16, 1);    // base shadow
+  atlas['t-museum-front'] = tile(ctx => {                      // dark stately stone, fits the neon street
+    fill(ctx, '#232a36');                                      // dark slate stone
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 0, 16, 2);      // gold cornice
+    ctx.fillStyle = '#8a6e1c'; ctx.fillRect(0, 2, 16, 1);      // cornice shadow
+    ctx.fillStyle = '#2f3a48'; for (let x = 1; x < 16; x += 4) ctx.fillRect(x, 3, 2, 11);   // columns (highlight)
+    ctx.fillStyle = '#161b24'; for (let x = 3; x < 16; x += 4) ctx.fillRect(x, 3, 1, 11);   // column shade (seams L-R)
+    ctx.fillStyle = '#ffd24a'; for (let x = 1; x < 16; x += 4) ctx.fillRect(x, 6, 2, 2);    // warm lit windows
+    ctx.fillStyle = '#1a1f28'; ctx.fillRect(0, 14, 16, 2);     // base
   });
 
   // Mines
