@@ -1044,6 +1044,136 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#b08a50'; ctx.fillRect(4, 2, 8, 3); // hat on display
     ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 4, 10, 1);
   });
+
+  // ---- Paris (the secret arc) ------------------------------------------------
+  // Cobblestone, Haussmann facades, café/boulangerie fronts, the Seine, and a
+  // multi-tile Eiffel Tower. Authored at neutral daytime; engine tints day/night.
+  atlas['t-cobble'] = tile(ctx => {
+    fill(ctx, '#8b8a86');
+    ctx.fillStyle = '#74726d'; // mortar grid
+    ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1);
+    ctx.fillRect(4, 0, 1, 5); ctx.fillRect(11, 6, 1, 5); ctx.fillRect(7, 12, 1, 4);
+    ctx.fillStyle = '#9a988f'; // stone tops, lit upper-left
+    ctx.fillRect(1, 1, 2, 3); ctx.fillRect(6, 1, 3, 3); ctx.fillRect(12, 1, 3, 3);
+    ctx.fillRect(1, 7, 4, 3); ctx.fillRect(8, 7, 2, 3); ctx.fillRect(12, 7, 3, 3);
+    ctx.fillRect(1, 12, 5, 3); ctx.fillRect(9, 12, 5, 3);
+    speckle(ctx, '#7f7d77', 83, 5);
+  });
+  atlas['t-paris-sky'] = tile(ctx => {
+    fill(ctx, '#bcd6ec');
+    ctx.fillStyle = '#cbe2f2'; ctx.fillRect(0, 0, 16, 6); // brighter up high
+    ctx.fillStyle = '#eef5fb'; ctx.fillRect(2, 8, 5, 2); ctx.fillRect(9, 4, 4, 2); // soft clouds
+    ctx.fillStyle = '#d8eafa'; ctx.fillRect(3, 10, 4, 1); ctx.fillRect(10, 6, 3, 1);
+  });
+  atlas['t-paris-bld'] = tile(ctx => {       // Haussmann cream facade (solid)
+    fill(ctx, '#d8c9a8');
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(0, 0, 16, 3);   // grey mansard roof
+    ctx.fillStyle = '#4a5466'; ctx.fillRect(0, 0, 16, 1);
+    ctx.fillStyle = '#c4b48f'; ctx.fillRect(0, 3, 16, 1);   // cornice shadow
+    ctx.fillStyle = '#5d6470'; ctx.fillRect(2, 5, 4, 7); ctx.fillRect(10, 5, 4, 7);   // tall windows
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(3, 6, 2, 5); ctx.fillRect(11, 6, 2, 5);   // glass
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(2, 11, 4, 1); ctx.fillRect(10, 11, 4, 1); // juliet balconies
+    ctx.fillStyle = '#b9a884'; ctx.fillRect(0, 14, 16, 2);  // base shadow
+  });
+  atlas['t-cafe-awning'] = tile(ctx => {     // red-striped café front (solid)
+    fill(ctx, '#e8e0d0');
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, 16, 6);
+    ctx.fillStyle = '#e8e0d0'; for (let x = 0; x < 16; x += 4) ctx.fillRect(x, 0, 2, 6);
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(0, 6, 16, 1);
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(0, 7, 16, 9);   // café window below
+    ctx.fillStyle = '#caa46a'; ctx.fillRect(2, 9, 12, 5);
+    ctx.fillStyle = '#3a2c1e'; ctx.fillRect(8, 9, 1, 5);
+  });
+  atlas['t-boulangerie'] = tile(ctx => {     // blue/gold bakery front (solid)
+    fill(ctx, '#e8e0d0');
+    ctx.fillStyle = '#2e5e8e'; ctx.fillRect(0, 0, 16, 6);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(0, 5, 16, 1); for (let x = 1; x < 16; x += 4) ctx.fillRect(x, 0, 1, 6);
+    ctx.fillStyle = '#27517c'; ctx.fillRect(0, 6, 16, 1);
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(0, 7, 16, 9);   // window with bread
+    ctx.fillStyle = '#caa46a'; ctx.fillRect(2, 9, 12, 5);
+    ctx.fillStyle = '#b5651d'; ctx.fillRect(3, 11, 3, 2); ctx.fillRect(7, 10, 3, 2); ctx.fillRect(10, 12, 3, 1);
+  });
+  atlas['t-paris-door'] = tile(ctx => {      // bistro door (walkable) on cobble
+    fill(ctx, '#8b8a86');
+    ctx.fillStyle = '#1f3a2a'; ctx.fillRect(2, 0, 12, 16);  // dark green frame
+    ctx.fillStyle = '#2e5e44'; ctx.fillRect(3, 1, 10, 14);
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(4, 2, 8, 5);    // glass top
+    ctx.fillStyle = '#234a35'; ctx.fillRect(7, 2, 1, 5);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(10, 9, 2, 2);   // brass handle
+  });
+  atlas['t-paris-tree'] = tile(ctx => {      // pollarded plane tree in a planter
+    fill(ctx, '#8b8a86');
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(3, 1, 10, 8);   // canopy
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(4, 2, 4, 3); ctx.fillRect(9, 4, 3, 2);
+    ctx.fillStyle = '#3e5c33'; ctx.fillRect(7, 8, 2, 3);    // trunk
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(4, 11, 8, 4);   // planter box
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(4, 11, 8, 1);
+  });
+  atlas['t-quay'] = tile(ctx => {            // stone embankment by the Seine
+    fill(ctx, '#9a9488');
+    ctx.fillStyle = '#857f73'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 10, 16, 1);
+    ctx.fillRect(5, 0, 1, 5); ctx.fillRect(11, 6, 1, 4);
+    ctx.fillStyle = '#6e6a60'; ctx.fillRect(0, 14, 16, 2);  // edge toward the water
+    speckle(ctx, '#a8a294', 89, 5);
+  });
+  // The faint seam in the backrooms wall that becomes the Paris entrance.
+  atlas['t-paris-portal'] = tile(ctx => {
+    fill(ctx, '#b0a050'); // matches t-backwall base
+    ctx.fillStyle = '#988a40'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1);
+    ctx.fillStyle = '#887a36'; ctx.fillRect(0, 14, 16, 2);
+    ctx.fillStyle = '#6e6326'; ctx.fillRect(7, 1, 2, 14); // hairline vertical seam
+    ctx.fillStyle = '#c9be6a'; ctx.fillRect(6, 1, 1, 14);
+    speckle(ctx, '#c4b462', 47, 4);
+  });
+
+  // Eiffel Tower — a 3-wide × 4-tall block: spire '1', upper '3', mid row
+  // '5','6','7', base row '8','9','0'. Authored against pale sky; legs mirror.
+  const eSky = '#cbe2f2', eFe = '#5a3c24', eFeL = '#7a5638', eFeD = '#3a2616';
+  atlas['t-eiffel-1'] = tile(ctx => {        // spire (top, centred)
+    fill(ctx, eSky);
+    ctx.fillStyle = eFeL; ctx.fillRect(7, 0, 2, 2);
+    ctx.fillStyle = eFe; ctx.fillRect(7, 2, 2, 11);         // mast
+    ctx.fillStyle = eFe; ctx.fillRect(4, 13, 8, 3);         // top observation deck
+    ctx.fillStyle = eFeD; ctx.fillRect(4, 15, 8, 1);
+  });
+  atlas['t-eiffel-3'] = tile(ctx => {        // upper body, under the spire
+    fill(ctx, eSky);
+    ctx.fillStyle = eFe; ctx.fillRect(5, 0, 2, 16); ctx.fillRect(9, 0, 2, 16); // uprights
+    ctx.fillStyle = eFeL; ctx.fillRect(5, 0, 1, 16);
+    ctx.fillStyle = eFeD; for (let y = 1; y < 15; y += 4) ctx.fillRect(6, y, 4, 1); // rungs
+    ctx.fillStyle = eFe; ctx.fillRect(3, 12, 10, 3);        // mid platform
+    ctx.fillStyle = eFeD; ctx.fillRect(3, 14, 10, 1);
+  });
+  const eMidL = tile(ctx => {                // mid-left leg slanting out
+    fill(ctx, eSky);
+    for (let k = 0; k < 16; k++) { const x = 13 - Math.floor(k * 0.5); ctx.fillStyle = eFe; ctx.fillRect(x, k, 3, 1); }
+    ctx.fillStyle = eFeD; for (let k = 2; k < 16; k += 4) { const x = 13 - Math.floor(k * 0.5); ctx.fillRect(x, k, 3, 1); }
+  });
+  atlas['t-eiffel-5'] = eMidL; atlas['t-eiffel-7'] = mirror(eMidL);
+  atlas['t-eiffel-6'] = tile(ctx => {        // mid-centre lattice belly + decks
+    fill(ctx, eSky);
+    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 2);         // upper deck joining the legs
+    ctx.fillStyle = eFeL; ctx.fillRect(0, 0, 16, 1);
+    ctx.fillStyle = eFe; ctx.fillRect(6, 2, 4, 14);         // central column
+    ctx.fillStyle = eFeD; ctx.fillRect(2, 7, 12, 1);        // cross rail
+    ctx.fillStyle = eFe; ctx.fillRect(0, 13, 16, 3);        // lower deck
+    ctx.fillStyle = eFeD; ctx.fillRect(0, 15, 16, 1);
+  });
+  const eLegL = tile(ctx => {                // base-left splayed leg + arch shoulder
+    fill(ctx, eSky);
+    for (let k = 0; k < 16; k++) { const x = 9 - Math.floor(k * 0.5); ctx.fillStyle = eFe; ctx.fillRect(Math.max(0, x), k, 4, 1); }
+    ctx.fillStyle = eFeD; ctx.fillRect(0, 13, 7, 3); ctx.fillStyle = eFe; ctx.fillRect(0, 13, 7, 1); // foot
+    ctx.fillStyle = eFe; ctx.fillRect(13, 0, 3, 5);         // arch shoulder (inner top)
+  });
+  atlas['t-eiffel-8'] = eLegL; atlas['t-eiffel-0'] = mirror(eLegL);
+  atlas['t-eiffel-9'] = tile(ctx => {        // grand arch (open) under the deck
+    fill(ctx, eSky);
+    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 3);         // beam joining the legs
+    ctx.fillStyle = eFeL; ctx.fillRect(0, 0, 16, 1);
+    ctx.fillStyle = eFe; ctx.fillRect(0, 3, 3, 4); ctx.fillRect(13, 3, 3, 4); // arch haunches
+    ctx.fillStyle = eFeD; ctx.fillRect(0, 3, 2, 1); ctx.fillRect(14, 3, 2, 1);
+    // the middle/bottom stays open sky — the famous arch
+  });
 };
 
 // ---- Furniture (procedural; bed/sofa/futon are 32x16) -------------------

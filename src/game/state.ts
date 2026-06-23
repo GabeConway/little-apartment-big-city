@@ -5,7 +5,7 @@
 import type { Dir } from './engine';
 import { mulberry32 } from './engine';
 import {
-  FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
+  FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
   itemKind, MESSAGES, furnitureById,
 } from './data';
@@ -44,9 +44,11 @@ export interface GameSave {
   gacha: Record<string, number>; // figure name -> count
   hat: boolean;                 // Tex's $67 cowboy hat (worn on the sprite)
   peepis: number;               // cans of "Diet Doctor Peepis" in your pocket
-  sodas: Record<string, number>; // other vending sodas in your pocket (soda id -> count)
+  sodas: Record<string, number>; // other vending sodas in your pocket (soda id -> count), e.g. 'doofert'
   monsterFed: boolean;          // gave The Manager a cold one; shop unlocked
   gangPaid: boolean;            // paid off the yakuza blocking the way to Downtown
+  backroomsUnlocked: boolean;   // The Big Guy at Club Kaiju revealed the konbini freezer portal (after a Doofert)
+  parisRevealed: boolean;       // The Manager revealed the secret Paris entrance in the backrooms (after all his furniture)
   minerals: Record<string, number>; // mineral id -> count
   wand: boolean;                // the magical girl wand
   visited: string[];            // scene ids seen (the DJ only plays places you know)
@@ -113,6 +115,8 @@ export const newSave = (): GameSave => ({
   sodas: {},
   monsterFed: false,
   gangPaid: false,
+  backroomsUnlocked: false,
+  parisRevealed: false,
   minerals: {},
   wand: false,
   visited: ['apartment'],
@@ -247,6 +251,11 @@ export const buyFurniture = (s: GameSave, itemId: string, price: number): boolea
 // The ending wants the furniture actually IN the apartment, not in boxes.
 export const allFurnished = (s: GameSave): boolean =>
   FURNITURE.every(f => Boolean(s.placed[f.id]));
+
+// True once every one of The Manager's rare furniture pieces has been acquired
+// (owned, boxed or placed). Drives the Manager's Paris reveal.
+export const allRaresOwned = (s: GameSave): boolean =>
+  RARE_FURNITURE.every(f => s.rares.includes(f.id));
 
 // ---- placement -----------------------------------------------------------------
 

@@ -246,6 +246,12 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   deepsea: [
     { text: '↓ HOME / SHORE', x: 5, y: 10, color: '#9fc4e8', bg: 'rgba(0,0,0,0.5)' },
   ],
+  paris: [
+    { text: 'CAFÉ DE LA LUNE', x: 1, y: 4, color: '#ffe9a0', bg: '#7a1f18', border: '#c0392b', font: 7 },
+    { text: 'BOULANGERIE', x: 17, y: 4, color: '#ffd24a', bg: '#16304a', border: '#2e5e8e', font: 7 },
+    { text: '↩ RETOUR', x: 2, y: 5, color: '#e8e0d0', bg: 'rgba(0,0,0,0.5)' },
+    { text: 'PARIS, FRANCE', x: 9, y: 12, color: '#e8e0d0', bg: 'rgba(0,0,0,0.4)' },
+  ],
 };
 
 // ---- Den Den Electric --------------------------------------------------------
@@ -540,9 +546,10 @@ const backrooms: SceneDef = {
     '.': T('t-backfloor'),
     'O': T('t-portal-0'),
     'H': T('t-hole'),
+    'E': T('t-paris-portal', true), // the secret Paris seam (top wall); only "opens" once parisRevealed
   },
   grid: [
-    '##################',
+    '########E#########',
     '#................#',
     '#..##....##......#',
     '#..##....##......#',
@@ -559,6 +566,8 @@ const backrooms: SceneDef = {
   interactables: [
     { id: 'portal-exit', x: 2, y: 9, label: 'Step back through' },
     { id: 'descend', x: 13, y: 9, label: 'Climb down' },
+    // Faced from tile (8,1); the hacker transition fires only when parisRevealed.
+    { id: 'paris-portal', x: 8, y: 0, label: 'A faint seam in the wall' },
   ],
   npcs: [
     { id: 'monster', x: 13, y: 3, sprite: 'npc-monster', dir: 'down' },
@@ -752,6 +761,58 @@ const casino: SceneDef = {
   npcs: [{ id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' }],
 };
 
+// ---- Paris (the secret entrance behind the backrooms) ---------------------------------
+// Reached only via the hacker transition from the backrooms seam (parisRevealed).
+// Eiffel Tower against the sky, café + boulangerie awnings, cobble plaza, the Seine.
+
+const paris: SceneDef = {
+  id: 'paris',
+  name: 'Paris, France',
+  legend: {
+    'P': T('t-paris-bld', true),
+    'k': T('t-paris-sky', true),
+    'c': T('t-cobble'),
+    'a': T('t-cafe-awning', true),
+    'b': T('t-boulangerie', true),
+    'D': T('t-paris-door'),
+    'T': T('t-paris-tree', true),
+    'q': T('t-quay'),
+    'w': T('t-water-0', true),
+    // Eiffel Tower tiles (all solid): spire / upper / mid row / base row.
+    '1': T('t-eiffel-1', true),
+    '3': T('t-eiffel-3', true),
+    '5': T('t-eiffel-5', true), '6': T('t-eiffel-6', true), '7': T('t-eiffel-7', true),
+    '8': T('t-eiffel-8', true), '9': T('t-eiffel-9', true), '0': T('t-eiffel-0', true),
+  },
+  outdoor: true,
+  grid: [
+    'PPkkkkkkkkkk1kkkkkkkkkkkPP',
+    'PPkkkkkkkkkk3kkkkkkkkkkkPP',
+    'PPkkkkkkkkk567kkkkkkkkkkPP',
+    'PPkkkkkkkkk890kkkkkkkkkkPP',
+    'PPccccccccccccccccccccccPP',
+    'PaaaccccccccccccccccccbbbP',
+    'PaDDccccccccccccccccccbbbP',
+    'PPccccccccccccccccccccccPP',
+    'cccccccccccccccccccccccccc',
+    'cccTccccTccccccccTccccTccc',
+    'qqqqqqqqqqqqqqqqqqqqqqqqqq',
+    'wwwwwwwwwwwwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwwwwwwwwwwwww',
+  ],
+  warps: [
+    { x: 2, y: 6, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
+    { x: 3, y: 6, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
+  ],
+  interactables: [
+    { id: 'seine', x: 0, y: 10, w: 26, h: 2, label: 'The Seine' },
+  ],
+  npcs: [
+    { id: 'baguette', x: 16, y: 8, sprite: 'npc-tourist', dir: 'down' },
+  ],
+};
+
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, island, deepsea, casino,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, island, deepsea, casino, paris,
 };
