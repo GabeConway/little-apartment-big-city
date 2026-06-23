@@ -226,7 +226,6 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'カラオケ', x: 20, y: 0, color: '#7ce8e0', bg: '#16121d', border: '#7ce8e0', vertical: true, font: 8, blink: true },
     { text: 'ホテル', x: 22, y: 0, color: '#e857a8', bg: '#16121d', border: '#e857a8', vertical: true, font: 8 },
     { text: 'カジノ', x: 24, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', vertical: true, font: 8, blink: true },
-    { text: 'CASINO', x: 23, y: 2, color: '#16181d', bg: '#ffd24a', border: '#c9a227', font: 7, blink: true },
     { text: 'いざかや', x: 26, y: 0, color: '#7ce8a0', bg: '#16121d', border: '#7ce8a0', vertical: true, font: 8 },
     { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
   ],
@@ -389,6 +388,7 @@ const BADTOWN_L = {
   'T': T('t-trash', true),
   'V': T('t-vending-dead', true),
   'D': T('t-door'),
+  'K': T('t-casino-front', true), // gold marquee facade over the casino entrance
 };
 
 const badtown: SceneDef = {
@@ -397,8 +397,8 @@ const badtown: SceneDef = {
   legend: BADTOWN_L,
   outdoor: true,
   grid: [
-    'NNNNNNNNNNGGGGGGGGGGEEXXEEXX',
-    'NNNNNNNNNNGGGGGGGGGGEEXXEEXX',
+    'NNNNNNNNNNGGGGGGGGGGEEXXKKXX',
+    'NNNNNNNNNNGGGGGGGGGGEEXXKKXX',
     'NNNDDNNNNNGGGGDDGGGGEEXXDDXX',
     'ppqpppppppppppppppppppqppppp',
     'ppppppppppppppppppppppVppppp',

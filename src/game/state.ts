@@ -253,9 +253,10 @@ export const allFurnished = (s: GameSave): boolean =>
   FURNITURE.every(f => Boolean(s.placed[f.id]));
 
 // True once every one of The Manager's rare furniture pieces has been acquired
-// (owned, boxed or placed). Drives the Manager's Paris reveal.
+// (owned, boxed or placed). Drives the Manager's Paris reveal. The coffin is
+// David's gift, not the Manager's stock, so it doesn't count here.
 export const allRaresOwned = (s: GameSave): boolean =>
-  RARE_FURNITURE.every(f => s.rares.includes(f.id));
+  RARE_FURNITURE.filter(f => f.id !== 'coffin').every(f => s.rares.includes(f.id));
 
 // ---- placement -----------------------------------------------------------------
 

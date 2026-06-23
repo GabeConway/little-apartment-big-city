@@ -838,6 +838,17 @@ const buildTiles = (atlas: Atlas) => {
   });
 
   // Casino (Kaiju Palace) — burgundy carpet, red slot cabinets, green felt tables
+  atlas['t-casino-front'] = tile(ctx => {              // exterior: gold marquee with bulb lights
+    ctx.fillStyle = '#160b12'; ctx.fillRect(0, 0, 16, 16);                         // dark wall
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(1, 2, 14, 11);                         // red sign panel
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 4, 10, 6);                          // bright marquee face
+    ctx.fillStyle = '#c9a227';                                                     // gold frame
+    ctx.fillRect(1, 1, 14, 1); ctx.fillRect(1, 13, 14, 1); ctx.fillRect(1, 1, 1, 13); ctx.fillRect(14, 1, 1, 13);
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(5, 6, 2, 2); ctx.fillRect(9, 6, 2, 2); // glyph hints on the marquee
+    ctx.fillStyle = '#ffe9a0';                                                     // bulb lights around the frame
+    for (let x = 2; x < 15; x += 3) { ctx.fillRect(x, 0, 1, 1); ctx.fillRect(x, 14, 1, 1); }
+    for (let y = 3; y < 13; y += 3) { ctx.fillRect(0, y, 1, 1); ctx.fillRect(15, y, 1, 1); }
+  });
   atlas['t-casino-carpet'] = tile(ctx => {
     fill(ctx, '#7a2230');
     ctx.fillStyle = '#8e2a38'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1);

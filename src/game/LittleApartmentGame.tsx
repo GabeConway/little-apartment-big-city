@@ -123,7 +123,7 @@ const SCENE_MUSIC: Record<string, string> = {
   nightclub: '/music/the-club.mp3',
   garage: '/music/garage-theme.mp3',
   badtown: '/music/badside.mp3',
-  casino: '/music/the-club.mp3',
+  casino: '/music/casino.mp3',
   backrooms: '/music/backrooms.mp3',
   mines: '/music/mines.mp3',
   gacha: '/music/gacha.mp3',
@@ -3518,7 +3518,7 @@ const LittleApartmentGame: React.FC = () => {
             </div>
           )}
           <p className="text-base text-[#b06ad0]/80 mt-1">FURNITURE — "Money? Quaint. Down here we work in minerals."</p>
-          {RARE_FURNITURE.map(f => {
+          {RARE_FURNITURE.filter(f => f.id !== 'coffin').map(f => {
             const owned = s.rares.includes(f.id);
             return (
               <div key={f.id} className="py-1.5 border-b border-white/10">
