@@ -524,6 +524,13 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
       ['Welcome to the shrine. I am Yoshi — I keep it. Bow twice, clap twice, wish once. The order matters more than people think.'],
       ['The kami here is small but diligent. Fond of fishermen, crows, and exact change.'],
       ['I sweep the same leaves every morning. The tree drops them again every night. We have an understanding.'],
+      ['People come up the steps in such a hurry. The kami has waited four hundred years. It can wait for you to catch your breath.'],
+      ['A coin in the box is not a transaction. It is a hello. The luck that follows is the kami being polite back.'],
+      ['You smell of the city — neon, fried things, hurry. Stand here a moment. Let the cedar have a turn.'],
+      ['The komainu? One has its mouth open, one closed. Beginning and end. They have been arguing the middle for centuries.'],
+      ['I drew my own fortune this morning. "Small blessing." It is always "small blessing." I have made my peace with small.'],
+      ['When it rains I do not mind. The kami likes the sound on the roof, and so, it turns out, do I.'],
+      ['Do not wish for everything at once. The kami is small. Give it one wish it can actually carry.'],
     ],
   },
   collector: {
@@ -1783,12 +1790,16 @@ const LittleApartmentGame: React.FC = () => {
               : 'The whole shrine seems to lean toward you approvingly. (Fishing luck way up!)',
           ]);
         } else {
-          const lines = [
-            'Clink. You bow twice, clap twice, and ask for nothing in particular.',
-            `Clink. (Total offered: ¥${s.donated.toLocaleString()})`,
-            'Clink. A crow watches you with what might be respect.',
+          const lines: [string, string?][] = [
+            ['Clink. You bow twice, clap twice, and ask for nothing in particular.', undefined],
+            [`Clink. (Total offered: ¥${s.donated.toLocaleString()})`, undefined],
+            ['Clink. A crow watches you with what might be respect.', undefined],
+            ['"The kami noticed that. It notices everything, eventually. It is just not in a hurry about it."', 'Yoshi'],
+            ['"Generous today. Careful — the kami remembers kindness, and it has a long memory and short legs."', 'Yoshi'],
+            ['"You did the bow a little crooked. The kami forgives crooked bows. It is the straight ones it suspects."', 'Yoshi'],
           ];
-          showDialog([lines[Math.floor(Math.random() * lines.length)]]);
+          const pick = lines[Math.floor(Math.random() * lines.length)];
+          showDialog([pick[0]], pick[1]);
         }
         break;
       }
