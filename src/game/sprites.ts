@@ -1379,6 +1379,95 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 1, 16, 1);          // gold ridge cap
     ctx.fillStyle = '#2c3340'; ctx.fillRect(0, 13, 16, 3);         // deep eave shadow
   });
+  atlas['t-shrine-roof-l'] = tile(ctx => {                         // left end of the roof — eave curls up (karahafu)
+    grassBg(ctx);                                                  // outer (left) edge is open sky/grass
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(3, 0, 13, 16);         // slate body (right 13px)
+    ctx.fillStyle = '#4a5466'; for (let y = 1; y < 16; y += 3) ctx.fillRect(3, y, 13, 1);
+    ctx.fillStyle = '#525e72'; ctx.fillRect(3, 0, 13, 1);          // sunlit top
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(3, 1, 13, 1);          // gold ridge cap
+    ctx.fillStyle = '#2c3340'; ctx.fillRect(3, 13, 13, 3);         // eave shadow
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(1, 11, 3, 2); ctx.fillRect(0, 9, 2, 2); // upturned eave tip sweeping up-left
+    ctx.fillStyle = '#2c3340'; ctx.fillRect(1, 13, 3, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 9, 2, 1);           // gold finial tip
+  });
+  atlas['t-shrine-roof-r'] = tile(ctx => {                         // right end — mirror of -l
+    grassBg(ctx);
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(0, 0, 13, 16);
+    ctx.fillStyle = '#4a5466'; for (let y = 1; y < 16; y += 3) ctx.fillRect(0, y, 13, 1);
+    ctx.fillStyle = '#525e72'; ctx.fillRect(0, 0, 13, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 1, 13, 1);
+    ctx.fillStyle = '#2c3340'; ctx.fillRect(0, 13, 13, 3);
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(12, 11, 3, 2); ctx.fillRect(14, 9, 2, 2);
+    ctx.fillStyle = '#2c3340'; ctx.fillRect(12, 13, 3, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(14, 9, 2, 1);
+  });
+  atlas['t-shrine-peak'] = tile(ctx => {                           // gable peak: crossed chigi finials + katsuogi billets
+    grassBg(ctx);                                                  // above the roof — open sky
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(0, 7, 16, 9);          // slate apex
+    ctx.fillStyle = '#4a5466'; for (let y = 9; y < 16; y += 3) ctx.fillRect(0, y, 16, 1);
+    ctx.fillStyle = '#525e72'; ctx.fillRect(0, 7, 16, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 8, 16, 1);          // gold ridge
+    ctx.fillStyle = '#2c3340'; ctx.fillRect(0, 14, 16, 2);
+    ctx.fillStyle = '#caa14a';                                     // chigi (crossed golden finials, X at the apex)
+    ctx.fillRect(4, 6, 2, 2); ctx.fillRect(5, 4, 2, 2); ctx.fillRect(6, 2, 2, 2); ctx.fillRect(7, 0, 2, 2);
+    ctx.fillRect(10, 6, 2, 2); ctx.fillRect(9, 4, 2, 2); ctx.fillRect(8, 2, 2, 2);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(2, 9, 2, 2); ctx.fillRect(12, 9, 2, 2); // katsuogi billets on the ridge
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 0, 2, 1);           // sun glint on the cross
+  });
+  atlas['t-shrine-door'] = tile(ctx => {                           // honden entrance: dark doorway, shimenawa + bell rope
+    fill(ctx, '#b04a3a');                                          // vermillion timber wall
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 14, 16, 2);         // base shadow
+    ctx.fillStyle = '#1a1410'; ctx.fillRect(3, 2, 10, 12);         // recessed doorway
+    ctx.fillStyle = '#241a14'; ctx.fillRect(4, 3, 8, 10);          // inner sanctum
+    ctx.fillStyle = '#3a2a1e'; ctx.fillRect(7, 3, 1, 10); ctx.fillRect(10, 3, 1, 10); // door slats
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 0, 12, 2);          // shimenawa straw rope over the lintel
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(2, 1, 12, 1);
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(5, 0, 1, 2); ctx.fillRect(10, 0, 1, 2); // shide paper zigzags
+    ctx.fillStyle = '#d8584a'; ctx.fillRect(7, 2, 2, 6);          // suzu bell rope (red & white)
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(7, 3, 2, 1); ctx.fillRect(7, 5, 2, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(7, 8, 2, 2);          // brass suzu bell
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 8, 1, 1);
+  });
+  atlas['t-shrine-veranda'] = tile(ctx => {                        // engawa: wooden platform + balustrade across the hall front
+    fill(ctx, '#8a6644');                                          // wood deck
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(1, 4, 1, 11); ctx.fillRect(4, 4, 1, 11); ctx.fillRect(7, 4, 1, 11); ctx.fillRect(10, 4, 1, 11); ctx.fillRect(13, 4, 1, 11); // balusters
+    ctx.fillStyle = '#b04a3a'; ctx.fillRect(0, 0, 16, 3);          // vermillion top rail
+    ctx.fillStyle = '#d8584a'; ctx.fillRect(0, 0, 16, 1);          // lit rail edge
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 3, 16, 1);          // rail underside
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(0, 14, 16, 2);         // ground shadow under deck
+  });
+  atlas['t-saisen'] = tile(ctx => {                                // saisen-bako: offering box w/ coin grate, bell & shimenawa
+    fill(ctx, '#9aa0a6');                                          // stands on the stone forecourt
+    ctx.fillStyle = '#878d93'; ctx.fillRect(0, 0, 16, 1);
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(0, 0, 16, 3);          // shimenawa straw rope above the box
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(0, 2, 16, 1);
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(3, 0, 1, 3); ctx.fillRect(8, 0, 1, 3); ctx.fillRect(12, 0, 1, 3); // shide zigzags
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(7, 3, 2, 2);          // brass suzu bell
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 3, 1, 1);
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 6, 12, 8);         // box body
+    ctx.fillStyle = '#a9805a'; ctx.fillRect(3, 8, 10, 5);         // lit timber face
+    ctx.fillStyle = '#c79a6e'; ctx.fillRect(3, 8, 10, 1);         // top-lit plank edge
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(2, 13, 12, 1);        // base shadow
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(7, 8, 2, 5);          // centre plank seam highlight
+    ctx.fillStyle = '#3a2a1e'; ctx.fillRect(3, 6, 10, 2);         // slatted coin grate on top
+    ctx.fillStyle = '#1a120c'; ctx.fillRect(4, 6, 1, 2); ctx.fillRect(6, 6, 1, 2); ctx.fillRect(8, 6, 1, 2); ctx.fillRect(10, 6, 1, 2); ctx.fillRect(12, 6, 1, 2); // coin slots
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(2, 6, 1, 8); ctx.fillRect(13, 6, 1, 8); // iron corner braces
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 10, 2, 2);        // a coin glints in the slot
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(8, 11, 1, 1);
+  });
+  atlas['t-temizuya'] = tile(ctx => {                              // chozubachi: stone water basin w/ bamboo dipper
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 67, 5);
+    ctx.fillStyle = '#8a8d93'; ctx.fillRect(3, 6, 10, 8);         // stone basin
+    ctx.fillStyle = '#a8abb1'; ctx.fillRect(3, 6, 10, 1);         // sunlit rim
+    ctx.fillStyle = '#6e7178'; ctx.fillRect(3, 12, 10, 1);
+    ctx.fillStyle = '#5aa6c8'; ctx.fillRect(4, 7, 8, 4);         // water surface
+    ctx.fillStyle = '#9ad8ee'; ctx.fillRect(5, 7, 3, 1);        // glint
+    ctx.fillStyle = '#3a7e9e'; ctx.fillRect(4, 10, 8, 1);
+    ctx.fillStyle = '#9aa84a'; ctx.fillRect(2, 4, 9, 1);         // bamboo pole laid across
+    ctx.fillStyle = '#c9d27a'; ctx.fillRect(2, 4, 9, 1);
+    ctx.fillStyle = '#7a8a3a'; ctx.fillRect(9, 3, 3, 2);        // ladle cup
+    ctx.fillStyle = '#6e7178'; ctx.fillRect(4, 13, 8, 2);       // base
+  });
   atlas['t-shrine-wall'] = tile(ctx => {
     fill(ctx, '#b04a3a'); // vermillion timber
     ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 14, 16, 2);
@@ -1387,13 +1476,19 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillRect(2, 6, 5, 1); ctx.fillRect(9, 6, 5, 1);
     ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 11, 16, 1);
   });
-  atlas['t-komainu'] = tile(ctx => {
+  atlas['t-komainu'] = tile(ctx => {                       // guardian lion-dog seated on a stone pedestal
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 79, 5);
-    ctx.fillStyle = '#8a8d93'; ctx.fillRect(5, 4, 6, 5);   // lion-dog body
-    ctx.fillRect(4, 2, 4, 4);                               // head
-    ctx.fillStyle = '#6e7178'; ctx.fillRect(5, 3, 1, 1); ctx.fillRect(9, 6, 2, 2);
-    ctx.fillStyle = '#a8abb1'; ctx.fillRect(4, 9, 8, 2);   // pedestal top
     ctx.fillStyle = '#8a8d93'; ctx.fillRect(3, 11, 10, 4); // pedestal
+    ctx.fillStyle = '#a8abb1'; ctx.fillRect(3, 11, 10, 1); // sunlit pedestal cap
+    ctx.fillStyle = '#6e7178'; ctx.fillRect(3, 14, 10, 1); // pedestal base shadow
+    ctx.fillStyle = '#9498a0'; ctx.fillRect(5, 6, 6, 5);   // haunches / seated body
+    ctx.fillStyle = '#7e828a'; ctx.fillRect(9, 7, 2, 4);   // shaded flank
+    ctx.fillStyle = '#9498a0'; ctx.fillRect(4, 3, 5, 4);   // head
+    ctx.fillStyle = '#a8abb1'; ctx.fillRect(4, 3, 3, 1);   // sunlit brow
+    ctx.fillStyle = '#7e828a'; ctx.fillRect(3, 4, 1, 3); ctx.fillRect(8, 4, 1, 3); // mane curls
+    ctx.fillStyle = '#9498a0'; ctx.fillRect(11, 6, 2, 3);  // curled tail
+    ctx.fillStyle = '#2c2c30'; ctx.fillRect(5, 5, 1, 1); ctx.fillRect(7, 5, 1, 1); // eyes
+    ctx.fillStyle = '#3a3a40'; ctx.fillRect(5, 6, 3, 1);   // open mouth (a-gyo)
   });
   atlas['t-sakura'] = tile(ctx => {                        // cherry-blossom tree, solid
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 83, 5);
