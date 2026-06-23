@@ -1379,6 +1379,20 @@ const LittleApartmentGame: React.FC = () => {
         break;
       }
       case 'tiki': setOverlayBoth({ type: 'shop', shop: 'tiki' }); break;
+      case 'zama-poster':
+        if (!s.zamazonkApp) {
+          s.zamazonkApp = true;
+          sfxCoin();
+          persistSave(s); refreshHud();
+          showDialog([
+            'A glossy poster, half-peeled by the salt wind: "ZamaZonk™ — the Everything Store. NOW ON YOUR PHONE."',
+            'A little code shimmers in the corner. Your phone buzzes on its own. …The ZamaZonk app is now installed. You do not recall agreeing to this.',
+            'Order furniture from anywhere; it lands in your boxes by morning. Open your phone (P) → the new ZamaZonk app. 📦',
+          ]);
+        } else {
+          showDialog(['The ZamaZonk poster smiles its cardboard smile. The app is already on your phone. It is always on your phone now.']);
+        }
+        break;
       case 'casino-slots': startSlots(); break;
       case 'casino-blackjack': startBlackjack(); break;
       case 'fish-tropical': startCast(faced, 'tropical'); break;
@@ -3252,10 +3266,12 @@ const LittleApartmentGame: React.FC = () => {
             <div className="grid grid-cols-3 gap-y-5 gap-x-2 px-4 pt-3 pb-6 justify-items-center">
               <AppIcon icon="🧳" label="Bag" bg="linear-gradient(160deg,#c9952f,#8a5a1f)" onClick={() => open('inventory')} />
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
-              <AppIcon
-                icon={<img src={ZAMAZONK_LOGO} alt="" className="w-full h-full object-contain p-0.5" />}
-                label="ZamaZonk" bg="#120726" badge={s.orders.length || undefined} onClick={() => open('zamazonk')}
-              />
+              {s.zamazonkApp && (
+                <AppIcon
+                  icon={<img src={ZAMAZONK_LOGO} alt="" className="w-full h-full object-contain p-0.5" />}
+                  label="ZamaZonk" bg="#120726" badge={s.orders.length || undefined} onClick={() => open('zamazonk')}
+                />
+              )}
               <AppIcon icon="🏆" label="Trophies" bg="linear-gradient(160deg,#e0a32e,#9e6e16)" onClick={() => open('achievements')} />
               <AppIcon icon="⚙️" label="Settings" bg="linear-gradient(160deg,#5a5f6e,#33363f)" onClick={() => open('settings')} />
             </div>

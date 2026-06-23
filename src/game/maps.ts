@@ -665,6 +665,7 @@ const island: SceneDef = {
     'g': T('t-grass'),
     'P': T('t-tree', true), // coconut palms
     'K': T('t-tiki', true),
+    'Z': T('t-zama-poster', true), // ZamaZonk billboard
   },
   outdoor: true,
   grid: [
@@ -674,7 +675,7 @@ const island: SceneDef = {
     '~~ssgggggggggKKKggss~~',
     '~~ssgPgggggggggPggss~~',
     '~~ssggggggPgggggggss~~',
-    '~~ssssssssssssssssss~~',
+    '~~ssssssssZsssssssss~~',
     '~~~~ssssssssssssss~~~~',
     '~~~~~~~~~~~~~~~~~~~~~~',
   ],
@@ -682,6 +683,7 @@ const island: SceneDef = {
   interactables: [
     { id: 'boat-island', x: 4, y: 7, w: 2, h: 1, label: 'The skiff' },
     { id: 'tiki', x: 13, y: 3, w: 3, h: 1, label: 'Tiki bar' },
+    { id: 'zama-poster', x: 10, y: 6, label: 'Read the poster' },
     { id: 'coconut', x: 5, y: 4, label: 'Coconut palm' },
     { id: 'coconut', x: 15, y: 4, label: 'Coconut palm' },
     { id: 'coconut', x: 10, y: 5, label: 'Coconut palm' },

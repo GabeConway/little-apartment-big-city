@@ -287,6 +287,7 @@ export interface MsgCtx {
   timeMin: number;     // in-game clock (minutes since midnight) — for time-gated day-1 texts
   leftKonbiniAt: number | null; // absolute minute you first left the konbini (job offer fires ~1h later)
   metStores: string[];          // store ids you've introduced yourself to (gave your number)
+  zamazonkApp: boolean;         // downloaded the ZamaZonk app (island poster)
   owned: string[];
   placedCount: number;
   money: number;
@@ -331,9 +332,8 @@ export const MESSAGES: MessageDef[] = [
   },
   {
     id: 'zamazonk-welcome', from: 'ZamaZonk 📦', avatar: '📦', company: true,
-    // Day 1: lands around midday — spread out from the landlord text so the
-    // welcome buzzes don't all pile up at once. Available on any later day too.
-    when: c => c.day > 1 || c.timeMin >= 12 * 60,
+    // Fires once you've downloaded the app from the island poster.
+    when: c => c.zamazonkApp,
     body: [
       'Hello, valued human. This is ZamaZonk™ — the Everything Store. We got your number. We get everyone\'s number.',
       'How it works: open your phone (📱 / P) → tap the ZamaZonk app → pick furniture → it pays up front and arrives in your boxes by morning. Then open ARRANGE ROOM in your Bag to place it.',

@@ -1022,6 +1022,15 @@ const buildTiles = (atlas: Atlas) => {
   });
 
   // Island
+  atlas['t-zama-poster'] = tile(ctx => {                    // ZamaZonk billboard on a post (sand)
+    fill(ctx, '#e8d49a'); speckle(ctx, '#d8c48a', 41, 6);   // sandy ground
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 9, 2, 7);    // post
+    ctx.fillStyle = '#120726'; ctx.fillRect(1, 0, 14, 9);   // dark board
+    ctx.fillStyle = '#6a3fb0'; ctx.fillRect(1, 0, 14, 1); ctx.fillRect(1, 8, 14, 1); ctx.fillRect(1, 0, 1, 9); ctx.fillRect(14, 0, 1, 9); // purple frame
+    ctx.fillStyle = '#9a6fe0'; ctx.fillRect(4, 2, 8, 5);    // box logo body
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(4, 2, 8, 1); ctx.fillRect(7, 2, 2, 5); // gold tape
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 7, 1, 1); ctx.fillRect(12, 7, 1, 1); // sparkle
+  });
   atlas['t-tiki'] = tile(ctx => {
     fill(ctx, '#5e8a4f');
     ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 0, 16, 4);   // thatch
