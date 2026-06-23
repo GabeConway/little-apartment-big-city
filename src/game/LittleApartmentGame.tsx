@@ -823,6 +823,9 @@ const LittleApartmentGame: React.FC = () => {
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
   const shrineHealRef = useRef(0);   // accumulates real seconds for the very-slow shrine energy heal
   const signGlowRef = useRef(new Map<object, HTMLCanvasElement>()); // cached neon-bloom sprites per sign (built once, not per frame)
+  const signSpriteRef = useRef(new Map<object, { c: HTMLCanvasElement; w: number; h: number }>()); // each sign's panel+text rendered once, then blitted (no per-frame font switching)
+  const skyGradRef = useRef<CanvasGradient | null>(null);  // night sky band — built once, alpha modulated per frame
+  const sunGradRef = useRef<CanvasGradient | null>(null);  // morning sun rake — same
   const glowSpriteRef = useRef(new Map<string, HTMLCanvasElement>()); // cached radial light sprites (club lights, street lamps) — built once, blitted per frame
   const wanderersRef = useRef<Wanderer[]>([]); // live positions of gently-pacing NPCs in the current scene
   const djPickRef = useRef<string | null>(null);
@@ -2372,10 +2375,6 @@ const LittleApartmentGame: React.FC = () => {
         for (const ch of txt) { ctx.font = charFont(ch, size); w += ctx.measureText(ch).width; }
         return w;
       };
-      const drawRun = (txt: string, x: number, y: number, size: number) => {
-        let cx = x;
-        for (const ch of txt) { ctx.font = charFont(ch, size); ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width; }
-      };
       // hex → "r,g,b" + luminance, to colour the neon bloom by the sign's
       // brightest swatch (the glowing tube, usually the text or border colour).
       const hex2rgb = (h: string): [number, number, number] => {
@@ -2391,27 +2390,39 @@ const LittleApartmentGame: React.FC = () => {
         const best = cands.sort((a, b) => lum(b) - lum(a))[0] ?? sg.color;
         return hex2rgb(best).join(',');
       };
-      const dims = (sg: typeof signs[number]) => {
+      // Each sign's panel + border + text is rendered to an offscreen canvas ONCE
+      // (keyed by the sign object) and then blitted every frame. Walking glyphs
+      // with per-char font switches + measureText every frame — in both the base
+      // pass AND the night re-light pass — was the framerate sink, worst at night.
+      const sprite = (sg: typeof signs[number]) => {
+        let e = signSpriteRef.current.get(sg);
+        if (e) return e;
         const size = sg.font ?? 6;
-        if (sg.vertical) return { size, w: size + 5, h: [...sg.text].length * (size + 1) + 4 };
-        return { size, w: Math.ceil(measureRun(sg.text, size)) + 5, h: size + 4 };
-      };
-      const paintText = (sg: typeof signs[number], sx: number, sy: number, size: number, color: string) => {
-        ctx.fillStyle = color;
+        const w = sg.vertical ? size + 5 : Math.ceil(measureRun(sg.text, size)) + 5;
+        const h = sg.vertical ? [...sg.text].length * (size + 1) + 4 : size + 4;
+        const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h);
+        const g = c.getContext('2d')!;
+        g.textBaseline = 'top';
+        g.fillStyle = sg.bg ?? 'rgba(0,0,0,0.45)';
+        g.fillRect(0, 0, w, h);
+        if (sg.border) { g.strokeStyle = sg.border; g.lineWidth = 1; g.strokeRect(0.5, 0.5, w - 1, h - 1); }
+        g.fillStyle = sg.color;
         if (sg.vertical) {
-          [...sg.text].forEach((ch, i) => { ctx.font = charFont(ch, size); ctx.fillText(ch, sx, sy + i * (size + 1)); });
+          [...sg.text].forEach((ch, i) => { g.font = charFont(ch, size); g.fillText(ch, 2, 2 + i * (size + 1)); });
         } else {
-          drawRun(sg.text, sx, sy, size);
+          let cx = 2; for (const ch of sg.text) { g.font = charFont(ch, size); g.fillText(ch, cx, 2); cx += g.measureText(ch).width; }
         }
+        e = { c, w, h };
+        signSpriteRef.current.set(sg, e);
+        return e;
       };
+      const dims = (sg: typeof signs[number]) => sprite(sg); // {w,h}, cached
       const paint = (sg: typeof signs[number]) => {
-        const { size, w, h } = dims(sg);
         const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
-        const color = sg.blink && !neonOn ? 'rgba(255,255,255,0.25)' : sg.color;
-        ctx.fillStyle = sg.bg ?? 'rgba(0,0,0,0.45)';
-        ctx.fillRect(sx - 2, sy - 2, w, h);
-        if (sg.border) { ctx.strokeStyle = sg.border; ctx.lineWidth = 1; ctx.strokeRect(sx - 1.5, sy - 1.5, w - 1, h - 1); }
-        paintText(sg, sx, sy, size, color);
+        const blinkOff = sg.blink && !neonOn;
+        if (blinkOff) { ctx.save(); ctx.globalAlpha = 0.4; }
+        ctx.drawImage(sprite(sg).c, sx - 2, sy - 2);
+        if (blinkOff) ctx.restore();
       };
       for (const sign of signs) paint(sign);
 
@@ -2703,11 +2714,12 @@ const LittleApartmentGame: React.FC = () => {
           ctx.fillStyle = `rgba(10, 16, 42, ${alpha})`;
           ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
           if (scene.outdoor) {
-            const sky = ctx.createLinearGradient(0, 0, 0, VIEW_PH);
-            sky.addColorStop(0, `rgba(6, 10, 30, ${0.28 * night})`);
-            sky.addColorStop(0.55, 'rgba(6, 10, 30, 0)');
-            ctx.fillStyle = sky;
-            ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+            if (!skyGradRef.current) {
+              const g = ctx.createLinearGradient(0, 0, 0, VIEW_PH);
+              g.addColorStop(0, 'rgba(6, 10, 30, 0.28)'); g.addColorStop(0.55, 'rgba(6, 10, 30, 0)');
+              skyGradRef.current = g;
+            }
+            ctx.save(); ctx.globalAlpha = night; ctx.fillStyle = skyGradRef.current; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH); ctx.restore();
           }
         }
         // re-light the neon over the darkness
@@ -2720,11 +2732,12 @@ const LittleApartmentGame: React.FC = () => {
         ctx.fillStyle = `rgba(255, 176, 92, ${0.55 * morn})`;
         ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
         ctx.restore();
-        const sun = ctx.createLinearGradient(0, 0, VIEW_PW, VIEW_PH);
-        sun.addColorStop(0, `rgba(255, 214, 140, ${0.22 * morn})`);
-        sun.addColorStop(0.5, 'rgba(255, 214, 140, 0)');
-        ctx.fillStyle = sun;
-        ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+        if (!sunGradRef.current) {
+          const g = ctx.createLinearGradient(0, 0, VIEW_PW, VIEW_PH);
+          g.addColorStop(0, 'rgba(255, 214, 140, 0.22)'); g.addColorStop(0.5, 'rgba(255, 214, 140, 0)');
+          sunGradRef.current = g;
+        }
+        ctx.save(); ctx.globalAlpha = morn; ctx.fillStyle = sunGradRef.current; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH); ctx.restore();
       }
     }
 
@@ -3304,7 +3317,9 @@ const LittleApartmentGame: React.FC = () => {
     // Canvas text doesn't trigger a webfont fetch on its own — kick the load so
     // the kanji/kana signs render in Naganoshi. The render loop redraws every
     // frame, so it swaps in as soon as the face is ready.
-    document.fonts?.load("16px 'Naganoshi'");
+    // Signs are cached to sprites once rendered, so rebuild that cache the moment
+    // the pixel font actually arrives (else early frames freeze the fallback face).
+    document.fonts?.load("16px 'Naganoshi'").then(() => signSpriteRef.current.clear()).catch(() => {});
     const input = inputRef.current;
     window.addEventListener('keydown', input.onKeyDown);
     window.addEventListener('keyup', input.onKeyUp);
