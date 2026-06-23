@@ -41,7 +41,7 @@ import {
   clockLabel, nightT, morningT, COLLAPSE_MIN,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   oreNodesFor, shrineLuck, syncMessages, unreadCount,
-  fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk,
+  fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
 } from './state';
 import type { OreNode } from './state';
 import type { GameSave, Vibe } from './state';
@@ -665,6 +665,21 @@ const LittleApartmentGame: React.FC = () => {
       if (!pending.nursed) award('night-owl');
     }
     fulfillDeliveries(s); // ZamaZonk orders land in the boxes this morning
+    // Konbini lottery resolves the morning after you buy a ticket. SECRET: shrine
+    // donations quietly raise your odds (more offered = luckier draw).
+    if (s.lotteryDay > 0 && s.lotteryDay < s.day) {
+      const odds = 0.05 + Math.min(0.30, s.donated / 15000);
+      if (Math.random() < odds) {
+        const prize = 20000;
+        s.money += prize;
+        pushMessage(s, { id: `lottery-${s.day}`, from: 'Konbini 24h 🏪', avatar: '🏪', company: true,
+          body: [`🎉 KONBINI LOTTERY: your ticket WON! ¥${prize.toLocaleString()} credited. The clerk seems almost suspicious of your luck. 🍀`] });
+      } else {
+        pushMessage(s, { id: `lottery-${s.day}`, from: 'Konbini 24h 🏪', avatar: '🏪', company: true,
+          body: ['KONBINI LOTTERY: not a winner this time. A fresh ticket is waiting at the counter. 🎫'] });
+      }
+      s.lotteryDay = 0;
+    }
     checkStory();
     checkMessages(); // new day can trigger date-gated texts (buzz if so)
     persistSave(s);
@@ -2298,6 +2313,16 @@ const LittleApartmentGame: React.FC = () => {
     }, 550, 1100);
   };
 
+  // Buy a konbini lottery ticket (one in play at a time); resolves next morning.
+  const buyLottery = () => {
+    const s = saveRef.current;
+    if (s.day < 3 || s.lotteryDay !== 0 || s.money < 500) return;
+    s.money -= 500;
+    s.lotteryDay = s.day;
+    sfxCoin();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
   const finishEnding = () => {
     const s = saveRef.current;
     s.ended = true;
@@ -3237,6 +3262,17 @@ const LittleApartmentGame: React.FC = () => {
           </div>
         ) : (
           <p className="py-1 text-lg opacity-60">Not hiring walk-ins just yet. (They have your number — keep an eye on your phone.)</p>
+        )}
+        {s.day >= 3 && (
+          <>
+            <p className="text-base text-[#ffd24a]/80 mt-3">LOTTERY</p>
+            <div className="flex items-center gap-3 py-1">
+              <p className="flex-grow text-lg opacity-80">{s.lotteryDay !== 0 ? 'Ticket in play — results land in the morning.' : 'One ticket per draw. Winners are texted next morning.'}</p>
+              <button className={btnCls} disabled={s.lotteryDay !== 0 || s.money < 500} onClick={buyLottery}>
+                {s.lotteryDay !== 0 ? 'PENDING' : 'TICKET ¥500'}
+              </button>
+            </div>
+          </>
         )}
       </ShopFrame>
     );

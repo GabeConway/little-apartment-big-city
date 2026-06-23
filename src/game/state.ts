@@ -59,6 +59,7 @@ export interface GameSave {
   fishLog: Record<string, number>; // fish id -> total caught
   storySeen: string[];          // story beat ids already shown
   shiftDay: number;             // last day the konbini shift was worked (0 = never)
+  lotteryDay: number;           // day a konbini lottery ticket was bought (0 = none); resolves next morning
   leftKonbiniAt: number | null; // absolute in-game minute you first left the konbini (job unlocks ~1h later)
   sketchyDay: number;           // last day a deal was bought from the sketchy guy
   ended: boolean;               // ending seen (free play continues)
@@ -124,6 +125,7 @@ export const newSave = (): GameSave => ({
   fishLog: {},
   storySeen: [],
   shiftDay: 0,
+  lotteryDay: 0,
   leftKonbiniAt: null,
   sketchyDay: 0,
   ended: false,
