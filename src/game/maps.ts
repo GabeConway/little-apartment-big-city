@@ -138,7 +138,7 @@ const city: SceneDef = {
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'gTggggwwggggggggggggggggggggggfg',
     'ggHHHHHHHHggggggEEgggggggggggggg',
-    'ggHHHHNKHHggggggEEgggggggggggggg',
+    'ggHHHHHHHHggggggEEgggggggggggggg',
     'ggHHHHDDHHggggggDDggTgggggggggfg',
     'gggggpwwpggggggggggfgfgggggggggg',
     'wwwwwwwwgggggggggggggggnmmnggggg',
@@ -193,6 +193,7 @@ export interface SceneSign {
 }
 export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   city: [
+    { text: 'NAKATOMI', x: 2, y: 12, color: '#ffd24a', bg: '#2a211c', border: '#c9a227', font: 7 },
     { text: '温室 GREENHOUSE', x: 13, y: 10, color: '#aef0a0', bg: 'rgba(0,0,0,0.4)', font: 7 },
     { text: '♥ ドキドキ でんき ♥', x: 1, y: 0, color: '#16181d', bg: '#ffd24a', border: '#d05050', font: 8 },
     { text: 'DOKI DOKI DISCOUNT', x: 1, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
