@@ -124,7 +124,7 @@ const SCENE_MUSIC: Record<string, string> = {
   garage: '/music/garage-theme.mp3',
   badtown: '/music/badside.mp3',
   backrooms: '/music/backrooms.mp3',
-  mines: '/music/backrooms.mp3',
+  mines: '/music/mines.mp3',
   gacha: '/music/gacha.mp3',
   island: '/music/island.mp3',
   deepsea: '/music/deep-sea.mp3',
@@ -1328,7 +1328,7 @@ const LittleApartmentGame: React.FC = () => {
           else c.dir = (['up', 'down', 'left', 'right'] as Dir[])[Math.floor(Math.random() * 4)];
         }
         const near2 = Math.abs(p.x - c.x) + Math.abs(p.y - c.y) < 2.5 * TILE;
-        const sp = (near2 ? 58 : 34) * dt;
+        const sp = (near2 ? 70 : 40) * dt; // lunges harder when it's right on you
         const dx = c.dir === 'left' ? -sp : c.dir === 'right' ? sp : 0;
         const dy = c.dir === 'up' ? -sp : c.dir === 'down' ? sp : 0;
         const next = tryMove(sceneRef.current, { x: c.x, y: c.y }, dx, dy, solidsRef.current);
@@ -1728,6 +1728,20 @@ const LittleApartmentGame: React.FC = () => {
         ctx.fillStyle = sun;
         ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
       }
+    }
+
+    // Mines: claustrophobic dark — you only see a few tiles around you (the wand
+    // lights a little further). Makes the crawlers genuinely scary.
+    if (scene.id === 'mines') {
+      const pcx = Math.round(p.x) - cam.x + 8, pcy = Math.round(p.y) - cam.y + 8;
+      const lr = saveRef.current.wand ? 104 : 70;
+      const flick = 1 + Math.sin(t * 11) * 0.03; // faint lantern flicker
+      const dark = ctx.createRadialGradient(pcx, pcy, lr * 0.34, pcx, pcy, lr * flick);
+      dark.addColorStop(0, 'rgba(6,6,10,0)');
+      dark.addColorStop(0.7, 'rgba(6,6,10,0.55)');
+      dark.addColorStop(1, 'rgba(3,3,7,0.95)');
+      ctx.fillStyle = dark;
+      ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
     }
 
     // interact prompt
