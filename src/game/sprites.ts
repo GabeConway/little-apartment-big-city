@@ -294,6 +294,10 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#15151a', k: '#0a0a0d', s: '#caa27c', e: '#222', t: '#23272e', u: '#15171c', p: '#1a1d24', b: '#0d0d10' },
     acc: [ACC.shades('#16181d')],
   },
+  'npc-vampire': { // David — pale, dark hair, red eyes, black cloak
+    pal: { h: '#1a1620', k: '#0d0a12', s: '#dcd4d0', e: '#7a1a1a', t: '#2a2030', u: '#1a1424', p: '#16121d', b: '#0d0a12' },
+    acc: [],
+  },
   'npc-granny': { // Granny Sato — silver hair, round glasses
     pal: { h: '#dcdcdc', k: '#b8b8b8', s: '#eec6a2', e: '#222', t: '#a86b8a', u: '#82506a', p: '#5a5a6a', b: '#444' },
     acc: [ACC.glasses('#6b5d4f', '#cfe2ee')],
@@ -1105,6 +1109,20 @@ const buildFurniture = (atlas: Atlas) => {
     ctx.fillRect(3, 6, 2, 4); ctx.fillRect(5, 8, 1, 1); ctx.fillRect(6, 6, 2, 4); // H-ish O-ish glyphs
     ctx.fillRect(9, 6, 2, 4); ctx.fillRect(12, 6, 2, 4);
     ctx.fillStyle = '#ffd5ec'; ctx.fillRect(3, 6, 1, 4);
+  });
+  atlas['f-coffin'] = tile(ctx => {
+    ctx.fillStyle = '#2a1d12'; ctx.fillRect(3, 1, 10, 14);            // coffin shadow/edge
+    ctx.fillStyle = '#3a2a1a'; ctx.fillRect(4, 1, 8, 14);            // body
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(5, 2, 6, 12);            // lid
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(5, 2, 1, 12);           // lit edge
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(7, 4, 2, 7); ctx.fillRect(6, 6, 4, 1); // gold cross
+  });
+  atlas['prop-campfire'] = tile(ctx => {                            // transparent bg — overlays sand
+    ctx.fillStyle = '#4a3120'; ctx.fillRect(3, 11, 10, 2); ctx.fillRect(4, 9, 9, 2); // logs
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 11, 10, 1);
+    ctx.fillStyle = '#e0552e'; ctx.fillRect(6, 4, 4, 7);            // flame outer
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 6, 2, 4);            // flame mid
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 8, 1, 2);           // flame core
   });
   atlas['f-maneki'] = tile(ctx => {
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 4, 8, 9); ctx.fillRect(4, 2, 3, 3); ctx.fillRect(11, 2, 3, 3);

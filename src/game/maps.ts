@@ -362,6 +362,9 @@ const shore: SceneDef = {
   npcs: [
     { id: 'old-man', x: 4, y: 7, sprite: 'npc-oldman', dir: 'down' },
     { id: 'tex', x: 6, y: 4, sprite: 'npc-hatvendor', dir: 'down' },
+    // David + his campfire only appear on even-numbered nights (gated in code).
+    { id: 'campfire', x: 13, y: 6, sprite: 'prop-campfire', dir: 'down' },
+    { id: 'david', x: 14, y: 6, sprite: 'npc-vampire', dir: 'left' },
   ],
 };
 

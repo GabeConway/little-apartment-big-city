@@ -349,6 +349,9 @@ const PLAYER_SPEED = 72; // px/s
 
 // NPCs that gently pace around their home tile instead of standing still.
 const WANDER_IDS = new Set(['granny']);
+// NPCs (David the vampire + his campfire) that only appear on even-numbered nights.
+const NIGHT_EVEN_IDS = new Set(['david', 'campfire']);
+const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.45;
 type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: number; homeY: number; dir: Dir; moving: boolean; stepT: number };
 const makeWanderers = (scene: SceneDef): Wanderer[] =>
   scene.npcs.filter(n => WANDER_IDS.has(n.id)).map(n => ({
@@ -586,6 +589,7 @@ const LittleApartmentGame: React.FC = () => {
     for (const npc of scene.npcs) {
       if (npc.id === 'yakuza' && s.gangPaid) continue; // paid off — no longer blocks
       if (WANDER_IDS.has(npc.id)) continue; // wanderers move; not part of the static solid set
+      if (NIGHT_EVEN_IDS.has(npc.id) && !davidActive(s)) continue; // David's only here on even nights
       set.add(`${npc.x},${npc.y}`);
     }
     if (scene.id === 'apartment') {
@@ -935,12 +939,37 @@ const LittleApartmentGame: React.FC = () => {
     const wanderHit = wanderersRef.current.find(w => Math.round(w.x / TILE) === faced.x && Math.round(w.y / TILE) === faced.y);
     const npc = wanderHit
       ? { id: wanderHit.id, x: faced.x, y: faced.y, sprite: wanderHit.sprite, dir: wanderHit.dir }
-      : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id));
+      : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
+          && !(NIGHT_EVEN_IDS.has(n.id) && !davidActive(s)));
     if (npc) {
       // Merchants open their stalls; everyone else just talks.
       if (npc.id === 'yakuza') {
         if (s.gangPaid) return; // already paid; he's on his way out
         setOverlayBoth({ type: 'shop', shop: 'yakuza' });
+        return;
+      }
+      if (npc.id === 'campfire') { showDialog(['Driftwood crackles, though no one gathered it. The fire smells of the sea — and something older.']); return; }
+      if (npc.id === 'david') {
+        if (s.rares.includes('coffin')) {
+          showDialog(['David smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."'], 'David');
+          return;
+        }
+        if ((s.sodas['conk'] ?? 0) > 0) {
+          s.sodas['conk'] -= 1;
+          s.rares.push('coffin');
+          sfxCatch();
+          persistSave(s); refreshHud();
+          showDialog([
+            'David takes the Conk, drinks, and lets out a long sigh. "...You know, don\'t you."',
+            '"Fine. Yes. A vampire. Three hundred and twelve years — the sea air helps with the cravings."',
+            '"You kept a stranger company and asked nothing. Take this; an old friend built it. It\'s yours." (Got a rare COFFIN — a new bed for your apartment!)',
+          ], 'David');
+          return;
+        }
+        showDialog([
+          'A pale man tends a driftwood fire, though the night is not cold. "Lovely evening. Care to sit?"',
+          'His smile is all teeth. "You wouldn\'t happen to have a Conk on you? I have such a... thirst."',
+        ], 'David');
         return;
       }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
@@ -1625,9 +1654,11 @@ const LittleApartmentGame: React.FC = () => {
     for (const npc of scene.npcs) {
       if (npc.id === 'yakuza' && saveRef.current.gangPaid) continue; // paid off — gone
       if (WANDER_IDS.has(npc.id)) continue; // wanderers are drawn from their live positions below
+      if (NIGHT_EVEN_IDS.has(npc.id) && !davidActive(saveRef.current)) continue; // David only on even nights
       ents.push({
         y: npc.y * TILE,
         draw: () => {
+          if (npc.id === 'campfire') { ctx.drawImage(atlas['prop-campfire'], npc.x * TILE - cam.x, npc.y * TILE - cam.y); return; }
           ctx.drawImage(atlas['m-shadow'], npc.x * TILE - cam.x, npc.y * TILE - cam.y + 2);
           ctx.drawImage(atlas[`${npc.sprite}-${npc.dir}-0`], npc.x * TILE - cam.x, npc.y * TILE - cam.y);
         },
@@ -1764,7 +1795,8 @@ const LittleApartmentGame: React.FC = () => {
       const faced = facedTile(p, dirRef.current);
       const feet = feetTile(p);
       const npcT = wanderersRef.current.some(w => Math.round(w.x / TILE) === faced.x && Math.round(w.y / TILE) === faced.y)
-        || scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id));
+        || scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
+          && !(NIGHT_EVEN_IDS.has(n.id) && !davidActive(saveRef.current)));
       const hit = (it: Interactable, tt: Vec) =>
         tt.x >= it.x && tt.x < it.x + (it.w ?? 1) && tt.y >= it.y && tt.y < it.y + (it.h ?? 1);
       const it = scene.interactables.find(i => hit(i, faced) || hit(i, feet));

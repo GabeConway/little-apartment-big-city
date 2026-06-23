@@ -44,6 +44,8 @@ export const RARE_FURNITURE: Furniture[] = [
     blurb: 'One credit, infinite continues. The high score is not yours.' },
   { id: 'neon', name: 'Neon Sign', price: 9000, sprite: 'f-neon', pawnable: false,
     blurb: 'Says "HOME" in a color that does not exist outside.' },
+  { id: 'coffin', name: 'Coffin', price: 0, sprite: 'f-coffin', pawnable: false,
+    blurb: 'Solid oak, suspiciously comfortable. A gift from a new friend. Sleep tight.' },
 ];
 
 export const allFurnitureById = (id: string): Furniture =>
