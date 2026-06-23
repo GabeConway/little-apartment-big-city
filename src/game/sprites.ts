@@ -1936,6 +1936,61 @@ const buildMisc = (atlas: Atlas) => {
     '......',
     '..rr..',
   ], { r: '#ffd24a' });
+
+  // ---- Downtown dumpster (hides a stray cat) -------------------------------
+  atlas['t-dumpster'] = tile(ctx => {
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(1, 14, 14, 2);   // ground shadow
+    ctx.fillStyle = '#2f5d3a'; ctx.fillRect(2, 7, 12, 8);            // body
+    ctx.fillStyle = '#3a7048'; ctx.fillRect(2, 7, 12, 1);            // top highlight
+    ctx.fillStyle = '#264c30'; ctx.fillRect(2, 12, 12, 3);          // lower shade
+    ctx.fillStyle = '#23402b'; ctx.fillRect(6, 7, 1, 8); ctx.fillRect(10, 7, 1, 8); // ribs
+    ctx.fillStyle = '#1f3a27'; ctx.fillRect(1, 5, 14, 2);           // lid
+    ctx.fillStyle = '#0c160f'; ctx.fillRect(3, 4, 9, 1);            // dark gap (ajar)
+    ctx.fillStyle = '#1a1a1f'; ctx.fillRect(2, 15, 2, 1); ctx.fillRect(12, 15, 2, 1); // wheels
+    speckle(ctx, '#6a5a30', 7, 8);                                  // grime/rust
+  });
+
+  // ---- Black stray cat (found in the dumpster, then lives at home) ----------
+  // Standing/walking, right-facing (mirror for left); plus a sitting pose.
+  const CATPAL = { k: '#16161c', g: '#86e06a', p: '#e0879f' };
+  const catR = strSprite([
+    '................',
+    '................',
+    '...........k..k.',
+    '.k.........kkkk.',
+    '.kk.......kkkkkk',
+    '..kk......kgkpkk',
+    '...kkkkkkkkkkkk.',
+    '...kkkkkkkkkkkk.',
+    '...kkkkkkkkkkkk.',
+    '...kkkkkkkkkk...',
+    '...k.kk..kk.k...',
+    '...k.kk..kk.k...',
+    '................',
+    '................',
+    '................',
+    '................',
+  ], CATPAL);
+  atlas['cat-r'] = catR; atlas['cat-l'] = mirror(catR);
+  const catSitR = strSprite([
+    '................',
+    '................',
+    '..........k.k...',
+    '.........kkkkk..',
+    '.........kgkpk..',
+    '.........kkkkk..',
+    '........kkkkkk..',
+    '.......kkkkkkk..',
+    '......kkkkkkkk..',
+    '......kkkkkkkkk.',
+    '.....kkkkkkkkkk.',
+    '.....kkkkkkkkkk.',
+    '.....kk...kkkkk.',
+    '................',
+    '................',
+    '................',
+  ], CATPAL);
+  atlas['cat-sit-r'] = catSitR; atlas['cat-sit-l'] = mirror(catSitR);
   atlas['m-bobber'] = strSprite([
     '.rr.',
     'rrrr',

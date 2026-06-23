@@ -88,6 +88,8 @@ export interface GameSave {
   shrineDay: number;            // last day an offering was made at the shrine (0 = never); one per day
   museum: { donated: string[] }; // MUSEUM_SLOTS ids the player has donated a piece to (empty by default)
   greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
+  cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
+  collectibles: string[];       // museum collectible item ids found but not yet donated (in your bag)
 }
 
 // A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
@@ -184,6 +186,8 @@ export const newSave = (): GameSave => ({
   shrineDay: 0,
   museum: { donated: [] },
   greenhouse: { sprinklerOn: false, plots: [freshPlot(), freshPlot(), freshPlot()] },
+  cat: { found: false, name: '' },
+  collectibles: [],
 });
 
 export const loadSave = (): GameSave | null => {
@@ -204,7 +208,7 @@ export const loadSave = (): GameSave | null => {
       }
     }
     if (s.vehicles.includes('car') && !s.carPos && !s.driving) {
-      s.carPos = { scene: 'badtown', x: 17, y: 3 };
+      s.carPos = { scene: 'badtown', x: 13, y: 8 };
     }
     if (!s.canFish && (s.fishInv.length > 0 || Object.keys(s.fishLog).length > 0)) {
       s.canFish = true; // grandfather in anyone who already learned

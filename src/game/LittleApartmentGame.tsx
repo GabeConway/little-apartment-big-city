@@ -244,7 +244,7 @@ type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' |
   | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
-// bag for energy (Peepis can also be fed to The Manager / given to David).
+// bag for energy (Peepis can also be fed to The Manager; a Conk goes to Max).
 type Soda = { id: string; name: string; price: number; energy: number; blurb: string };
 const SODAS: Soda[] = [
   { id: 'peepis',  name: '"Diet Doctor Peepis"',   price: 150, energy: 12, blurb: 'Legally distinct, the can insists. Pocket it and drink it later for energy.' },
@@ -613,7 +613,21 @@ const PORTRAIT_IMAGES: Record<string, string> = {
   'Jean-Pierre': '/images/portraits/jean-pierre.jpeg',
   'Jean-Pierre (tourist)': '/images/portraits/jean-pierre.jpeg',
   'Yoshi': '/images/portraits/yoshi.jpeg',
+  // The wise talking cat is named David (the shore vampire was renamed Max so the
+  // cat can own the name). His dialogs use speaker 'David' → this portrait.
+  'David': '/images/portraits/david.jpeg',
 };
+
+// David the cat is ancient and wise. He dispenses unsettlingly calm aphorisms.
+const WISE_CAT_LINES: string[][] = [
+  ['David the cat watches you with eyes like old coins. "You rush. The city does not. Consider which of you is mistaken."'],
+  ['"I have had nine lives, and forgotten eight," David says, washing a paw. "The trick is to waste the ninth beautifully."'],
+  ['"You keep score in yen," he muses. "I keep score in warm patches of sun. One of us is wealthier."'],
+  ['David yawns enormously. "Everything you are chasing is, statistically, a piece of string. I would know."'],
+  ['"The yellow place behind the cold door," David says, not blinking. "Do not stare into it too long. It stares at the same speed you do."'],
+  ['"Feed me, and I will tell you a secret," David says. He will not tell you the secret. This too is a lesson.'],
+  ['"A closed door is only a wall that has not given up," he purrs. "Be patient. Or be a cat."'],
+];
 
 // Renders a registered speaker portrait into an inline pixel-art canvas. Returns
 // null (no panel) when the speaker has no portrait registered.
@@ -842,6 +856,9 @@ const LittleApartmentGame: React.FC = () => {
   const movingRef = useRef(false);
   const animRef = useRef(0);
   const parisGlitchRef = useRef(0); // seconds left of the "hacked into the map" materialize on Paris arrival
+  // David the cat, once adopted: roams the apartment, sits, naps. Lives only in the
+  // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
+  const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; timer: number } | null>(null);
   const inputRef = useRef(new Input());
   const solidsRef = useRef(new Set<string>());
   const overlayRef = useRef<Overlay | null>(null);
@@ -1337,6 +1354,16 @@ const LittleApartmentGame: React.FC = () => {
     const feet = feetTile(posRef.current);
     const s = saveRef.current;
 
+    // Have a word with David the cat (he's wherever he's wandered to).
+    if (catRef.current && scene.id === 'apartment') {
+      const ct = { x: Math.round(catRef.current.x / TILE), y: Math.round(catRef.current.y / TILE) };
+      if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
+        catRef.current.sitting = true; catRef.current.timer = 4; // he stops to address you
+        showDialog(WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)], 'David');
+        return;
+      }
+    }
+
     // Behind the wheel, E means one thing: park.
     if (s.driving) {
       const spot = findParkSpot(scene, feet);
@@ -1471,7 +1498,7 @@ const LittleApartmentGame: React.FC = () => {
       if (npc.id === 'campfire') { showDialog(['Driftwood crackles, though no one gathered it. The fire smells of the sea — and something older.']); return; }
       if (npc.id === 'david') {
         if (s.rares.includes('coffin')) {
-          showDialog(['David smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."'], 'David');
+          showDialog(['Max smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."'], 'Max');
           return;
         }
         if ((s.sodas['conk'] ?? 0) > 0) {
@@ -1480,16 +1507,16 @@ const LittleApartmentGame: React.FC = () => {
           sfxCatch();
           persistSave(s); refreshHud();
           showDialog([
-            'David takes the Conk, drinks, and lets out a long sigh. "...You know, don\'t you."',
+            'Max takes the Conk, drinks, and lets out a long sigh. "...You know, don\'t you."',
             '"Fine. Yes. A vampire. Three hundred and twelve years — the sea air helps with the cravings."',
             '"You kept a stranger company and asked nothing. Take this; an old friend built it. It\'s yours." (Got a rare COFFIN — a new bed for your apartment!)',
-          ], 'David');
+          ], 'Max');
           return;
         }
         showDialog([
           'A pale man tends a driftwood fire, though the night is not cold. "Lovely evening. Care to sit?"',
           'His smile is all teeth. "You wouldn\'t happen to have a Conk on you? I have such a... thirst."',
-        ], 'David');
+        ], 'Max');
         return;
       }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
@@ -1662,6 +1689,22 @@ const LittleApartmentGame: React.FC = () => {
       }
       case 'vending-dead':
         showDialog(['OUT OF ORDER, says the sign. Behind the glass, one light still blinks.', 'Something inside hisses softly. You decide you were never thirsty.']);
+        break;
+      case 'cat-dumpster':
+        if (!s.cat.found) {
+          s.cat.found = true;
+          s.cat.name = 'David';
+          sfxCatch();
+          persistSave(s); refreshHud();
+          showDialog([
+            'Something shifts in the dumpster. Two eyes, like old coins, blink open in the dark.',
+            'A black cat unfolds itself onto the lip of the bin and regards you with ancient patience.',
+            '"I am David," it says. You did not know cats could speak. This one, evidently, can — and has decided you are worth the breath.',
+            '"I have seen this city eat better people than you. I think I shall keep an eye on you. Leave a door open." And he pads off toward home.',
+          ], 'David');
+        } else {
+          showDialog(['Just a dumpster now, smelling of yesterday. David has moved into your apartment and, frankly, improved it.']);
+        }
         break;
       case 'bar': {
         if (s.money < 500) { showDialog(['"Highball is ¥500," Saito says, kindly not looking at your wallet.'], 'Saito'); break; }
@@ -2054,6 +2097,34 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // David the cat ambles around the apartment, pausing to sit and nap.
+    if (sceneRef.current.id === 'apartment' && saveRef.current.cat.found) {
+      if (!catRef.current) catRef.current = { x: 8 * TILE, y: 6 * TILE, dir: 'left', sitting: true, timer: 1.5 };
+      const cat = catRef.current;
+      cat.timer -= dt;
+      if (cat.timer <= 0) {
+        if (cat.sitting) { // get up and pick somewhere to mosey
+          cat.sitting = false;
+          cat.dir = Math.random() < 0.5 ? 'left' : 'right';
+          cat.timer = 1.2 + Math.random() * 2.2;
+        } else { // settle down for a sit/nap, or turn around
+          if (Math.random() < 0.55) { cat.sitting = true; cat.timer = 2.5 + Math.random() * 4; }
+          else { cat.dir = Math.random() < 0.5 ? 'left' : 'right'; cat.timer = 1 + Math.random() * 2; }
+        }
+      }
+      if (!cat.sitting) {
+        const sp = (cat.dir === 'left' ? -16 : 16) * dt;
+        const moved = tryMove(sceneRef.current, { x: cat.x, y: cat.y }, sp, 0, solidsRef.current);
+        if (Math.abs(moved.x - cat.x) < 0.01) { cat.dir = cat.dir === 'left' ? 'right' : 'left'; } // bumped a wall — turn
+        cat.x = moved.x;
+        // keep him inside the interior floor, occasionally drift vertically
+        if (Math.random() < 0.02) { const dy = (Math.random() < 0.5 ? -1 : 1) * 14 * dt * 4; cat.y = tryMove(sceneRef.current, { x: cat.x, y: cat.y }, 0, dy, solidsRef.current).y; }
+        cat.y = Math.max(1.2 * TILE, Math.min(8 * TILE, cat.y));
+      }
+    } else if (catRef.current) {
+      catRef.current = null; // left the apartment — despawn until you return
+    }
+
     if (pendingBeatsRef.current.length > 0) {
       const beat = pendingBeatsRef.current.shift()!;
       persistSave(saveRef.current);
@@ -2202,7 +2273,7 @@ const LittleApartmentGame: React.FC = () => {
           const spot = findParkSpot(sceneRef.current, lastSafeTileRef.current ?? ft);
           s.carPos = spot
             ? { scene: sceneRef.current.id, x: spot.x, y: spot.y }
-            : { scene: 'badtown', x: 17, y: 3 }; // worst case: Kojima holds it
+            : { scene: 'badtown', x: 13, y: 8 }; // worst case: Kojima holds it
           s.driving = false;
         }
         enterScene(warp.to, warp.tx, warp.ty, warp.dir);
@@ -2685,6 +2756,20 @@ const LittleApartmentGame: React.FC = () => {
           ctx.drawImage(atlas['m-shadow'], Math.round(a.x) - cam.x, Math.round(a.y) - cam.y + 2);
           const frame = cutsceneRef.current!.phase === 'walk' ? (Math.floor(animRef.current * 7) % 2) : 0;
           ctx.drawImage(atlas[`${a.sprite}-${a.dir}-${frame}`], Math.round(a.x) - cam.x, Math.round(a.y) - cam.y);
+        },
+      });
+    }
+    // David the cat (y-sorted with everyone else so he passes in front/behind).
+    if (catRef.current) {
+      const cat = catRef.current;
+      ents.push({
+        y: cat.y,
+        draw: () => {
+          const cx = Math.round(cat.x) - cam.x, cy = Math.round(cat.y) - cam.y;
+          const bob = cat.sitting ? 0 : Math.round(Math.sin(animRef.current * 9) * 0.6);
+          ctx.drawImage(atlas['m-shadow'], cx, cy + 3);
+          const key = cat.sitting ? `cat-sit-${cat.dir}` : `cat-${cat.dir}`;
+          ctx.drawImage(atlas[key], cx, cy + bob);
         },
       });
     }
@@ -3589,7 +3674,7 @@ const LittleApartmentGame: React.FC = () => {
     if (s.vehicles.includes(vehicleId) || s.money < v.price) return;
     s.money -= v.price;
     s.vehicles.push(vehicleId);
-    if (vehicleId === 'car') s.carPos = { scene: 'badtown', x: 17, y: 3 };
+    if (vehicleId === 'car') s.carPos = { scene: 'badtown', x: 13, y: 8 };
     sfxBuy();
     award(vehicleId === 'car' ? 'wheels' : 'captain');
     computeSolids();
@@ -3609,7 +3694,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     if (!s.vehicles.includes('car') || s.money < 500) return;
     s.money -= 500;
-    s.carPos = { scene: 'badtown', x: 17, y: 3 };
+    s.carPos = { scene: 'badtown', x: 13, y: 8 };
     s.driving = false;
     sfxCoin();
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
@@ -3963,7 +4048,7 @@ const LittleApartmentGame: React.FC = () => {
         break;
       case 'country roads': {
         // Take me home — to the apartment, right by the futon.
-        if (s.driving) { s.carPos = { scene: 'badtown', x: 17, y: 3 }; s.driving = false; }
+        if (s.driving) { s.carPos = { scene: 'badtown', x: 13, y: 8 }; s.driving = false; }
         sceneRef.current = SCENES.apartment;
         posRef.current = { x: 2 * TILE, y: 2 * TILE - 4 };
         dirRef.current = 'down';
@@ -5724,7 +5809,7 @@ const LittleApartmentGame: React.FC = () => {
               <div className="flex items-end gap-2">
                 {hasPortrait && (
                   imgSrc
-                    ? <img src={imgSrc} alt={overlay.speaker} className="w-28 h-28 sm:w-36 sm:h-36 shrink-0 self-end" style={{ imageRendering: 'pixelated' }} />
+                    ? <img src={imgSrc} alt={overlay.speaker} className="w-[8.75rem] h-[8.75rem] sm:w-[11.25rem] sm:h-[11.25rem] shrink-0 self-end" style={{ imageRendering: 'pixelated' }} />
                     : <div className={`${panelCls} p-1 shrink-0 self-end`}>
                         <DialogPortrait speaker={overlay.speaker!} />
                       </div>

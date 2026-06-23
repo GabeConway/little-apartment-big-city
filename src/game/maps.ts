@@ -390,6 +390,7 @@ const BADTOWN_L = {
   'D': T('t-door'),
   'K': T('t-casino-front', true), // gold marquee facade over the casino entrance
   'U': T('t-museum-front', true), // neoclassical stone facade over the museum entrance
+  'B': T('t-dumpster', true),     // grimy dumpster tucked in the back corner (hides a stray)
 };
 
 const badtown: SceneDef = {
@@ -411,7 +412,7 @@ const badtown: SceneDef = {
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
-    'ppppppLpppppppLppppppLpppppp',
+    'pBppppLpppppppLppppppLpppppp',
     'FFFFFFFFFFFFFFFFFFFFFFFFFFFF',
   ],
   warps: [
@@ -432,7 +433,10 @@ const badtown: SceneDef = {
     { x: 21, y: 2, to: 'museum', tx: 7, ty: 8, dir: 'up' },
     { x: 22, y: 2, to: 'museum', tx: 8, ty: 8, dir: 'up' },
   ],
-  interactables: [{ id: 'vending-dead', x: 6, y: 4, label: 'Vending machine?' }],
+  interactables: [
+    { id: 'vending-dead', x: 6, y: 4, label: 'Vending machine?' },
+    { id: 'cat-dumpster', x: 1, y: 11, label: 'Rummage' },
+  ],
   npcs: [{ id: 'sketchy', x: 24, y: 11, sprite: 'npc-sketchy', dir: 'left' }],
 };
 

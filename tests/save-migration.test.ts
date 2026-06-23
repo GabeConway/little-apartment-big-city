@@ -98,7 +98,7 @@ describe('loadSave — v2 current shape is preserved, not re-migrated', () => {
 describe('loadSave — grandfather fixups', () => {
   it('parks an owned car that has no recorded position', () => {
     seed(JSON.stringify({ ...newSave(), vehicles: ['car'], carPos: null, driving: false }));
-    expect(loadSave()!.carPos).toEqual({ scene: 'badtown', x: 17, y: 3 });
+    expect(loadSave()!.carPos).toEqual({ scene: 'badtown', x: 13, y: 8 });
   });
 
   it('grandfathers fishing for anyone who already has caught fish', () => {
