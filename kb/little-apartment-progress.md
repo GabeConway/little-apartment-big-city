@@ -20,7 +20,8 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 - [x] Built via parallel worktree subagents + merge; all 88 tests pass, tsc/build clean, playtested each scene (shrine/greenhouse/museum/city/shore/Journal/dialogue).
 - [x] **Follow-up fixes**: greenhouse moved out of the shrine → into the **city** (east of home); museum entrance warp fixed (was on a solid facade row — couldn't walk in); **fishing reverted to the old catch-zone minigame** (overhauled stamina/tension version scrapped) + first-cast HOW TO FISH explainer; Genji's rod now just biases rare-fish bites (no minigame change).
 - [x] **Shore foraging** — ungated early-game money: 4-6 daily seeded beach finds (`FORAGE`/`shoreForageFor`, `save.forageDay`/`foragedSpots`), walk+E for instant cash, first-pickup how-to, Journal nudge while broke. Day 1, no gate.
-- [ ] **Future**: phase-2 errand/odd-jobs board (layer on foraging); museum collectible items (wire `donateToMuseum`); more greenhouse crops; portraits for more NPCs.
+- [x] **Odd-jobs board** (phase 2) — notice board in the city by home; one seeded fetch errand/day (`ERRANDS`/`errandFor`, `save.errandDay`), deliver a held item (soda/fish/coconut) for a premium fee. Synergy: forage → buy cheap soda → deliver → profit. Journal lists the job.
+- [ ] **Future**: konbini shift minigame (replace the time-skip); museum collectible items (wire `donateToMuseum`); more greenhouse crops; portraits for more NPCs.
 
 ## Part A — Games section (done earlier, unchanged)
 - [x] Navbar Games tab, `/games` hub (hash views), `/about-me` redirect, GabeOsDesk extraction, link repoints, InterestsPage deleted

@@ -46,6 +46,7 @@ import {
   shrineLuck, syncMessages, unreadCount,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
+  errandFor, errandDoneToday,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
@@ -1563,6 +1564,26 @@ const LittleApartmentGame: React.FC = () => {
         break;
       }
       case 'vending': useVending(); break;
+      case 'errand-board': {
+        if (errandDoneToday(s)) { showDialog(["ODD JOBS — today's job is handled. Come back in the morning; there's always something."]); break; }
+        const e = errandFor(s);
+        const have = e.kind === 'peepis' ? s.peepis > 0
+          : e.kind === 'soda' ? (s.sodas[e.want!] ?? 0) > 0
+          : e.kind === 'fish' ? s.fishInv.length > 0
+          : s.coconuts > 0;
+        if (!have) { showDialog([e.ask], e.giver); break; }
+        if (e.kind === 'peepis') s.peepis -= 1;
+        else if (e.kind === 'soda') s.sodas[e.want!] -= 1;
+        else if (e.kind === 'fish') s.fishInv.shift();
+        else s.coconuts -= 1;
+        s.money += e.reward;
+        s.errandDay = s.day;
+        mineTextRef.current = { x: target.x * TILE, y: target.y * TILE, text: `+¥${e.reward.toLocaleString()}`, color: '#ffd24a', t: 1.2 };
+        sfxCoin();
+        persistSave(s); refreshHud();
+        showDialog([e.thanks, `(+¥${e.reward.toLocaleString()})`], e.giver);
+        break;
+      }
       case 'vending-dead':
         showDialog(['OUT OF ORDER, says the sign. Behind the glass, one light still blinks.', 'Something inside hisses softly. You decide you were never thirsty.']);
         break;
@@ -4057,6 +4078,9 @@ const LittleApartmentGame: React.FC = () => {
       const goals: { text: string; done: boolean }[] = [];
       goals.push({ text: `Furnish the apartment — ${placedBase}/${FURNITURE.length} placed`, done: placedBase >= FURNITURE.length });
       if (s.money < 5000) goals.push({ text: 'Short on cash? Comb the beach each morning — the bay washes up finds worth quick yen', done: false });
+      goals.push(errandDoneToday(s)
+        ? { text: "Odd-jobs board (by home): today's job done", done: true }
+        : { text: 'Odd-jobs board by home has a job posted today — deliver the goods for a tidy fee', done: false });
       if (!s.canFish) goals.push({ text: 'Meet Genji on Sumikawa Shore — learn to fish', done: false });
       else if (s.fishRod < 1) goals.push({ text: "Buy Genji's upgraded rod (bigger fish, deeper water)", done: false });
       if (s.canFish && !s.fishLog['golden']) goals.push({ text: 'Land the legendary Golden Carp', done: false });

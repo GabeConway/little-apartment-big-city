@@ -803,6 +803,17 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#fff4c4'; ctx.fillRect(6, 10, 1, 1); ctx.fillRect(9, 11, 1, 1);
   });
 
+  // Odd-jobs notice board — corkboard on two posts, pinned papers. Solid; faced.
+  atlas['t-board'] = tile(ctx => {
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 12, 2, 4); ctx.fillRect(12, 12, 2, 4); // posts
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 1, 14, 11);                            // frame
+    ctx.fillStyle = '#c79a5a'; ctx.fillRect(2, 2, 12, 9);                             // cork
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(3, 3, 4, 4); ctx.fillRect(9, 3, 4, 5);    // papers
+    ctx.fillStyle = '#e8e0cc'; ctx.fillRect(4, 8, 4, 2);
+    ctx.fillStyle = '#9a9488'; ctx.fillRect(4, 4, 2, 1); ctx.fillRect(10, 4, 2, 1); ctx.fillRect(10, 6, 2, 1); // text lines
+    ctx.fillStyle = '#d05050'; ctx.fillRect(4, 3, 1, 1); ctx.fillRect(11, 3, 1, 1);   // pins
+  });
+
   // Shop interiors
   atlas['t-shopfloor'] = tile(ctx => {
     fill(ctx, '#d8d2c4');

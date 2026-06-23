@@ -7,8 +7,9 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, FORAGE,
+  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, FORAGE, ERRANDS,
 } from './data';
+import type { Errand } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
 
@@ -76,6 +77,7 @@ export interface GameSave {
   sketchyDay: number;           // last day a deal was bought from the sketchy guy
   forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
   foragedSpots: number[];       // indices of today's shore finds already grabbed
+  errandDay: number;            // last day the odd-jobs board errand was completed (0 = none); one per day
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
   messages: PhoneMessage[];     // smartphone texts delivered so far
@@ -170,6 +172,7 @@ export const newSave = (): GameSave => ({
   sketchyDay: 0,
   forageDay: 0,
   foragedSpots: [],
+  errandDay: 0,
   ended: false,
   today: freshDayLog(3000),
   messages: [],
@@ -314,6 +317,12 @@ export const shoreForageFor = (s: GameSave): ForageSpot[] => {
   }
   return spots;
 };
+
+// The odd-jobs board posts ONE fetch errand per day, seeded so it's stable across
+// reloads but varies day to day. Completed once/day (save.errandDay).
+export const errandFor = (s: GameSave): Errand =>
+  ERRANDS[Math.floor(mulberry32(s.day * 374761393 + 31)() * ERRANDS.length)];
+export const errandDoneToday = (s: GameSave): boolean => s.errandDay === s.day;
 
 export const buyFurniture = (s: GameSave, itemId: string, price: number): boolean => {
   if (s.owned.includes(itemId) || s.money < price) return false;

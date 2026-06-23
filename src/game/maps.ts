@@ -123,6 +123,7 @@ const city: SceneDef = {
     'p': T('t-planter', true),     // flowering planter flanking the entrance
     'F': T('t-grass-v2'),          // clover/daisy grass detail (walkable)
     'E': T('t-gh-front', true),    // community greenhouse glass facade (east of home)
+    'J': T('t-board', true),       // odd-jobs notice board (errand giver)
   },
   outdoor: true,
   grid: [
@@ -139,7 +140,7 @@ const city: SceneDef = {
     'gTggggwwggggggggggggggggggggggfg',
     'ggHHHHHHHHggggggEEgggggggggggggg',
     'ggHHHHHHHHggggggEEgggggggggggggg',
-    'ggHHHHDDHHggggggDDggTgggggggggfg',
+    'ggHHHHDDHHgJggggDDggTgggggggggfg',
     'gggggpwwpggggggggggfgfgggggggggg',
     'wwwwwwwwgggggggggggggggnmmnggggg',
     'wwwwwwwwggggggggggggggojggjo~~gg',
@@ -172,6 +173,7 @@ const city: SceneDef = {
   interactables: [
     { id: 'vending', x: 8, y: 4, label: 'Vending machine' },
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
+    { id: 'errand-board', x: 11, y: 13, label: 'Odd-jobs board' },
   ],
   npcs: [
     { id: 'tony', x: 17, y: 3, sprite: 'npc-skater', dir: 'down' },

@@ -348,6 +348,35 @@ export const FORAGE: ForageKind[] = [
 ];
 export const forageById = (id: string): ForageKind => FORAGE.find(f => f.id === id) ?? FORAGE[0];
 
+// ---- Odd jobs (errand board) ------------------------------------------------
+// Phase 2 of early money, layered on foraging: the notice board by home posts ONE
+// daily fetch job (seeded per day in state.ts → errandFor). Bring the wanted item
+// and the giver pays a premium — e.g. a ¥150 vending soda turned in for ¥450.
+// `kind` picks which pocket to consume from; `want` is the item id for 'soda'.
+// One completion per day (save.errandDay). Extend by adding rows here.
+export interface Errand {
+  id: string; giver: string;
+  kind: 'peepis' | 'soda' | 'fish' | 'coconut';
+  want?: string;            // soda id (for kind 'soda')
+  reward: number;
+  ask: string; thanks: string;
+}
+export const ERRANDS: Errand[] = [
+  { id: 'peepis-run', giver: 'Thirsty Salaryman', kind: 'peepis', reward: 450,
+    ask: 'The machine ate my last coin and I am DYING here. Bring me a Diet Doctor Peepis from any vending machine — ¥450 for the favor.',
+    thanks: '*glug glug* ...Aaah. You are a finer human being than I am. Here.' },
+  { id: 'doofert-run', giver: 'Gym Bro', kind: 'soda', want: 'doofert', reward: 600,
+    ask: 'Bro. My pre-workout is a Diet Mountain Doofert and the konbini line is INSANE. Grab me one, ¥600, no questions.',
+    thanks: 'EXTREME citrus. EXTREME gains. EXTREME gratitude, my dude.' },
+  { id: 'fish-fry', giver: 'Konbini Cook', kind: 'fish', reward: 700,
+    ask: "Today's lunch special needs a fresh catch and my supplier flaked. Bring me ANY fish and ¥700 is yours.",
+    thanks: 'Beautiful. The noon crowd will never know how close we came. Take the cash.' },
+  { id: 'coconut-run', giver: 'Lulu, by note', kind: 'coconut', reward: 550,
+    ask: 'A note pinned to the board, smelling faintly of rum: "Darling — the tiki bar is dry on coconuts. Bring me one from Kiwami Island? ¥550. — L"',
+    thanks: 'The note vanishes; ¥550 appears in its place, still warm. Lulu pays her debts.' },
+];
+export const errandById = (id: string): Errand => ERRANDS.find(e => e.id === id) ?? ERRANDS[0];
+
 export const fishById = (id: string): Fish =>
   (FISH.find(f => f.id === id) ?? DEEP_FISH.find(f => f.id === id) ?? TROPICAL_FISH.find(f => f.id === id))!;
 
