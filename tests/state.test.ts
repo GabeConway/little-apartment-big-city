@@ -5,9 +5,10 @@ import {
   allFurnished, itemFootprintW, spotFree, placeItem, unplaceItem,
   WAKE_MIN, type GameSave,
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
-  orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE,
+  orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor,
 } from '../src/game/state';
 import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, GACHA_FIGURES } from '../src/game/data';
+import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
   it('starts on day 1 at 7:00 AM with starter cash', () => {
@@ -165,6 +166,68 @@ describe('sketchyOfferFor', () => {
     const s = newSave();
     s.owned = FURNITURE.map(f => f.id);
     expect(sketchyOfferFor(s)).toBeNull();
+  });
+});
+
+describe('mineLayoutFor (daily mine generation)', () => {
+  const minesGrid = SCENES.mines.grid;
+  const isFloor = (x: number, y: number) => minesGrid[y]?.[x] === '.';
+
+  it('is stable within a day but differs across days', () => {
+    const a = newSave(); a.day = 5;
+    const b = newSave(); b.day = 5;
+    const c = newSave(); c.day = 6;
+    expect(mineLayoutFor(a)).toEqual(mineLayoutFor(b));
+    // Two arbitrary days should (overwhelmingly) differ in their node layout.
+    expect(JSON.stringify(mineLayoutFor(a).ore)).not.toEqual(JSON.stringify(mineLayoutFor(c).ore));
+  });
+
+  it('only ever spawns ore and crawlers on walkable floor (never walls/entry)', () => {
+    for (let day = 1; day <= 60; day++) {
+      const s = newSave(); s.day = day;
+      const { ore, crawlers } = mineLayoutFor(s);
+      for (const n of ore) {
+        expect(isFloor(n.x, n.y)).toBe(true);
+        expect(`${n.x},${n.y}`).not.toBe('2,1'); // entry tile
+        expect(n.amount).toBeGreaterThanOrEqual(1);
+      }
+      for (const c of crawlers) {
+        expect(isFloor(c.x, c.y)).toBe(true);
+        // never crowd the ladder entry
+        expect(Math.abs(c.x - 2) + Math.abs(c.y - 1)).toBeGreaterThanOrEqual(3);
+      }
+      // ore and crawlers never overlap
+      const oreKeys = new Set(ore.map(n => `${n.x},${n.y}`));
+      for (const c of crawlers) expect(oreKeys.has(`${c.x},${c.y}`)).toBe(false);
+    }
+  });
+
+  it('hides already-mined nodes for the rest of the day', () => {
+    const s = newSave(); s.day = 9;
+    const first = mineLayoutFor(s);
+    expect(first.ore.length).toBeGreaterThan(0);
+    const gone = first.ore[0];
+    s.minedNodes.push(`${gone.x},${gone.y}`);
+    const after = mineLayoutFor(s);
+    expect(after.ore.some(n => n.x === gone.x && n.y === gone.y)).toBe(false);
+  });
+
+  it('shrine favor secretly yields more/rarer ore and fewer crawlers (averaged)', () => {
+    let baseOre = 0, baseRare = 0, baseCrawl = 0;
+    let luckOre = 0, luckRare = 0, luckCrawl = 0;
+    for (let day = 1; day <= 80; day++) {
+      const plain = newSave(); plain.day = day;
+      const blessed = newSave(); blessed.day = day; blessed.donated = 25000; // tier 2
+      const a = mineLayoutFor(plain);
+      const b = mineLayoutFor(blessed);
+      baseOre += a.ore.length; baseCrawl += a.crawlers.length;
+      baseRare += a.ore.filter(n => n.mineral.id !== 'shard').length;
+      luckOre += b.ore.length; luckCrawl += b.crawlers.length;
+      luckRare += b.ore.filter(n => n.mineral.id !== 'shard').length;
+    }
+    expect(luckOre).toBeGreaterThan(baseOre);     // more ore overall
+    expect(luckRare).toBeGreaterThan(baseRare);   // and rarer ore
+    expect(luckCrawl).toBeLessThan(baseCrawl);    // fewer monsters
   });
 });
 
