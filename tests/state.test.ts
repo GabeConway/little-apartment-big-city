@@ -7,8 +7,9 @@ import {
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
   mineChallengeFor, enterMineStreak, crackGeode,
+  plantCrop, harvestCrop, plotReady, growGreenhouse,
 } from '../src/game/state';
-import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, GACHA_FIGURES } from '../src/game/data';
+import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, GACHA_FIGURES, CROPS } from '../src/game/data';
 import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
@@ -305,6 +306,52 @@ describe('mineLayoutFor (daily mine generation)', () => {
     expect(luckOre).toBeGreaterThan(baseOre);     // more ore overall
     expect(luckRare).toBeGreaterThan(baseRare);   // and rarer ore
     expect(luckCrawl).toBeLessThan(baseCrawl);    // fewer monsters
+  });
+});
+
+describe('greenhouse', () => {
+  it('starts with empty plots and the sprinklers off', () => {
+    const s = newSave();
+    expect(s.greenhouse.sprinklerOn).toBe(false);
+    expect(s.greenhouse.plots.length).toBeGreaterThanOrEqual(1);
+    expect(s.greenhouse.plots.every(p => p.crop === null)).toBe(true);
+  });
+
+  it('plant → water → advance day → grow → harvest', () => {
+    const s = newSave();
+    const sun = CROPS.sunflower;
+    // plant a sunflower in the first plot
+    expect(plantCrop(s, 0, 'sunflower')).toBe(true);
+    expect(s.greenhouse.plots[0].crop).toBe('sunflower');
+    expect(s.greenhouse.plots[0].stage).toBe(0);
+    expect(plotReady(s.greenhouse.plots[0])).toBe(false);
+    // can't double-plant an occupied plot
+    expect(plantCrop(s, 0, 'sunflower')).toBe(false);
+
+    // sprinklers OFF → a new morning grows nothing
+    const day0 = s.day;
+    sleep(s); growGreenhouse(s);
+    expect(s.greenhouse.plots[0].stage).toBe(0);
+
+    // turn the sprinklers on → each watered morning climbs a stage to bloom
+    s.greenhouse.sprinklerOn = true;
+    for (let i = 0; i < sun.stages - 1; i++) { sleep(s); growGreenhouse(s); }
+    expect(s.greenhouse.plots[0].stage).toBe(sun.stages - 1);
+    expect(plotReady(s.greenhouse.plots[0])).toBe(true);
+    expect(s.day).toBeGreaterThan(day0);
+
+    // further mornings don't grow past the final stage
+    sleep(s); growGreenhouse(s);
+    expect(s.greenhouse.plots[0].stage).toBe(sun.stages - 1);
+
+    // harvest pays the reward and clears the plot
+    const before = s.money;
+    const reward = harvestCrop(s, 0);
+    expect(reward).toBe(sun.reward);
+    expect(s.money).toBe(before + sun.reward);
+    expect(s.greenhouse.plots[0].crop).toBeNull();
+    // nothing to harvest from an empty plot
+    expect(harvestCrop(s, 0)).toBeNull();
   });
 });
 

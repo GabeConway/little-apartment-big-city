@@ -7,7 +7,7 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS,
+  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS,
 } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
@@ -82,10 +82,20 @@ export interface GameSave {
   rainCleared: boolean;         // a shrine offering made the rain suddenly stop today (cleared next morning)
   shrineDay: number;            // last day an offering was made at the shrine (0 = never); one per day
   museum: { donated: string[] }; // MUSEUM_SLOTS ids the player has donated a piece to (empty by default)
+  greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
 }
 
 // A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
 export interface ZamaOrder { itemId: string; dueDay: number }
+
+// ---- Greenhouse --------------------------------------------------------------
+// A single soil plot. `crop` is a CROPS id (or null = empty). `stage` runs
+// 0..(crop.stages-1); the top stage is harvestable. `wateredDay` is the last day
+// the sprinklers watered it (flavor + room for "missed a day" rules later).
+export interface GreenhousePlot { crop: string | null; plantedDay: number; stage: number; wateredDay: number }
+export interface GreenhouseState { sprinklerOn: boolean; plots: GreenhousePlot[] }
+
+const freshPlot = (): GreenhousePlot => ({ crop: null, plantedDay: 0, stage: 0, wateredDay: 0 });
 
 // Per-day tally, reset every morning; feeds the end-of-day recap screen.
 export interface DayLog {
@@ -164,6 +174,7 @@ export const newSave = (): GameSave => ({
   rainCleared: false,
   shrineDay: 0,
   museum: { donated: [] },
+  greenhouse: { sprinklerOn: false, plots: [freshPlot(), freshPlot(), freshPlot()] },
 });
 
 export const loadSave = (): GameSave | null => {
@@ -327,6 +338,54 @@ export const museumComplete = (s: GameSave): boolean =>
 // the rarer (valuable) fish noticeably more willing to bite.
 export const shrineLuck = (s: GameSave): number =>
   s.donated >= 20000 ? 2 : s.donated >= 5000 ? 1 : 0;
+
+// ---- greenhouse --------------------------------------------------------------
+// Plant a crop in an empty plot. Returns false if the plot is taken or the crop
+// is unknown.
+export const plantCrop = (s: GameSave, plotIdx: number, cropId: string): boolean => {
+  const plot = s.greenhouse.plots[plotIdx];
+  if (!plot || plot.crop || !CROPS[cropId]) return false;
+  plot.crop = cropId;
+  plot.plantedDay = s.day;
+  plot.stage = 0;
+  plot.wateredDay = 0;
+  return true;
+};
+
+// A plot is harvestable once it has reached its crop's final stage.
+export const plotReady = (plot: GreenhousePlot): boolean => {
+  if (!plot.crop) return false;
+  const crop = CROPS[plot.crop];
+  return Boolean(crop) && plot.stage >= crop.stages - 1;
+};
+
+// Harvest a fully-grown plot: pay the reward, clear the plot. Returns the yen
+// paid out, or null if the plot wasn't ready.
+export const harvestCrop = (s: GameSave, plotIdx: number): number | null => {
+  const plot = s.greenhouse.plots[plotIdx];
+  if (!plot || !plotReady(plot)) return null;
+  const reward = CROPS[plot.crop!].reward;
+  s.money += reward;
+  plot.crop = null;
+  plot.plantedDay = 0;
+  plot.stage = 0;
+  plot.wateredDay = 0;
+  return reward;
+};
+
+// Morning growth: if the sprinklers ran, every planted plot drinks for the day
+// and climbs one growth stage toward bloom (capped at its final stage). Call once
+// per new morning (after the day has advanced). No sprinklers → no growth.
+export const growGreenhouse = (s: GameSave): void => {
+  if (!s.greenhouse.sprinklerOn) return;
+  for (const plot of s.greenhouse.plots) {
+    if (!plot.crop) continue;
+    const crop = CROPS[plot.crop];
+    if (!crop) continue;
+    plot.wateredDay = s.day;
+    if (plot.stage < crop.stages - 1) plot.stage += 1;
+  }
+};
 
 // ---- the mines ---------------------------------------------------------------------
 // A multi-floor descent. Each floor reseeds richer + deadlier; you ascend all the

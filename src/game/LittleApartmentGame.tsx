@@ -25,7 +25,7 @@ const drawVibeThumb = (el: HTMLCanvasElement | null, vibe: 'fem' | 'masc') => {
   cx.clearRect(0, 0, el.width, el.height);
   cx.drawImage(spr, 0, 0, el.width, el.height);
 };
-import { SCENES, SCENE_SIGNS, MANEKI_SLOT } from './maps';
+import { SCENES, SCENE_SIGNS, MANEKI_SLOT, GREENHOUSE_PLOTS } from './maps';
 import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
@@ -33,7 +33,7 @@ import {
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
-  itemKind, MUSEUM_SLOTS,
+  itemKind, MUSEUM_SLOTS, CROPS,
 } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
@@ -45,7 +45,7 @@ import {
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
   shrineLuck, syncMessages, unreadCount,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
-  isRainyDay,
+  isRainyDay, plantCrop, harvestCrop, plotReady, growGreenhouse,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
@@ -143,7 +143,8 @@ const SCENE_MUSIC: Record<string, string> = {
   island: '/music/island.mp3',
   deepsea: '/music/deep-sea.mp3',
   shrine: '/music/shrine.mp3',
-  museum: '/music/shrine.mp3', // quiet gallery ambiance (reuses the calm shrine track)
+  museum: '/music/museum.mp3',        // "Museum After Hours"
+  greenhouse: '/music/greenhouse.mp3', // "Greenhouse Drift"
   paris: '/music/paris.mp3',
   // the "loading Paris" hacker transition score (played manually over the hack screen)
   'paris-transition': '/music/paris-transition.mp3',
@@ -161,6 +162,8 @@ const DJ_SETLIST: { scene: string; label: string }[] = [
   { scene: 'garage', label: 'Kojima Motors theme' },
   { scene: 'badtown', label: 'Downtown neon (badside)' },
   { scene: 'shrine', label: 'Yoshi Shrine bells' },
+  { scene: 'greenhouse', label: 'Greenhouse Drift' },
+  { scene: 'museum', label: 'Museum After Hours' },
   { scene: 'island', label: 'Kiwami Island breeze' },
   { scene: 'gacha', label: 'Gacha Gacha hall' },
   { scene: 'backrooms', label: 'the yellow hum (???)' },
@@ -998,6 +1001,7 @@ const LittleApartmentGame: React.FC = () => {
       if (!pending.nursed) award('night-owl');
     }
     fulfillDeliveries(s); // ZamaZonk orders land in the boxes this morning
+    growGreenhouse(s);    // greenhouse crops drink + climb a stage if the sprinklers ran overnight
     // Konbini lottery resolves the morning after you buy a ticket. SECRET: shrine
     // donations quietly raise your odds (more offered = luckier draw).
     if (s.lotteryDay > 0 && s.lotteryDay < s.day) {
@@ -1454,6 +1458,25 @@ const LittleApartmentGame: React.FC = () => {
         showDialog(lines, 'Bingus Doofelsmurt');
         return;
       }
+      // Granny Soto, curator of the community greenhouse. Speaker EXACTLY
+      // 'Granny Sato' so her authored portrait shows.
+      if (npc.id === 'granny-soto') {
+        const gh = s.greenhouse;
+        const planted = gh.plots.filter(pl => pl.crop).length;
+        const blooming = gh.plots.filter(pl => plotReady(pl)).length;
+        const lines = [
+          'Oh! A new face in my greenhouse. Welcome, dear. I am Granny Soto — these plots are the neighborhood\'s, and mine to fuss over.',
+          'Find an empty bed and press a sunflower seed in. Then flip the SPRINKLERS on so it drinks through the night.',
+          'Every watered morning it stands a little taller. Four mornings and it blooms — a face like a little sun. Then it is yours to cut.',
+        ];
+        if (blooming > 0) lines.push('And LOOK — one\'s come into bloom. Go on, harvest it before the crows get ideas. There\'s good money in a fine sunflower.');
+        else if (planted > 0) lines.push(gh.sprinklerOn
+          ? 'Your seedlings are drinking nicely. Mind you leave the sprinklers running, or they\'ll sulk and sit still.'
+          : 'You\'ve planted, but the sprinklers are OFF — nothing will grow dry. Twist that valve, dear.');
+        lines.push('One day I\'ll have tomatoes, daikon, the lot. For now — sunflowers. Everyone should grow at least one thing they don\'t have to.');
+        showDialog(lines, 'Granny Sato');
+        return;
+      }
       const voice = NPC_VOICES[npc.id];
       if (voice) {
         const set = voice.sets[Math.floor(Math.random() * voice.sets.length)];
@@ -1714,6 +1737,57 @@ const LittleApartmentGame: React.FC = () => {
             'This display is empty — Bingus is waiting for the right piece.',
           ], 'Museum');
         }
+        break;
+      }
+      // Greenhouse: toggle the sprinklers (the only "watering" needed).
+      case 'gh-sprinkler': {
+        s.greenhouse.sprinklerOn = !s.greenhouse.sprinklerOn;
+        sfxCoin();
+        persistSave(s); refreshHud();
+        showDialog(s.greenhouse.sprinklerOn
+          ? ['You twist the valve. The sprinklers hiss to life, fine mist drifting down over every plot.', 'Anything planted will drink overnight and grow by morning.']
+          : ['You twist the valve shut. The hiss fades; the last drops tick off the glass.', 'Nothing will grow while the soil is dry.']);
+        break;
+      }
+      // Greenhouse soil plot: plant → check progress → harvest at bloom.
+      case 'gh-plot': {
+        const idx = GREENHOUSE_PLOTS.findIndex(pl => pl.x === target!.x && pl.y === target!.y);
+        if (idx < 0) break;
+        const plot = s.greenhouse.plots[idx];
+        if (!plot.crop) {
+          plantCrop(s, idx, 'sunflower');
+          sfxBuy();
+          persistSave(s); refreshHud();
+          showDialog([
+            'You work a sunflower seed into the dark soil and pat it level.',
+            s.greenhouse.sprinklerOn
+              ? 'The sprinklers are already running — it\'ll drink tonight and sprout by morning.'
+              : 'Now flip the SPRINKLERS on so it can drink overnight. Come back each morning to watch it climb.',
+          ]);
+          break;
+        }
+        if (plotReady(plot)) {
+          const reward = harvestCrop(s, idx);
+          sfxCatch();
+          persistSave(s); refreshHud();
+          showDialog([
+            `You cut the sunflower — taller than you are, its face a small sun. (+¥${reward?.toLocaleString()})`,
+            'Granny Soto says the seeds make fine eating, but she keeps the best for next season.',
+          ]);
+          break;
+        }
+        const crop = CROPS[plot.crop];
+        const stageBlurb = [
+          'A seed, tucked in and waiting.',
+          'A green sprout, no taller than your thumb.',
+          'A thick stalk with a fat bud, about to break open.',
+        ][Math.min(plot.stage, 2)];
+        showDialog([
+          `${crop?.name ?? 'Something'} growing here. ${stageBlurb}`,
+          s.greenhouse.sprinklerOn
+            ? 'The soil is damp. It should grow again by morning.'
+            : 'The soil is bone dry — turn the sprinklers on so it can drink overnight.',
+        ]);
         break;
       }
     }
@@ -2233,6 +2307,33 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // the greenhouse: growing crops on each plot + a sprinkler mist when on
+    if (scene.id === 'greenhouse') {
+      const gh = saveRef.current.greenhouse;
+      gh.plots.forEach((plot, i) => {
+        if (!plot.crop) return;
+        const crop = CROPS[plot.crop];
+        if (!crop) return;
+        const cell = GREENHOUSE_PLOTS[i];
+        const key = crop.sprites[Math.min(plot.stage, crop.sprites.length - 1)];
+        if (atlas[key]) ctx.drawImage(atlas[key], cell.x * TILE - cam.x, cell.y * TILE - cam.y);
+      });
+      if (gh.sprinklerOn) {
+        // a light falling-mist over the plots while the sprinklers run
+        ctx.save();
+        ctx.fillStyle = 'rgba(180,230,240,0.7)';
+        for (const cell of GREENHOUSE_PLOTS) {
+          const bx = cell.x * TILE - cam.x, by = cell.y * TILE - cam.y;
+          for (let d = 0; d < 4; d++) {
+            const dx = (d * 5 + Math.floor(t * 22 + cell.x * 3)) % 14;
+            const dy = (d * 4 + Math.floor(t * 30 + cell.x * 5)) % 14;
+            ctx.fillRect(bx + 1 + dx, by + dy, 1, 2);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
     // the mines: ore nodes, crawlers, sparkle VFX
     if (scene.id === 'mines') {
       if (mineDownRef.current) {
@@ -2601,6 +2702,12 @@ const LittleApartmentGame: React.FC = () => {
         if (onCar(faced) || onCar(feet)) label = 'Drive';
       }
       if (it?.id === 'boat' && !sv.vehicles.includes('boat')) label = 'Fish';
+      if (it?.id === 'gh-sprinkler') label = sv.greenhouse.sprinklerOn ? 'Sprinklers: ON' : 'Sprinklers: OFF';
+      if (it?.id === 'gh-plot') {
+        const gi = GREENHOUSE_PLOTS.findIndex(pl => pl.x === it!.x && pl.y === it!.y);
+        const gp = sv.greenhouse.plots[gi];
+        if (gp) label = !gp.crop ? 'Plant sunflower' : plotReady(gp) ? 'Harvest' : 'Check on it';
+      }
       if (scene.id === 'mines' && !label) label = sv.gun ? 'Fire (hold)' : sv.wand ? 'Sparkle!' : undefined;
       if (!sv.canFish && (label === 'Fish' || label === 'Drop a line')) label = 'Fish? (ask Genji)';
       if (scene.id === 'deepsea' && !label) label = (feet.y >= 10 || faced.y >= 11) ? 'Sail south to go home' : 'Drop a line';

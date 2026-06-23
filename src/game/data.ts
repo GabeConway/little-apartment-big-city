@@ -48,6 +48,28 @@ export const RARE_FURNITURE: Furniture[] = [
     blurb: 'Solid oak, suspiciously comfortable. A gift from a new friend. Sleep tight.' },
 ];
 
+// ---- Greenhouse crops --------------------------------------------------------
+// Granny Soto's community greenhouse. Sprinkler-watered, day-cycle grown. Built
+// as a table so the farming sim can grow (literally) — add a crop here, give it
+// its growth-stage sprites + a harvest payout, and the plots handle the rest.
+export interface Crop {
+  id: string;
+  name: string;
+  stages: number;       // number of growth stages incl. seed + final bloom
+  sprites: string[];    // atlas keys, one per stage (length must === stages)
+  reward: number;       // yen paid out on harvest of a fully-grown crop
+}
+
+export const CROPS: Record<string, Crop> = {
+  sunflower: {
+    id: 'sunflower', name: 'Sunflower', stages: 4,
+    sprites: ['t-crop-sun-0', 't-crop-sun-1', 't-crop-sun-2', 't-crop-sun-3'],
+    reward: 600,
+  },
+};
+
+export const cropById = (id: string): Crop | undefined => CROPS[id];
+
 export const allFurnitureById = (id: string): Furniture =>
   (FURNITURE.find(f => f.id === id) ?? RARE_FURNITURE.find(f => f.id === id))!;
 
