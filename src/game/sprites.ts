@@ -1953,32 +1953,37 @@ const buildMisc = (atlas: Atlas) => {
   // ---- Black stray cat (found in the dumpster, then lives at home) ----------
   // Standing/walking, right-facing (mirror for left); plus a sitting pose.
   const CATPAL = { k: '#16161c', g: '#86e06a', p: '#e0879f' };
+  // Standing/walking, right-facing (side profile → one big green eye). Feet sit at
+  // the bottom of the tile so the drawn shadow grounds him.
   const catR = strSprite([
+    '................',
     '................',
     '................',
     '...........k..k.',
     '.k.........kkkk.',
     '.kk.......kkkkkk',
-    '..kk......kgkpkk',
+    '..kk......kggpkk',
     '...kkkkkkkkkkkk.',
     '...kkkkkkkkkkkk.',
     '...kkkkkkkkkkkk.',
     '...kkkkkkkkkk...',
     '...k.kk..kk.k...',
     '...k.kk..kk.k...',
-    '................',
-    '................',
+    '...k.kk..kk.k...',
     '................',
     '................',
   ], CATPAL);
   atlas['cat-r'] = catR; atlas['cat-l'] = mirror(catR);
+  // Sitting (front-facing → two green eyes + pink nose).
   const catSitR = strSprite([
+    '................',
+    '................',
     '................',
     '................',
     '..........k.k...',
     '.........kkkkk..',
-    '.........kgkpk..',
-    '.........kkkkk..',
+    '.........kgkgk..',
+    '.........kkpkk..',
     '........kkkkkk..',
     '.......kkkkkkk..',
     '......kkkkkkkk..',
@@ -1986,8 +1991,6 @@ const buildMisc = (atlas: Atlas) => {
     '.....kkkkkkkkkk.',
     '.....kkkkkkkkkk.',
     '.....kk...kkkkk.',
-    '................',
-    '................',
     '................',
   ], CATPAL);
   atlas['cat-sit-r'] = catSitR; atlas['cat-sit-l'] = mirror(catSitR);
