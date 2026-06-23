@@ -1567,40 +1567,53 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-eiffel-3'] = tile(ctx => {        // upper body, under the spire
     fill(ctx, eSky);
-    ctx.fillStyle = eFe; ctx.fillRect(5, 0, 2, 16); ctx.fillRect(9, 0, 2, 16); // uprights
-    ctx.fillStyle = eFeL; ctx.fillRect(5, 0, 1, 16);
-    ctx.fillStyle = eFeD; for (let y = 1; y < 15; y += 4) ctx.fillRect(6, y, 4, 1); // rungs
-    ctx.fillStyle = eFe; ctx.fillRect(3, 12, 10, 3);        // mid platform
-    ctx.fillStyle = eFeD; ctx.fillRect(3, 14, 10, 1);
+    ctx.fillStyle = eFe; ctx.fillRect(5, 0, 2, 12); ctx.fillRect(9, 0, 2, 12); // uprights
+    ctx.fillStyle = eFeL; ctx.fillRect(5, 0, 1, 12);
+    ctx.fillStyle = eFeD; for (let y = 1; y < 11; y += 3) ctx.fillRect(6, y, 4, 1); // rungs
+    // 2nd platform — full tile width so the splayed legs below spring from it
+    ctx.fillStyle = eFe; ctx.fillRect(0, 11, 16, 5);
+    ctx.fillStyle = eFeL; ctx.fillRect(0, 11, 16, 1);
+    ctx.fillStyle = eFeD; ctx.fillRect(0, 14, 16, 2);
   });
-  const eMidL = tile(ctx => {                // mid-left leg slanting out
+  // Mid-left belly leg: curves out from the 2nd platform (top, inner edge) down
+  // to the tile's outer-bottom, meeting the base leg below. A platform stub along
+  // the top joins it seamlessly to the centre tile.
+  const eMidL = tile(ctx => {
     fill(ctx, eSky);
-    for (let k = 0; k < 16; k++) { const x = 13 - Math.floor(k * 0.5); ctx.fillStyle = eFe; ctx.fillRect(x, k, 3, 1); }
-    ctx.fillStyle = eFeD; for (let k = 2; k < 16; k += 4) { const x = 13 - Math.floor(k * 0.5); ctx.fillRect(x, k, 3, 1); }
+    ctx.fillStyle = eFe; ctx.fillRect(10, 0, 6, 3);          // platform stub (joins centre)
+    ctx.fillStyle = eFeL; ctx.fillRect(10, 0, 6, 1);
+    for (let k = 0; k < 16; k++) { const x = Math.max(0, 12 - Math.round(k * 0.8)); ctx.fillStyle = eFe; ctx.fillRect(x, k, 3, 1); }
+    ctx.fillStyle = eFeD; for (let k = 2; k < 16; k += 3) { const x = Math.max(0, 12 - Math.round(k * 0.8)); ctx.fillRect(x, k, 3, 1); }
   });
   atlas['t-eiffel-5'] = eMidL; atlas['t-eiffel-7'] = mirror(eMidL);
   atlas['t-eiffel-6'] = tile(ctx => {        // mid-centre lattice belly + decks
     fill(ctx, eSky);
-    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 2);         // upper deck joining the legs
+    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 3);         // 2nd platform joining the legs
     ctx.fillStyle = eFeL; ctx.fillRect(0, 0, 16, 1);
-    ctx.fillStyle = eFe; ctx.fillRect(6, 2, 4, 14);         // central column
-    ctx.fillStyle = eFeD; ctx.fillRect(2, 7, 12, 1);        // cross rail
-    ctx.fillStyle = eFe; ctx.fillRect(0, 13, 16, 3);        // lower deck
+    ctx.fillStyle = eFe; ctx.fillRect(6, 3, 4, 13);         // central column
+    ctx.fillStyle = eFeL; ctx.fillRect(6, 3, 1, 13);
+    ctx.fillStyle = eFeD; for (let y = 5; y < 15; y += 3) ctx.fillRect(6, y, 4, 1); // rungs
+    ctx.fillStyle = eFe; ctx.fillRect(0, 13, 16, 3);        // 1st platform (bottom)
     ctx.fillStyle = eFeD; ctx.fillRect(0, 15, 16, 1);
   });
-  const eLegL = tile(ctx => {                // base-left splayed leg + arch shoulder
+  // Base-left splayed leg + foot, with the inner arch haunch that meets the arch.
+  const eLegL = tile(ctx => {
     fill(ctx, eSky);
-    for (let k = 0; k < 16; k++) { const x = 9 - Math.floor(k * 0.5); ctx.fillStyle = eFe; ctx.fillRect(Math.max(0, x), k, 4, 1); }
-    ctx.fillStyle = eFeD; ctx.fillRect(0, 13, 7, 3); ctx.fillStyle = eFe; ctx.fillRect(0, 13, 7, 1); // foot
-    ctx.fillStyle = eFe; ctx.fillRect(13, 0, 3, 5);         // arch shoulder (inner top)
+    for (let k = 0; k < 13; k++) { const x = Math.round(k * 0.15); ctx.fillStyle = eFe; ctx.fillRect(x, k, 4, 1); }
+    ctx.fillStyle = eFe; ctx.fillRect(0, 12, 8, 4);          // foot
+    ctx.fillStyle = eFeL; ctx.fillRect(0, 12, 8, 1);
+    ctx.fillStyle = eFeD; ctx.fillRect(0, 15, 8, 1);
+    ctx.fillStyle = eFe; ctx.fillRect(12, 0, 4, 6);          // inner arch haunch (toward centre)
+    ctx.fillStyle = eFeD; ctx.fillRect(12, 5, 4, 1);
   });
   atlas['t-eiffel-8'] = eLegL; atlas['t-eiffel-0'] = mirror(eLegL);
   atlas['t-eiffel-9'] = tile(ctx => {        // grand arch (open) under the deck
     fill(ctx, eSky);
-    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 3);         // beam joining the legs
+    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 3);         // 1st-platform beam joining the legs
     ctx.fillStyle = eFeL; ctx.fillRect(0, 0, 16, 1);
-    ctx.fillStyle = eFe; ctx.fillRect(0, 3, 3, 4); ctx.fillRect(13, 3, 3, 4); // arch haunches
-    ctx.fillStyle = eFeD; ctx.fillRect(0, 3, 2, 1); ctx.fillRect(14, 3, 2, 1);
+    ctx.fillStyle = eFe; ctx.fillRect(0, 3, 4, 5); ctx.fillRect(12, 3, 4, 5); // arch haunches
+    ctx.fillStyle = eFeD; ctx.fillRect(0, 3, 4, 1); ctx.fillRect(12, 3, 4, 1);
+    ctx.fillStyle = eFe; ctx.fillRect(2, 7, 2, 2); ctx.fillRect(12, 7, 2, 2);  // inner arch curve
     // the middle/bottom stays open sky — the famous arch
   });
 

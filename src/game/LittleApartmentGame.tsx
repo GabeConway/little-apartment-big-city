@@ -570,6 +570,8 @@ const PORTRAITS: Record<string, PortraitDraw> = {
 // its panel frame and speaker caption when one is shown.
 const PORTRAIT_IMAGES: Record<string, string> = {
   'Granny Sato': '/images/portraits/granny-soto.png',
+  'Genji': '/images/portraits/genji.jpeg',
+  'The Manager': '/images/portraits/the-manager.jpeg',
 };
 
 // Renders a registered speaker portrait into an inline pixel-art canvas. Returns
@@ -604,7 +606,10 @@ const PLAYER_SPEED = 72; // px/s
 // floor. Treated as wanderers (live positions), plus a draw-time bob.
 const DANCER_IDS = new Set(['dancer', 'dancer2', 'dancer3', 'dancer4']);
 // NPCs that gently pace around their home tile instead of standing still.
-const WANDER_IDS = new Set(['granny', ...DANCER_IDS]);
+// Outdoor folk all amble about (interaction follows their live position). A few
+// stay put on purpose: the yakuza block the alley, David tends his campfire, the
+// Paris baguette vendor mans a stall, the dealer works his corner, the cat sits.
+const WANDER_IDS = new Set(['granny', 'tex', 'tony', 'old-man', 'miko', ...DANCER_IDS]);
 // NPCs (David the vampire + his campfire) that only appear on even-numbered nights.
 const NIGHT_EVEN_IDS = new Set(['david', 'campfire']);
 const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.45;
@@ -1450,18 +1455,7 @@ const LittleApartmentGame: React.FC = () => {
       if (npc.id === 'monster') {
         // Once you own every one of his rares, The Manager lets you in on the
         // secret: there's a way to Paris hidden in the backrooms. (Feature #19.)
-        if (s.monsterFed && allRaresOwned(s) && !s.parisRevealed) {
-          s.parisRevealed = true;
-          sfxCatch();
-          persistSave(s); refreshHud();
-          showDialog([
-            'The Manager goes still. "You have taken everything I had to sell. Every piece. Hm. Hmmm."',
-            '"Then I will tell you a secret, customer. That little tourist? Jean-Pierre? He did not come from your city at all."',
-            '"There is a SEAM in the wall — the top of this room. It opens to Paris. Real Paris. France. That is where he slipped in from."',
-            '"Go and see. Press yourself to the seam. It will... load." Its smile does something a smile should not do.',
-          ], 'The Manager');
-          return;
-        }
+        if (s.monsterFed && allRaresOwned(s) && !s.parisRevealed) { revealParis(); return; }
         setOverlayBoth({ type: 'shop', shop: 'monster' });
         return;
       }
@@ -2159,8 +2153,9 @@ const LittleApartmentGame: React.FC = () => {
         return;
       }
       if (warp && warpCooldownRef.current <= 0) {
-        // Can't drive indoors: the car auto-parks beside the door, never on it
-        if (s.driving && !SCENES[warp.to].outdoor) {
+        // Can't drive indoors (or onto the shrine's sacred grounds): the car
+        // auto-parks beside the entrance and you continue in on foot, like a store.
+        if (s.driving && (!SCENES[warp.to].outdoor || warp.to === 'shrine')) {
           const spot = findParkSpot(sceneRef.current, lastSafeTileRef.current ?? ft);
           s.carPos = spot
             ? { scene: sceneRef.current.id, x: spot.x, y: spot.y }
@@ -3625,7 +3620,26 @@ const LittleApartmentGame: React.FC = () => {
     award('rare-one');
     computeSolids();
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
+    // Completing The Manager's whole rare collection unlocks the Paris secret.
+    // Fire the reveal immediately (don't make the player guess they must re-talk).
+    if (s.monsterFed && allRaresOwned(s) && !s.parisRevealed) revealParis();
   };
+
+  // The Manager lets you in on the Paris secret once you own every one of his
+  // rares. Reusable so it can fire on the final craft OR a later re-talk.
+  const revealParis = useCallback(() => {
+    const s = saveRef.current;
+    if (s.parisRevealed) return;
+    s.parisRevealed = true;
+    sfxCatch();
+    persistSave(s); refreshHud();
+    showDialog([
+      'The Manager goes still. "You have taken everything I had to sell. Every piece. Hm. Hmmm."',
+      '"Then I will tell you a secret, customer. That little tourist? Jean-Pierre? He did not come from your city at all."',
+      '"There is a SEAM in the wall — the top of this room. It opens to Paris. Real Paris. France. That is where he slipped in from."',
+      '"Go and see. Press yourself to the seam. It will... load." Its smile does something a smile should not do.',
+    ], 'The Manager');
+  }, [refreshHud, showDialog]);
 
   const sellMinerals = () => {
     const s = saveRef.current;
@@ -4969,11 +4983,11 @@ const LittleApartmentGame: React.FC = () => {
 
     if (ov.shop === 'hat') {
       return (
-        <ShopFrame title="TEX'S BEACH GOODS" subtitle={'"One hat. One price. One dream."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        <ShopFrame title="TEX" subtitle={'"No shop, no sign, just me and the hats. One hat. One price. One dream."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
           <div className="flex items-center gap-3 py-1.5">
             <div className="flex-grow min-w-0">
               <p className="text-xl leading-tight">Cowboy Hat</p>
-              <p className="text-sm opacity-60 leading-tight">The tag says $67. Tex says that's ¥6,700. Tex does not negotiate. You will wear it forever.</p>
+              <p className="text-sm opacity-60 leading-tight">Tex pulls it from a sack slung over his shoulder. The tag says $67 — that's ¥6,700. Tex does not negotiate. You will wear it forever.</p>
             </div>
             {s.hat
               ? <span className="text-[#3da26b] text-base shrink-0">ON YOUR HEAD</span>

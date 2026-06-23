@@ -232,9 +232,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'バー', x: 1, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', font: 8, blink: true },
     { text: '☄ KAIJU ☄', x: 9, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 7, blink: true },
   ],
-  shore: [
-    { text: "ぼうし TEX'S HATS", x: 4, y: 2, color: '#e8e0d0', bg: '#6e4a2f', border: '#b08a50', font: 7 },
-  ],
+  shore: [],
   garage: [
     { text: 'こじまモータース せいび', x: 2, y: 0, color: '#ffd24a', bg: '#33302a', border: '#c9a227', font: 8 },
     { text: 'オイル OIL', x: 14, y: 0, color: '#d05050', bg: '#e8e0d0', border: '#9e3a3a', font: 7 },
