@@ -99,6 +99,44 @@ const sfxGun = () => blip([180, 90], 0.045, 0.06);
 // Climbing down a floor — a soft two-step descending tick (nothing dramatic).
 const sfxDescend = () => blip([392, 294], 0.07, 0.04);
 
+// ---- Cute driving motor --------------------------------------------------------
+// A soft sustained putter whose pitch + volume glide UP as the car accelerates and
+// back DOWN when it coasts/idles. Very quiet (present, not annoying). Honors the
+// global mute. Driven each frame from the update loop via `engineSet`.
+let engine: { osc: OscillatorNode; sub: OscillatorNode; gain: GainNode; filt: BiquadFilterNode } | null = null;
+let engineLevel = 0; // smoothed throttle 0..1
+const engineStop = () => {
+  engineLevel = 0;
+  if (!engine || !audioCtx) { engine = null; return; }
+  const e = engine; engine = null;
+  try {
+    e.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.06);
+    e.osc.stop(audioCtx.currentTime + 0.25); e.sub.stop(audioCtx.currentTime + 0.25);
+  } catch { /* already stopped */ }
+};
+const engineSet = (target: number, dt: number) => {
+  if (readMuted() || target < 0) { engineStop(); return; }
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    const ctx = audioCtx;
+    if (!engine) {
+      const osc = ctx.createOscillator(); osc.type = 'triangle';
+      const sub = ctx.createOscillator(); sub.type = 'sine';
+      const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 500;
+      const gain = ctx.createGain(); gain.gain.value = 0;
+      osc.connect(filt); sub.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+      osc.start(); sub.start();
+      engine = { osc, sub, gain, filt };
+    }
+    engineLevel += (target - engineLevel) * Math.min(1, dt * 4); // smooth glide
+    const f = 46 + engineLevel * 64;        // idle putter ~46Hz → ~110Hz at speed
+    engine.osc.frequency.setTargetAtTime(f, ctx.currentTime, 0.05);
+    engine.sub.frequency.setTargetAtTime(f * 0.5, ctx.currentTime, 0.05);
+    engine.filt.frequency.setTargetAtTime(380 + engineLevel * 820, ctx.currentTime, 0.05);
+    engine.gain.gain.setTargetAtTime(0.011 + engineLevel * 0.018, ctx.currentTime, 0.05);
+  } catch { /* no audio */ }
+};
+
 // One-shot sampled SFX (mp3). Cached + rewound so they can re-fire rapidly.
 // Independent of the music mute toggle, matching the blip SFX above.
 const sfxCache = new Map<string, HTMLAudioElement>();
@@ -800,6 +838,7 @@ const LittleApartmentGame: React.FC = () => {
   const dirRef = useRef<Dir>('down');
   const movingRef = useRef(false);
   const animRef = useRef(0);
+  const parisGlitchRef = useRef(0); // seconds left of the "hacked into the map" materialize on Paris arrival
   const inputRef = useRef(new Input());
   const solidsRef = useRef(new Set<string>());
   const overlayRef = useRef<Overlay | null>(null);
@@ -1710,6 +1749,7 @@ const LittleApartmentGame: React.FC = () => {
         playMusicFor('paris-transition');
         runTransition('hack', () => {
           enterScene('paris', 12, 8, 'down');
+          parisGlitchRef.current = 1.9; // you glitch/materialize into the map like a render finishing
           if (!s.storySeen.includes('paris-intro')) {
             s.storySeen.push('paris-intro');
             persistSave(s);
@@ -2169,6 +2209,12 @@ const LittleApartmentGame: React.FC = () => {
     } else {
       movingRef.current = false;
     }
+
+    // Cute driving motor: pitch/volume climb while accelerating, settle to a soft
+    // idle putter when stopped, cut out entirely once you park or open a menu.
+    if (saveRef.current.driving && !overlayRef.current) engineSet(movingRef.current ? 1 : 0.18, dt);
+    else engineStop();
+    if (parisGlitchRef.current > 0) parisGlitchRef.current = Math.max(0, parisGlitchRef.current - dt);
 
     // The Down There has residents
     if (sceneRef.current.id === 'mines' && crawlersRef.current.length > 0) {
@@ -2655,15 +2701,56 @@ const LittleApartmentGame: React.FC = () => {
           return;
         }
         if (saveRef.current.driving) {
-          ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x - 8, Math.round(p.y) - cam.y + 2);
-          ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x + 8, Math.round(p.y) - cam.y + 2);
-          ctx.drawImage(atlas['v-car'], Math.round(p.x) - cam.x - 8, Math.round(p.y) - cam.y);
+          const cx = Math.round(p.x) - cam.x, cy = Math.round(p.y) - cam.y;
+          const bob = moving ? Math.round(Math.sin(t * 20) * 0.9) : 0;   // engine jiggle
+          const sx = moving ? Math.round(Math.sin(t * 13) * 0.6) : 0;    // little shimmy as it rolls
+          // exhaust puff trailing out the back while accelerating
+          if (moving) {
+            const back = dirRef.current === 'up' ? [8, 18] : dirRef.current === 'down' ? [8, -2] : dirRef.current === 'left' ? [22, 9] : [-6, 9];
+            const drift = dirRef.current === 'up' ? [0, 4] : dirRef.current === 'down' ? [0, -4] : dirRef.current === 'left' ? [4, 0] : [-4, 0];
+            const puff = (t * 5) % 1;
+            ctx.save();
+            ctx.globalAlpha = 0.3 * (1 - puff);
+            ctx.fillStyle = '#cfcabf';
+            ctx.beginPath();
+            ctx.arc(cx + back[0] + drift[0] * puff, cy + back[1] + drift[1] * puff, 1.5 + puff * 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+          ctx.drawImage(atlas['m-shadow'], cx - 8, cy + 2);
+          ctx.drawImage(atlas['m-shadow'], cx + 8, cy + 2);
+          ctx.drawImage(atlas['v-car'], cx - 8 + sx, cy + bob);
           return;
         }
-        ctx.drawImage(atlas['m-shadow'], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y + 2);
+        const px = Math.round(p.x) - cam.x, py = Math.round(p.y) - cam.y;
         const frame = moving ? (Math.floor(animRef.current * 7) % 2) : 0;
         const playerKey = saveRef.current.hat ? `${pcBase}-hat` : pcBase;
-        ctx.drawImage(atlas[`${playerKey}-${dirRef.current}-${frame}`], Math.round(p.x) - cam.x, Math.round(p.y) - cam.y);
+        const sprite = atlas[`${playerKey}-${dirRef.current}-${frame}`];
+        const g = parisGlitchRef.current;
+        if (g > 0) {
+          // "Hacked into the map": the player materializes in datamoshed scanlines
+          // — sliced + jittered + chromatic flashes, settling as the timer runs out.
+          const k = g / 1.9;                       // 1 → 0 over the effect
+          const sw = sprite.width, sh = sprite.height, slices = 8, step = sh / slices;
+          for (let i = 0; i < slices; i++) {
+            if (k > 0.15 && Math.random() < 0.14 * k) continue;          // dropped scanline
+            const off = Math.round((Math.random() - 0.5) * 14 * k);     // horizontal tear
+            ctx.globalAlpha = 0.55 + Math.random() * 0.45;
+            ctx.drawImage(sprite, 0, i * step, sw, step, px + off, py + i * step, sw, step);
+          }
+          ctx.globalAlpha = 1;
+          if (Math.random() < 0.6) {               // additive cyan/magenta glitch band
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.5 * k;
+            ctx.fillStyle = Math.random() < 0.5 ? '#37e0ff' : '#ff3df0';
+            ctx.fillRect(px - 4, py + Math.round(Math.random() * sh), sw + 8, 1 + Math.round(Math.random() * 2));
+            ctx.restore();
+          }
+          return;
+        }
+        ctx.drawImage(atlas['m-shadow'], px, py + 2);
+        ctx.drawImage(sprite, px, py);
       },
     });
     ents.sort((a, b) => a.y - b.y).forEach(e => e.draw());
@@ -3203,6 +3290,7 @@ const LittleApartmentGame: React.FC = () => {
   useEffect(() => {
     if (screen !== 'title') return;
     syncRain(false); // no rain on the title screen
+    engineStop();    // and no phantom motor droning behind the menu
     playMusicFor('title');
     const kick = () => playMusicFor('title');
     window.addEventListener('pointerdown', kick, { once: true });
