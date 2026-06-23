@@ -736,6 +736,16 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#7ce8e0'; ctx.fillRect(0, 0, 8, 8);
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 8, 8, 8);
   });
+  atlas['t-dance-2'] = tile(ctx => {
+    fill(ctx, '#3a2a55');
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(0, 0, 8, 8);
+    ctx.fillStyle = '#b06ad0'; ctx.fillRect(8, 8, 8, 8);
+  });
+  atlas['t-dance-3'] = tile(ctx => {
+    fill(ctx, '#3a2a55');
+    ctx.fillStyle = '#b06ad0'; ctx.fillRect(0, 0, 8, 8);
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(8, 8, 8, 8);
+  });
   atlas['t-djbooth'] = tile(ctx => {
     fill(ctx, '#16181d');
     ctx.fillStyle = '#2a2333'; ctx.fillRect(0, 0, 16, 5);
@@ -838,16 +848,35 @@ const buildTiles = (atlas: Atlas) => {
   });
 
   // Casino (Kaiju Palace) — burgundy carpet, red slot cabinets, green felt tables
-  atlas['t-casino-front'] = tile(ctx => {              // exterior: gold marquee with bulb lights
-    ctx.fillStyle = '#160b12'; ctx.fillRect(0, 0, 16, 16);                         // dark wall
-    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(1, 2, 14, 11);                         // red sign panel
-    ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 4, 10, 6);                          // bright marquee face
-    ctx.fillStyle = '#c9a227';                                                     // gold frame
-    ctx.fillRect(1, 1, 14, 1); ctx.fillRect(1, 13, 14, 1); ctx.fillRect(1, 1, 1, 13); ctx.fillRect(14, 1, 1, 13);
-    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(5, 6, 2, 2); ctx.fillRect(9, 6, 2, 2); // glyph hints on the marquee
-    ctx.fillStyle = '#ffe9a0';                                                     // bulb lights around the frame
-    for (let x = 2; x < 15; x += 3) { ctx.fillRect(x, 0, 1, 1); ctx.fillRect(x, 14, 1, 1); }
-    for (let y = 3; y < 13; y += 3) { ctx.fillRect(0, y, 1, 1); ctx.fillRect(15, y, 1, 1); }
+  atlas['t-casino-front'] = tile(ctx => {              // exterior: one continuous gold marquee (tiles seamlessly L-R)
+    fill(ctx, '#1d0d14');                                                          // dark facade
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 10, 16, 6);                         // red lower wall
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(0, 10, 16, 1);
+    ctx.fillStyle = '#6a1d28'; ctx.fillRect(0, 15, 16, 1);                         // wall base shadow
+    // gold marquee band — drawn full-width (no per-tile centering) so a row of
+    // these reads as ONE sign instead of repeated boxes.
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(0, 2, 16, 7);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 3, 16, 5);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(0, 4, 16, 3);                          // bright face
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(0, 4, 16, 1);                          // top sheen
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 2, 16, 1); ctx.fillRect(0, 8, 16, 1); // frame edges
+    ctx.fillStyle = '#ffe9a0';                                                     // bulb rows, evenly spaced across tiles
+    for (let x = 1; x < 16; x += 3) { ctx.fillRect(x, 0, 1, 1); ctx.fillRect(x, 9, 1, 1); }
+  });
+  // Tokyo shopping-street lamp post (sidewalk furniture). Base matches the
+  // sidewalk so it blends like the chochin lantern; warm glowing head up top.
+  atlas['t-streetlamp'] = tile(ctx => {
+    fill(ctx, '#6e7276');
+    ctx.fillStyle = '#5a5e62'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1); // seam lines (match chochin)
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(7, 5, 2, 10);                          // pole
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(7, 5, 1, 10);                          // pole highlight
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(5, 14, 6, 1);                          // foot
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 5, 8, 1);                           // crossarm
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(5, 1, 6, 4);                           // lamp housing
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 0, 8, 1);                           // cap
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 2, 4, 2);                           // warm glow
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(6, 3, 4, 1);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(7, 2, 2, 1);                           // hot center
   });
   atlas['t-casino-carpet'] = tile(ctx => {
     fill(ctx, '#7a2230');

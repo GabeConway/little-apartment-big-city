@@ -10,7 +10,7 @@
 //   outputDir defaults to the .app's sibling ../dmg. macOS only (no-op elsewhere).
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, rmSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -87,6 +87,39 @@ try {
   } catch (e) {
     console.warn('make-dmg: codesign step failed — the .dmg may report "damaged" on download.', e?.message ?? e);
   }
+
+  // Drop a plain-text "how to run" note in the dmg so first-time users know how
+  // to get past Gatekeeper (we have no paid Apple Developer ID, so the app is
+  // ad-hoc signed only and macOS treats it as from an "unidentified developer").
+  const howTo = [
+    `${productName} — How to run on macOS`,
+    '',
+    'This game is made by an independent developer and is NOT signed with a paid',
+    'Apple Developer ID, so macOS may say the app is "damaged" or block it as being',
+    'from an "unidentified developer". The app is safe — this is just Gatekeeper.',
+    '',
+    'TO INSTALL:',
+    `  1. Drag "${productName}.app" onto the Applications folder in this window.`,
+    '',
+    'TO RUN THE FIRST TIME, pick ONE of these:',
+    '',
+    '  A) Right-click (or Control-click) the app in Applications, choose "Open",',
+    '     then click "Open" again in the dialog. You only need to do this once.',
+    '',
+    '  B) If macOS still says it is "damaged", open Terminal and run this one line',
+    '     (copy/paste it exactly, including the quotes), then press Return:',
+    '',
+    `       xattr -dr com.apple.quarantine "/Applications/${productName}.app"`,
+    '',
+    '     Then open the app normally.',
+    '',
+    '  C) Or open  System Settings > Privacy & Security , scroll down, and click',
+    '     "Open Anyway" next to the message about this app.',
+    '',
+    'Enjoy! 🏠🌆',
+    '',
+  ].join('\n');
+  writeFileSync(join(stage, 'HOW TO RUN.txt'), howTo);
 
   execFileSync('ln', ['-s', '/Applications', join(stage, 'Applications')]);
   execFileSync('rm', ['-f', out]);

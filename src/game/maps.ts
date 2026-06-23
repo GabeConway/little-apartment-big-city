@@ -224,10 +224,15 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'KOJIMA MOTORS', x: 11, y: 1, color: '#cfc4ab', bg: 'rgba(0,0,0,0.55)' },
     { text: 'しゅうり', x: 18, y: 0, color: '#ffd24a', bg: '#33302a', border: '#7a7468', vertical: true, font: 8 },
     { text: 'カラオケ', x: 20, y: 0, color: '#7ce8e0', bg: '#16121d', border: '#7ce8e0', vertical: true, font: 8, blink: true },
-    { text: 'ホテル', x: 22, y: 0, color: '#e857a8', bg: '#16121d', border: '#e857a8', vertical: true, font: 8 },
-    { text: 'カジノ', x: 24, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', vertical: true, font: 8, blink: true },
-    { text: 'いざかや', x: 26, y: 0, color: '#7ce8a0', bg: '#16121d', border: '#7ce8a0', vertical: true, font: 8 },
+    // Casino: one horizontal marquee sign sitting on the widened gold facade
+    // (x23–26), instead of the old crammed stack of vertical signs.
+    { text: 'カジノ', x: 23, y: 0, color: '#16181d', bg: '#ffd24a', border: '#c9a227', font: 8, blink: true },
+    { text: 'CASINO', x: 23, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
+  ],
+  nightclub: [
+    { text: 'バー', x: 1, y: 1, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', font: 8, blink: true },
+    { text: '☄ KAIJU ☄', x: 9, y: 1, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 7, blink: true },
   ],
   shore: [
     { text: "ぼうし TEX'S HATS", x: 4, y: 2, color: '#e8e0d0', bg: '#6e4a2f', border: '#b08a50', font: 7 },
@@ -385,7 +390,7 @@ const BADTOWN_L = {
   'G': T('t-bld-garage', true),
   'X': T('t-bld-grim', true),
   'F': T('t-graffiti', true),
-  'T': T('t-trash', true),
+  'L': T('t-streetlamp', true),  // Tokyo street lamp post (replaced the trash piles)
   'V': T('t-vending-dead', true),
   'D': T('t-door'),
   'K': T('t-casino-front', true), // gold marquee facade over the casino entrance
@@ -397,10 +402,10 @@ const badtown: SceneDef = {
   legend: BADTOWN_L,
   outdoor: true,
   grid: [
-    'NNNNNNNNNNGGGGGGGGGGEEXXKKXX',
-    'NNNNNNNNNNGGGGGGGGGGEEXXKKXX',
-    'NNNDDNNNNNGGGGDDGGGGEEXXDDXX',
-    'ppqpppppppppppppppppppqppppp',
+    'NNNNNNNNNNGGGGGGGGGGEEXKKKKX',
+    'NNNNNNNNNNGGGGGGGGGGEEXKKKKX',
+    'NNNDDNNNNNGGGGDDGGGGEEXKDDKX',
+    'ppqppppLppppppppLpppppqppppp',
     'ppppppppppppppppppppppVppppp',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
@@ -408,8 +413,8 @@ const badtown: SceneDef = {
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
-    'TpppppppppppppppppppppppppTT',
     'pppppppppppppppppppppppppppp',
+    'ppppLpppppppLpppppppLppppppp',
     'FFFFFFFFFFFFFFFFFFFFFFFFFFFF',
   ],
   warps: [
@@ -463,6 +468,8 @@ const nightclub: SceneDef = {
     { id: 'dj', x: 12, y: 1, sprite: 'npc-dj', dir: 'down' },
     { id: 'dancer', x: 5, y: 5, sprite: 'npc-dancer', dir: 'right' },
     { id: 'dancer2', x: 9, y: 6, sprite: 'npc-dancer', dir: 'left' },
+    { id: 'dancer3', x: 7, y: 4, sprite: 'npc-dancer', dir: 'down' },
+    { id: 'dancer4', x: 10, y: 7, sprite: 'npc-dancer', dir: 'up' },
     { id: 'kaiju', x: 13, y: 6, sprite: 'npc-kaiju', dir: 'left' },
   ],
 };

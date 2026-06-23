@@ -467,8 +467,11 @@ const npcDynamicLines = (id: string, s: GameSave): string[] => {
 
 const PLAYER_SPEED = 72; // px/s
 
+// Club patrons that dance/bob in place and bust the occasional move across the
+// floor. Treated as wanderers (live positions), plus a draw-time bob.
+const DANCER_IDS = new Set(['dancer', 'dancer2', 'dancer3', 'dancer4']);
 // NPCs that gently pace around their home tile instead of standing still.
-const WANDER_IDS = new Set(['granny']);
+const WANDER_IDS = new Set(['granny', ...DANCER_IDS]);
 // NPCs (David the vampire + his campfire) that only appear on even-numbered nights.
 const NIGHT_EVEN_IDS = new Set(['david', 'campfire']);
 const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.45;
@@ -1799,7 +1802,9 @@ const LittleApartmentGame: React.FC = () => {
         if (!def) continue;
         let key = def.sprite;
         if (key === 't-water-0' && waterAlt) key = 't-water-1';
-        else if (key === 't-dance-0' && danceAlt) key = 't-dance-1';
+        // Dance floor: cycle 4 color frames by tile position so colors ripple
+        // across the floor (a real disco wave) instead of flipping in unison.
+        else if (key === 't-dance-0') key = `t-dance-${(tx + ty * 2 + Math.floor(t * 5)) & 3}`;
         else if (key === 't-portal-0' && danceAlt) key = 't-portal-1';
         // scatter detail variants through large grass/sand fields
         else if ((key === 't-grass' || key === 't-sand') && (tx * 7 + ty * 13) % 5 === 0) key = `${key}-v1`;
@@ -2014,8 +2019,11 @@ const LittleApartmentGame: React.FC = () => {
         y: w.y,
         draw: () => {
           ctx.drawImage(atlas['m-shadow'], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + 2);
-          const frame = w.moving ? (Math.floor(animRef.current * 7) % 2) : 0;
-          ctx.drawImage(atlas[`${w.sprite}-${w.dir}-${frame}`], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y);
+          const dancing = DANCER_IDS.has(w.id);
+          // dancers always animate (and hop) even when not walking
+          const frame = (w.moving || dancing) ? (Math.floor(animRef.current * (dancing ? 9 : 7)) % 2) : 0;
+          const bob = dancing ? -(Math.abs(Math.sin(animRef.current * 7 + w.homeX)) > 0.5 ? 1 : 0) : 0;
+          ctx.drawImage(atlas[`${w.sprite}-${w.dir}-${frame}`], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + bob);
         },
       });
     }
@@ -2148,6 +2156,35 @@ const LittleApartmentGame: React.FC = () => {
         ctx.fillStyle = 'rgba(70, 90, 120, 0.12)';
         ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
       }
+    }
+
+    // Club Kaiju: a dim room lit by sweeping colored spotlights + a disco-ball
+    // glow, with the occasional strobe flash. The dance-floor tiles already
+    // ripple colors; this is the lighting on top.
+    if (scene.id === 'nightclub') {
+      ctx.fillStyle = 'rgba(10, 8, 22, 0.34)';       // dim the room so the lights pop
+      ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const beams: [string, number][] = [['232,87,168', 0], ['124,232,224', 2.1], ['255,210,74', 4.2], ['176,106,208', 1.0]];
+      const bx = 11 * TILE - cam.x + 8, by = 2 * TILE - cam.y + 8; // origin near the DJ booth
+      for (const [rgb, ph] of beams) {
+        const fx = bx + Math.sin(t * 0.8 + ph) * 90;             // sweep across the floor
+        const fy = by + 96 + Math.sin(t * 0.5 + ph) * 16;
+        const a = 0.12 + 0.07 * Math.sin(t * 3 + ph);
+        const g = ctx.createRadialGradient(fx, fy, 3, fx, fy, 64);
+        g.addColorStop(0, `rgba(${rgb},${a})`);
+        g.addColorStop(1, `rgba(${rgb},0)`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      }
+      const dbx = 8 * TILE - cam.x, dby = 1 * TILE - cam.y + 4; // disco-ball glow, top-center
+      const da = 0.18 + 0.1 * Math.sin(t * 6);
+      const dg = ctx.createRadialGradient(dbx, dby, 1, dbx, dby, 28);
+      dg.addColorStop(0, `rgba(230,240,255,${da})`); dg.addColorStop(1, 'rgba(230,240,255,0)');
+      ctx.fillStyle = dg; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      ctx.restore();
+      const strobe = (t % 2.4) < 0.05 ? 0.16 : 0;                // brief strobe flash
+      if (strobe > 0) { ctx.fillStyle = `rgba(255,255,255,${strobe})`; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH); }
     }
 
     // Mines: claustrophobic dark — you only see a few tiles around you (the wand
