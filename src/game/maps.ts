@@ -624,34 +624,45 @@ const shrine: SceneDef = {
     'g': T('t-grass'),
     'p': T('t-stonepath'),
     'q': T('t-sakura-petals'),     // fallen petals beside the path (walkable)
-    'R': T('t-shrine-roof', true),
-    'W': T('t-shrine-wall', true),
-    'h': T('t-shrine', true),
-    'k': T('t-komainu', true),
-    'L': T('t-lantern', true),
-    'O': T('t-toro', true),        // stone ishidoro lantern
+    'R': T('t-shrine-roof', true), // hip roof — slate tiles + gold ridge
+    'r': T('t-shrine-roof-l', true), // upturned left eave (curls up)
+    'e': T('t-shrine-roof-r', true), // upturned right eave
+    'G': T('t-shrine-peak', true), // gable peak with crossed chigi finials
+    'W': T('t-shrine-wall', true), // vermillion honden facade w/ shoji
+    'D': T('t-shrine-door', true), // honden entrance: bell rope + dark doorway
+    'v': T('t-shrine-veranda', true), // wooden engawa platform across the hall front
+    'b': T('t-saisen', true),      // saisen-bako — the offering box (interactable)
+    'k': T('t-komainu', true),     // guardian lion-dog on a pedestal
+    'L': T('t-lantern', true),     // paper lantern (KEEP 'L' — main-file night glow scans it)
+    'O': T('t-toro', true),        // stone ishidoro lantern (KEEP 'O' — night glow scans it)
+    'z': T('t-temizuya', true),    // water purification basin (chozubachi)
+    'i': T('t-torii', true),       // torii leg (lower)
+    'y': T('t-torii-top', true),   // torii leg-top + kasagi crossbar
+    'x': T('t-torii-beam'),        // crossbar over the path — walkable, pass under it
     'C': T('t-sakura', true),      // cherry-blossom tree
     'M': T('t-maple', true),       // autumn maple
   },
   outdoor: true,
+  // Procession reads bottom→top: torii gate → sando path (flanked by lanterns &
+  // komainu) → temizuya → honden hall, with the saisen-bako ('b') front & centre.
   grid: [
-    'TTCTTTTMTTTTMTTTTCTT',
-    'TTTTTRRRRRRRRRRTTTTT',
-    'TggggRRRRRRRRRRggggT',
-    'TggggWWWWWWWWWWggggT',
-    'TgggggggghhggggggggT',
-    'TggggOgggppgggOggggT',
-    'TgggkgggqppqgggkgggT',
-    'TggLgggggppgggggLggT',
+    'TTCTMTggggggggMTTCTT',
+    'TgggggrRRGGRRegggggT',
+    'TgggggrRRRRRRegggggT',
+    'TgggggWWWDDWWWgggggT',
+    'TgggggvvvbvvvvgggggT',
+    'TggggOgkgppgkgOggggT',
     'TgggggggqppqgggggggT',
-    'TggggggggppggggggggT',
+    'TgCgzOgggppgggOgMggT',
+    'TgggggLgyxxygLgggggT',
+    'TgggggggippigggggggT',
     'TTTTTTTTTppTTTTTTTTT',
   ],
   warps: [
     { x: 9, y: 10, to: 'city', tx: 24, ty: 13, dir: 'up' },
     { x: 10, y: 10, to: 'city', tx: 25, ty: 13, dir: 'up' },
   ],
-  interactables: [{ id: 'shrine', x: 9, y: 4, w: 1, h: 1, label: 'Offer ¥500' }],
+  interactables: [{ id: 'shrine', x: 9, y: 4, w: 1, h: 1, label: 'Offer ¥500 at the saisen-bako' }],
   npcs: [{ id: 'miko', x: 13, y: 5, sprite: 'npc-miko', dir: 'down' }],
 };
 
