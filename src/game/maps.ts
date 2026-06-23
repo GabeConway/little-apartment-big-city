@@ -225,7 +225,8 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'しゅうり', x: 18, y: 0, color: '#ffd24a', bg: '#33302a', border: '#7a7468', vertical: true, font: 8 },
     { text: 'カラオケ', x: 20, y: 0, color: '#7ce8e0', bg: '#16121d', border: '#7ce8e0', vertical: true, font: 8, blink: true },
     { text: 'ホテル', x: 22, y: 0, color: '#e857a8', bg: '#16121d', border: '#e857a8', vertical: true, font: 8 },
-    { text: 'パチンコ', x: 24, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', vertical: true, font: 8, blink: true },
+    { text: 'カジノ', x: 24, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', vertical: true, font: 8, blink: true },
+    { text: 'CASINO', x: 23, y: 2, color: '#16181d', bg: '#ffd24a', border: '#c9a227', font: 7, blink: true },
     { text: 'いざかや', x: 26, y: 0, color: '#7ce8a0', bg: '#16121d', border: '#7ce8a0', vertical: true, font: 8 },
     { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
   ],
@@ -392,7 +393,7 @@ const badtown: SceneDef = {
   grid: [
     'NNNNNNNNNNGGGGGGGGGGEEXXEEXX',
     'NNNNNNNNNNGGGGGGGGGGEEXXEEXX',
-    'NNNDDNNNNNGGGGDDGGGGEEXXEEXX',
+    'NNNDDNNNNNGGGGDDGGGGEEXXDDXX',
     'ppqpppppppppppppppppppqppppp',
     'ppppppppppppppppppppppVppppp',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
@@ -414,6 +415,8 @@ const badtown: SceneDef = {
     { x: 4, y: 2, to: 'nightclub', tx: 8, ty: 8, dir: 'up' },
     { x: 14, y: 2, to: 'garage', tx: 8, ty: 7, dir: 'up' },
     { x: 15, y: 2, to: 'garage', tx: 9, ty: 7, dir: 'up' },
+    { x: 24, y: 2, to: 'casino', tx: 7, ty: 7, dir: 'up' },
+    { x: 25, y: 2, to: 'casino', tx: 8, ty: 7, dir: 'up' },
   ],
   interactables: [{ id: 'vending-dead', x: 22, y: 4, label: 'Vending machine?' }],
   npcs: [{ id: 'sketchy', x: 24, y: 11, sprite: 'npc-sketchy', dir: 'left' }],
@@ -711,6 +714,44 @@ const deepsea: SceneDef = {
   npcs: [],
 };
 
+// ---- Kinryū Lounge — yakuza casino (off the Downtown neon strip) ----------------------
+
+const casino: SceneDef = {
+  id: 'casino',
+  name: 'Kinryū Lounge',
+  legend: {
+    '#': T('t-casino-wall', true),
+    '.': T('t-casino-carpet'),
+    'S': T('t-slot', true),
+    'B': T('t-blackjack', true),
+    'D': T('t-door'),
+  },
+  grid: [
+    '################',
+    '#SS.SS.SS.SS.SS#',
+    '#..............#',
+    '#...B.....B....#',
+    '#..............#',
+    '#..............#',
+    '#SS.SS....SS.SS#',
+    '#..............#',
+    '#..............#',
+    '#######DD#######',
+  ],
+  warps: [
+    { x: 7, y: 9, to: 'badtown', tx: 24, ty: 3, dir: 'down' },
+    { x: 8, y: 9, to: 'badtown', tx: 25, ty: 3, dir: 'down' },
+  ],
+  interactables: [
+    { id: 'casino-slots', x: 1, y: 1, w: 14, h: 1, label: 'Slot machine' },
+    { id: 'casino-slots', x: 1, y: 6, w: 5, h: 1, label: 'Slot machine' },
+    { id: 'casino-slots', x: 10, y: 6, w: 5, h: 1, label: 'Slot machine' },
+    { id: 'casino-blackjack', x: 4, y: 3, w: 1, h: 1, label: 'Blackjack table' },
+    { id: 'casino-blackjack', x: 10, y: 3, w: 1, h: 1, label: 'Blackjack table' },
+  ],
+  npcs: [{ id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' }],
+};
+
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, island, deepsea,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, island, deepsea, casino,
 };
