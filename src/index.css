@@ -35,3 +35,20 @@ body {
   50%      { transform: rotate(-8deg) scale(1.08); }
 }
 .animate-splash { animation: splash-bob 0.9s ease-in-out infinite; }
+
+/* ---- Casino flourishes ---- */
+/* Slot reel blur while spinning (fast vertical streak). */
+@keyframes reel-roll { 0% { background-position-y: 0; } 100% { background-position-y: 64px; } }
+.reel-spinning { animation: reel-roll 0.25s linear infinite; }
+/* Win pulse: a gold glow that throbs a couple of times. */
+@keyframes casino-win { 0%,100% { box-shadow: 0 0 0 0 rgba(255,210,74,0); } 50% { box-shadow: 0 0 16px 4px rgba(255,210,74,0.75); } }
+.casino-win { animation: casino-win 0.6s ease-in-out 2; }
+/* Card deal: slide+fade in from the deck. */
+@keyframes card-deal { from { transform: translateY(-10px) rotate(-6deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.card-deal { animation: card-deal 0.18s ease-out both; }
+/* Roulette wheel spin (the ball-track ring rotates). */
+@keyframes wheel-spin { to { transform: rotate(360deg); } }
+.wheel-spinning { animation: wheel-spin 0.5s linear infinite; }
+/* Chip pop when you place a bet. */
+@keyframes chip-pop { from { transform: scale(0.7); } to { transform: scale(1); } }
+.chip-pop { animation: chip-pop 0.12s ease-out; }

@@ -610,6 +610,9 @@ const PORTRAIT_IMAGES: Record<string, string> = {
   'Granny Sato': '/images/portraits/granny-soto.png',
   'Genji': '/images/portraits/genji.jpeg',
   'The Manager': '/images/portraits/the-manager.jpeg',
+  'Jean-Pierre': '/images/portraits/jean-pierre.jpeg',
+  'Jean-Pierre (tourist)': '/images/portraits/jean-pierre.jpeg',
+  'Yoshi': '/images/portraits/yoshi.jpeg',
 };
 
 // Renders a registered speaker portrait into an inline pixel-art canvas. Returns
@@ -4438,19 +4441,28 @@ const LittleApartmentGame: React.FC = () => {
     const journalApp = (() => {
       const placedBase = FURNITURE.filter(f => Boolean(s.placed[f.id])).length;
       const fishCount = Object.values(s.fishLog).reduce((a, b) => a + b, 0);
+      const museumDone = s.museum.donated.length, museumTotal = MUSEUM_SLOTS.length;
+      // GOALS: concrete, trackable progress only (with a count/checkbox). No spelling
+      // out *how* — that's discovery. Hand-holdy "go talk to X" lines were cut.
       const goals: { text: string; done: boolean }[] = [];
       goals.push({ text: `Furnish the apartment — ${placedBase}/${FURNITURE.length} placed`, done: placedBase >= FURNITURE.length });
-      if (s.money < 5000) goals.push({ text: 'Short on cash? Comb the beach each morning — the bay washes up finds worth quick yen', done: false });
-      if (!s.greenhouseUnlocked) goals.push({ text: 'Bring Granny Soto (wandering the city) a fresh fish — she\'ll unlock the community greenhouse', done: false });
-      goals.push(errandDoneToday(s)
-        ? { text: "Odd-jobs board (by home): today's job done", done: true }
-        : { text: 'Odd-jobs board by home has a job posted today — deliver the goods for a tidy fee', done: false });
-      if (!s.canFish) goals.push({ text: 'Meet Genji on Sumikawa Shore — learn to fish', done: false });
-      else if (s.fishRod < 1) goals.push({ text: "Buy Genji's upgraded rod (bigger fish, deeper water)", done: false });
+      if (museumDone > 0 || s.backroomsUnlocked || fishCount > 8) goals.push({ text: `Fill the Kawamachi Museum — ${museumDone}/${museumTotal} displays`, done: museumDone >= museumTotal });
       if (s.canFish && !s.fishLog['golden']) goals.push({ text: 'Land the legendary Golden Carp', done: false });
-      if (!s.vehicles.includes('boat')) goals.push({ text: 'Buy a skiff at Kojima Motors — reach deep water', done: false });
-      if (s.deepestFloor < 5) goals.push({ text: 'Descend to mine floor 5', done: false });
-      const locked = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id)).slice(0, 4);
+      if (s.greenhouseUnlocked) goals.push({ text: 'Tend the greenhouse — plant, water, harvest', done: false });
+      if (s.backroomsUnlocked && s.deepestFloor < 10) goals.push({ text: `Plumb the mines — deepest floor reached: ${s.deepestFloor}`, done: false });
+      // LEADS: vaguer nudges. Cryptic on purpose — point a lost player roughly the
+      // right way without handing them the answer.
+      const leads: string[] = [];
+      if (s.money < 5000) leads.push('Low on yen — the morning tide leaves little gifts on the sand.');
+      if (!s.canFish) leads.push('The old man on Sumikawa Shore has the look of someone itching to teach.');
+      else if (s.fishRod < 1) leads.push('Genji keeps something better than a starter rod behind his stall.');
+      if (s.canFish && !s.greenhouseUnlocked) leads.push('Granny Soto keeps asking after a fresh fish.');
+      if (!s.gangPaid) leads.push('The east alley out of the city is "spoken for." Coin might persuade them.');
+      if (s.backroomsUnlocked && allRaresOwned(s) && !s.parisRevealed) leads.push('The Manager has the air of someone holding one last secret.');
+      if (s.parisRevealed && !s.storySeen.includes('paris-intro')) leads.push('A seam waits at the very top of the yellow place. Press into it.');
+      if (museumDone > 0 && museumDone < museumTotal) leads.push('Bingus\'s empty pedestals nag at you. Curios hide where few think to look.');
+      // RUMORS: at most TWO cryptic achievement whispers (was four — too much).
+      const rumors = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id)).slice(0, 2);
       return (
         <div className="px-3 py-2">
           <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">CURRENT GOALS</p>
@@ -4462,12 +4474,18 @@ const LittleApartmentGame: React.FC = () => {
                   <p className={`text-base leading-tight ${g.done ? 'opacity-50 line-through' : ''}`}>{g.text}</p>
                 </div>
               ))}
-          <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3 mb-1">NEXT STEPS</p>
-          {locked.length === 0
-            ? <p className="py-1 text-base opacity-50">Every trophy earned. Legendary.</p>
-            : locked.map(a => (
-                <p key={a.id} className="text-sm py-1 border-b border-white/10 opacity-70 leading-tight">🔎 {a.hint}</p>
-              ))}
+          {leads.length > 0 && <>
+            <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3 mb-1">LEADS</p>
+            {leads.map((l, i) => (
+              <p key={i} className="text-sm py-1 border-b border-white/10 opacity-75 leading-tight">→ {l}</p>
+            ))}
+          </>}
+          {rumors.length > 0 && <>
+            <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3 mb-1">RUMORS</p>
+            {rumors.map(a => (
+              <p key={a.id} className="text-sm py-1 border-b border-white/10 opacity-60 leading-tight italic">“{a.hint}”</p>
+            ))}
+          </>}
           <p className="text-xs opacity-40 mt-3 italic">Day {s.day} · ¥{s.money.toLocaleString()} · {fishCount} fish caught</p>
         </div>
       );
@@ -4581,6 +4599,17 @@ const LittleApartmentGame: React.FC = () => {
   const panelCls = 'bg-[#16181d] border-2 border-[#ffd24a]/60 text-[#e8e0d0] font-pixel shadow-[4px_4px_0px_#000]';
   const btnCls = 'border border-[#ffd24a]/60 px-3 py-1 text-[#ffd24a] hover:bg-[#ffd24a] hover:text-black transition-colors disabled:opacity-30 disabled:pointer-events-none text-lg';
 
+  // A round casino chip used as a bet button across all three games.
+  const chipBtn = (c: number, active: boolean, disabled: boolean, onClick: () => void) => (
+    <button
+      key={c}
+      disabled={disabled}
+      onClick={onClick}
+      className={`relative w-12 h-12 rounded-full border-2 border-dashed font-bold text-xs flex items-center justify-center transition disabled:opacity-25 disabled:pointer-events-none ${active ? 'border-black bg-[#ffd24a] text-black scale-110 shadow-[0_0_10px_rgba(255,210,74,0.6)] chip-pop' : 'border-[#ffd24a]/70 bg-[#2a1822] text-[#ffd24a] hover:bg-[#3a2230]'}`}
+    >¥{c >= 1000 ? `${c / 1000}k` : c}</button>
+  );
+  const feltCls = 'rounded-xl bg-[radial-gradient(circle_at_50%_30%,#2a7d48,#14502b)] border-2 border-[#c9a227]/70 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]';
+
   const renderShop = (ov: Extract<Overlay, { type: 'shop' }>) => {
     void shopTick;
     const s = saveRef.current;
@@ -4673,15 +4702,22 @@ const LittleApartmentGame: React.FC = () => {
       const chips = [500, 1000, 2500, 5000];
       const pv = handValue(bj.player), dv = handValue(bj.dealer);
       const red = (c: Card) => c.suit === 1 || c.suit === 2;
+      const pip = (c: Card) => (
+        <span className="leading-[0.85] text-center">{CARD_RANKS[c.rank]}<br />{CARD_SUITS[c.suit]}</span>
+      );
       const cardChip = (c: Card, hidden: boolean, key: number) => (
-        <span key={key} className={`inline-flex flex-col items-center justify-center w-9 h-12 rounded-sm border-2 mr-1 text-base font-bold leading-none ${hidden ? 'bg-[#3d2030] border-[#c9a227] text-[#c9a227]' : 'bg-[#e8e0d0] border-[#7a7468]'}`}>
-          {hidden ? '?' : (<>
-            <span className={red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}>{CARD_RANKS[c.rank]}</span>
-            <span className={red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}>{CARD_SUITS[c.suit]}</span>
+        <span key={key} className={`card-deal relative inline-block w-[46px] h-16 rounded-md mr-1.5 align-top ${hidden ? 'bg-gradient-to-br from-[#7a2f5e] to-[#3a1530] border-2 border-[#c9a227]' : 'bg-[#f6f2ea] border border-[#b8b0a0] shadow-[1px_2px_0_rgba(0,0,0,0.45)]'}`}>
+          {hidden ? (
+            <span className="absolute inset-1 rounded-sm border border-[#c9a227]/50 flex items-center justify-center text-[#c9a227] text-lg">❖</span>
+          ) : (<>
+            <span className={`absolute top-0.5 left-1 text-[11px] font-bold ${red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{pip(c)}</span>
+            <span className={`absolute inset-0 flex items-center justify-center text-2xl ${red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{CARD_SUITS[c.suit]}</span>
+            <span className={`absolute bottom-0.5 right-1 text-[11px] font-bold rotate-180 ${red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{pip(c)}</span>
           </>)}
         </span>
       );
       const profit = bj.payout - bj.bet;
+      const won = bj.result === 'win' || bj.result === 'blackjack';
       const resultText =
         bj.result === 'blackjack' ? `BLACKJACK! +¥${profit.toLocaleString()}` :
         bj.result === 'win' ? `YOU WIN  +¥${profit.toLocaleString()}` :
@@ -4692,20 +4728,20 @@ const LittleApartmentGame: React.FC = () => {
           {bj.phase === 'bet' ? (
             <div className="py-2">
               <p className="text-base opacity-70 mb-2">Place your bet, then deal.</p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {chips.map(c => (
-                  <button key={c} className={`${btnCls} ${bj.bet === c ? 'bg-[#ffd24a] text-black' : ''}`} disabled={s.money < c} onClick={() => setBjBet(c)}>¥{c.toLocaleString()}</button>
-                ))}
+              <div className="flex flex-wrap gap-2 mb-3 justify-center">
+                {chips.map(c => chipBtn(c, bj.bet === c, s.money < c, () => setBjBet(c)))}
               </div>
               <button className={`${btnCls} w-full`} disabled={s.money < bj.bet} onClick={dealBlackjack}>DEAL · bet ¥{bj.bet.toLocaleString()}</button>
               <button className={`${btnCls} w-full mt-2 text-sm`} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
             </div>
           ) : (
             <div className="py-2">
-              <p className="text-sm opacity-60 mb-1">DEALER{bj.hideHole ? '' : ` · ${dv}${dv > 21 ? ' BUST' : ''}`}</p>
-              <div className="mb-3">{bj.dealer.map((c, i) => cardChip(c, bj.hideHole && i === 1, i))}</div>
-              <p className="text-sm opacity-60 mb-1">YOU · {pv}{pv > 21 ? ' BUST' : ''}</p>
-              <div className="mb-3">{bj.player.map((c, i) => cardChip(c, false, i))}</div>
+              <div className={`${feltCls} px-3 py-3 mb-3 ${won ? 'casino-win' : ''}`}>
+                <p className="text-xs text-white/70 mb-1">DEALER{bj.hideHole ? '' : ` · ${dv}${dv > 21 ? ' BUST' : ''}`}</p>
+                <div className="mb-3 min-h-[64px]">{bj.dealer.map((c, i) => cardChip(c, bj.hideHole && i === 1, i))}</div>
+                <p className="text-xs text-white/70 mb-1">YOU · {pv}{pv > 21 ? ' BUST' : ''}</p>
+                <div className="min-h-[64px]">{bj.player.map((c, i) => cardChip(c, false, i))}</div>
+              </div>
               {bj.phase === 'player' ? (
                 <div className="flex gap-2">
                   <button className={`${btnCls} flex-grow`} onClick={hitBlackjack}>HIT</button>
@@ -4713,7 +4749,7 @@ const LittleApartmentGame: React.FC = () => {
                 </div>
               ) : (
                 <div>
-                  <p className={`text-xl mb-2 ${bj.result === 'lose' ? 'text-[#d05050]' : 'text-[#7ce8a0]'}`}>{resultText}</p>
+                  <p className={`text-xl mb-2 text-center ${bj.result === 'lose' ? 'text-[#d05050]' : bj.result === 'push' ? 'text-[#e8e0d0]' : 'text-[#7ce8a0]'}`}>{resultText}</p>
                   <div className="flex gap-2">
                     <button className={`${btnCls} flex-grow`} disabled={s.money < bj.bet} onClick={() => { casinoRef.current.bj = { ...freshBlackjack(), bet: bj.bet }; setShopTick(v => v + 1); }}>NEW HAND</button>
                     <button className={btnCls} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>LOBBY</button>
@@ -4730,20 +4766,35 @@ const LittleApartmentGame: React.FC = () => {
       const slot = casinoRef.current.slot;
       const chips = [100, 500, 1000, 2500];
       const spinning = slot.phase === 'spin';
-      const reelBox = (i: number) => (
-        <span key={i} className={`inline-flex items-center justify-center w-16 h-16 mx-1 rounded border-2 text-4xl ${spinning && !slot.stopped[i] ? 'border-[#ffd24a] bg-[#1d1018]' : 'border-[#c9a227] bg-[#2a1822]'}`}>
-          {SLOT_SYMBOLS[slot.reels[i]]}
-        </span>
-      );
-      const winText = slot.phase === 'done' ? (slot.win > 0 ? `WIN  +¥${slot.win.toLocaleString()}!` : 'No match. Spin again.') : (spinning ? '…' : ' ');
+      const won = slot.phase === 'done' && slot.win > 0;
+      const sym = (n: number) => SLOT_SYMBOLS[((n % SLOT_SYMBOLS.length) + SLOT_SYMBOLS.length) % SLOT_SYMBOLS.length];
+      const reelBox = (i: number) => {
+        const live = spinning && !slot.stopped[i];
+        return (
+          <span key={i} className="mx-1 w-[60px] h-20 rounded-md border-2 border-[#7a5a1a] bg-[#0e0a10] overflow-hidden flex flex-col items-center justify-center shadow-[inset_0_0_8px_rgba(0,0,0,0.8)]">
+            {live ? (
+              <span className="flex flex-col items-center text-3xl leading-tight blur-[1.5px] opacity-90">
+                <span>{sym(slot.reels[i] + 1)}</span>
+                <span>{sym(slot.reels[i])}</span>
+                <span>{sym(slot.reels[i] + 2)}</span>
+              </span>
+            ) : (
+              <span className="text-4xl">{SLOT_SYMBOLS[slot.reels[i]]}</span>
+            )}
+          </span>
+        );
+      };
+      const winText = slot.phase === 'done' ? (slot.win > 0 ? `WIN  +¥${slot.win.toLocaleString()}!` : 'No match. Spin again.') : (spinning ? 'good luck…' : ' ');
       return (
         <ShopFrame title="SLOT MACHINES" subtitle="Line up three · 7️⃣7️⃣7️⃣ = 50× your bet" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
-          <div className="flex justify-center py-3">{[0, 1, 2].map(reelBox)}</div>
+          <div className={`relative mx-auto w-fit rounded-xl border-4 border-[#c9a227] bg-gradient-to-b from-[#3a2230] to-[#170d14] px-3 py-4 my-2 ${won ? 'casino-win' : ''}`}>
+            {/* payline across the middle */}
+            <div className="absolute left-3 right-3 top-1/2 -translate-y-1/2 h-[1px] bg-[#ffd24a]/70 shadow-[0_0_6px_rgba(255,210,74,0.8)] pointer-events-none" />
+            <div className="flex justify-center">{[0, 1, 2].map(reelBox)}</div>
+          </div>
           <p className={`text-center text-xl h-7 ${slot.win > 0 ? 'text-[#7ce8a0]' : 'opacity-60'}`}>{winText}</p>
           <div className="flex flex-wrap gap-2 justify-center my-2">
-            {chips.map(c => (
-              <button key={c} className={`${btnCls} ${slot.bet === c ? 'bg-[#ffd24a] text-black' : ''}`} disabled={spinning || s.money < c} onClick={() => setSlotBet(c)}>¥{c.toLocaleString()}</button>
-            ))}
+            {chips.map(c => chipBtn(c, slot.bet === c, spinning || s.money < c, () => setSlotBet(c)))}
           </div>
           <button className={`${btnCls} w-full text-xl`} disabled={spinning || s.money < slot.bet} onClick={spinSlots}>{spinning ? 'SPINNING…' : `PULL · bet ¥${slot.bet.toLocaleString()}`}</button>
           <button className={`${btnCls} w-full mt-2 text-sm`} disabled={spinning} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
@@ -4759,7 +4810,8 @@ const LittleApartmentGame: React.FC = () => {
       const r = roul.display;
       const green = r === 0;
       const isRed = ROULETTE_RED.has(r);
-      const numColor = green ? 'bg-[#1f6b3a] text-white' : isRed ? 'bg-[#b03030] text-white' : 'bg-[#1a1a1a] text-white';
+      const hubColor = green ? 'text-[#3ad17a]' : isRed ? 'text-[#ff6b6b]' : 'text-white';
+      const won = roul.phase === 'done' && roul.win > 0;
       const kinds: [RouletteBet, string][] = [
         ['red', 'RED'], ['black', 'BLACK'], ['even', 'EVEN'], ['odd', 'ODD'], ['low', '1–18'], ['high', '19–36'],
       ];
@@ -4774,8 +4826,20 @@ const LittleApartmentGame: React.FC = () => {
         roul.kind === 'low' ? 'on 1–18' : 'on 19–36';
       return (
         <ShopFrame title="ROULETTE" subtitle="Single zero · outside bets pay even · a number pays 35:1" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
-          <div className="flex justify-center py-3">
-            <span className={`inline-flex items-center justify-center w-20 h-20 rounded-full border-4 border-[#c9a227] text-4xl font-bold ${numColor}`}>{r}</span>
+          <div className="flex justify-center py-2">
+            <div className={`relative w-28 h-28 rounded-full ${won ? 'casino-win' : ''}`}>
+              {/* alternating red/black wheel ring; spins while the ball is rolling */}
+              <div
+                className={`absolute inset-0 rounded-full border-4 border-[#c9a227] ${spinning ? 'wheel-spinning' : ''}`}
+                style={{ background: 'repeating-conic-gradient(#1a1a1a 0 18deg, #b03030 18deg 36deg)' }}
+              />
+              {/* the dropping ball, parked at 12 o'clock */}
+              <div className="absolute top-[2px] left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white shadow-[0_0_4px_#fff]" />
+              {/* hub showing the winning pocket */}
+              <div className="absolute inset-[22px] rounded-full bg-[#0e0a10] border-2 border-[#7a5a1a] flex items-center justify-center">
+                <span className={`text-3xl font-bold ${hubColor}`}>{r}</span>
+              </div>
+            </div>
           </div>
           <p className={`text-center text-xl h-7 ${roul.win > 0 ? 'text-[#7ce8a0]' : 'opacity-60'}`}>{resultText}</p>
           <p className="text-sm opacity-60 text-center mb-2">Betting ¥{roul.bet.toLocaleString()} {betLabel}</p>
@@ -4791,9 +4855,7 @@ const LittleApartmentGame: React.FC = () => {
             <button className={`${btnCls} text-sm`} disabled={spinning} onClick={() => setRoulPick(roul.pick + 1)}>+</button>
           </div>
           <div className="flex flex-wrap gap-2 justify-center my-2">
-            {chips.map(c => (
-              <button key={c} className={`${btnCls} ${roul.bet === c ? 'bg-[#ffd24a] text-black' : ''}`} disabled={spinning || s.money < c} onClick={() => setRoulBet(c)}>¥{c.toLocaleString()}</button>
-            ))}
+            {chips.map(c => chipBtn(c, roul.bet === c, spinning || s.money < c, () => setRoulBet(c)))}
           </div>
           <button className={`${btnCls} w-full text-xl`} disabled={spinning || s.money < roul.bet} onClick={spinRoulette}>{spinning ? 'SPINNING…' : `SPIN · bet ¥${roul.bet.toLocaleString()}`}</button>
           <button className={`${btnCls} w-full mt-2 text-sm`} disabled={spinning} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
