@@ -2459,6 +2459,12 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // Paris: the Eiffel Tower, one big sprite rising over the sky behind the plaza.
+    if (scene.id === 'paris') {
+      const e = atlas['eiffel-big'];
+      ctx.drawImage(e, Math.round(13 * TILE - e.width / 2) - cam.x, 134 - e.height - cam.y);
+    }
+
     // soft shadows where walls meet walkable ground (cheap ambient occlusion)
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     for (let ty = ty0; ty <= ty1; ty++) {

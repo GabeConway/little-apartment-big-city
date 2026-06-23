@@ -242,9 +242,9 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: '↓ HOME / SHORE', x: 5, y: 10, color: '#9fc4e8', bg: 'rgba(0,0,0,0.5)' },
   ],
   paris: [
-    { text: 'CAFÉ DE LA LUNE', x: 1, y: 4, color: '#ffe9a0', bg: '#7a1f18', border: '#c0392b', font: 7 },
-    { text: 'BOULANGERIE', x: 17, y: 4, color: '#ffd24a', bg: '#16304a', border: '#2e5e8e', font: 7 },
-    { text: '↩ RETOUR', x: 2, y: 5, color: '#e8e0d0', bg: 'rgba(0,0,0,0.5)' },
+    { text: 'CAFÉ DE LA LUNE', x: 1, y: 5, color: '#ffe9a0', bg: '#7a1f18', border: '#c0392b', font: 7 },
+    { text: 'BOULANGERIE', x: 16, y: 5, color: '#ffd24a', bg: '#16304a', border: '#2e5e8e', font: 7 },
+    { text: '↩ RETOUR', x: 2, y: 6, color: '#e8e0d0', bg: 'rgba(0,0,0,0.5)' },
     { text: 'PARIS, FRANCE', x: 9, y: 12, color: '#e8e0d0', bg: 'rgba(0,0,0,0.4)' },
   ],
 };
@@ -838,22 +838,21 @@ const paris: SceneDef = {
     'T': T('t-paris-tree', true),
     'q': T('t-quay'),
     'w': T('t-water-0', true),
-    // Eiffel Tower tiles (all solid): spire / upper / mid row / base row.
-    '1': T('t-eiffel-1', true),
-    '3': T('t-eiffel-3', true),
-    '5': T('t-eiffel-5', true), '6': T('t-eiffel-6', true), '7': T('t-eiffel-7', true),
-    '8': T('t-eiffel-8', true), '9': T('t-eiffel-9', true), '0': T('t-eiffel-0', true),
+    // The Eiffel Tower is no longer tiles — it's one big sprite blitted over the
+    // sky in the paris draw block (see LittleApartmentGame.tsx).
   },
   outdoor: true,
+  // Big open sky (rows 0-7) for the Eiffel to rise into; cafe + boulangerie stand
+  // on the horizon; the cobble quay + Seine are the walkable foreground.
   grid: [
-    'PPkkkkkkkkkk1kkkkkkkkkkkPP',
-    'PPkkkkkkkkkk3kkkkkkkkkkkPP',
-    'PPkkkkkkkkk567kkkkkkkkkkPP',
-    'PPkkkkkkkkk890kkkkkkkkkkPP',
-    'PPccccccccccccccccccccccPP',
-    'PaaaccccccccccccccccccbbbP',
-    'PaDDccccccccccccccccccbbbP',
-    'PPccccccccccccccccccccccPP',
+    'PPkkkkkkkkkkkkkkkkkkkkkkPP',
+    'PPkkkkkkkkkkkkkkkkkkkkkkPP',
+    'PPkkkkkkkkkkkkkkkkkkkkkkPP',
+    'PPkkkkkkkkkkkkkkkkkkkkkkPP',
+    'PPkkkkkkkkkkkkkkkkkkkkkkPP',
+    'PPkkkkkkkkkkkkkkkkkkkkkkPP',
+    'PaaakkkkkkkkkkkkkkkkkkbbbP',
+    'PaDDkkkkkkkkkkkkkkkkkkbbbP',
     'cccccccccccccccccccccccccc',
     'cccTccccTccccccccTccccTccc',
     'qqqqqqqqqqqqqqqqqqqqqqqqqq',
@@ -862,8 +861,8 @@ const paris: SceneDef = {
     'wwwwwwwwwwwwwwwwwwwwwwwwww',
   ],
   warps: [
-    { x: 2, y: 6, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
-    { x: 3, y: 6, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
+    { x: 2, y: 7, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
+    { x: 3, y: 7, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
   ],
   interactables: [
     { id: 'seine', x: 0, y: 10, w: 26, h: 2, label: 'The Seine' },

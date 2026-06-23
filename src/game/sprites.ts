@@ -1555,67 +1555,46 @@ const buildTiles = (atlas: Atlas) => {
     speckle(ctx, '#c4b462', 47, 4);
   });
 
-  // Eiffel Tower — a 3-wide × 4-tall block: spire '1', upper '3', mid row
-  // '5','6','7', base row '8','9','0'. Authored against pale sky; legs mirror.
-  const eSky = '#cbe2f2', eFe = '#5a3c24', eFeL = '#7a5638', eFeD = '#3a2616';
-  atlas['t-eiffel-1'] = tile(ctx => {        // spire (top, centred)
-    fill(ctx, eSky);
-    ctx.fillStyle = eFeL; ctx.fillRect(7, 0, 2, 2);
-    ctx.fillStyle = eFe; ctx.fillRect(7, 2, 2, 11);         // mast
-    ctx.fillStyle = eFe; ctx.fillRect(4, 13, 8, 3);         // top observation deck
-    ctx.fillStyle = eFeD; ctx.fillRect(4, 15, 8, 1);
-  });
-  atlas['t-eiffel-3'] = tile(ctx => {        // upper body, under the spire
-    fill(ctx, eSky);
-    ctx.fillStyle = eFe; ctx.fillRect(5, 0, 2, 12); ctx.fillRect(9, 0, 2, 12); // uprights
-    ctx.fillStyle = eFeL; ctx.fillRect(5, 0, 1, 12);
-    ctx.fillStyle = eFeD; for (let y = 1; y < 11; y += 3) ctx.fillRect(6, y, 4, 1); // rungs
-    // 2nd platform — full tile width so the splayed legs below spring from it
-    ctx.fillStyle = eFe; ctx.fillRect(0, 11, 16, 5);
-    ctx.fillStyle = eFeL; ctx.fillRect(0, 11, 16, 1);
-    ctx.fillStyle = eFeD; ctx.fillRect(0, 14, 16, 2);
-  });
-  // Mid-left belly leg: curves out from the 2nd platform (top, inner edge) down
-  // to the tile's outer-bottom, meeting the base leg below. A platform stub along
-  // the top joins it seamlessly to the centre tile.
-  const eMidL = tile(ctx => {
-    fill(ctx, eSky);
-    ctx.fillStyle = eFe; ctx.fillRect(10, 0, 6, 3);          // platform stub (joins centre)
-    ctx.fillStyle = eFeL; ctx.fillRect(10, 0, 6, 1);
-    for (let k = 0; k < 16; k++) { const x = Math.max(0, 12 - Math.round(k * 0.8)); ctx.fillStyle = eFe; ctx.fillRect(x, k, 3, 1); }
-    ctx.fillStyle = eFeD; for (let k = 2; k < 16; k += 3) { const x = Math.max(0, 12 - Math.round(k * 0.8)); ctx.fillRect(x, k, 3, 1); }
-  });
-  atlas['t-eiffel-5'] = eMidL; atlas['t-eiffel-7'] = mirror(eMidL);
-  atlas['t-eiffel-6'] = tile(ctx => {        // mid-centre lattice belly + decks
-    fill(ctx, eSky);
-    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 3);         // 2nd platform joining the legs
-    ctx.fillStyle = eFeL; ctx.fillRect(0, 0, 16, 1);
-    ctx.fillStyle = eFe; ctx.fillRect(6, 3, 4, 13);         // central column
-    ctx.fillStyle = eFeL; ctx.fillRect(6, 3, 1, 13);
-    ctx.fillStyle = eFeD; for (let y = 5; y < 15; y += 3) ctx.fillRect(6, y, 4, 1); // rungs
-    ctx.fillStyle = eFe; ctx.fillRect(0, 13, 16, 3);        // 1st platform (bottom)
-    ctx.fillStyle = eFeD; ctx.fillRect(0, 15, 16, 1);
-  });
-  // Base-left splayed leg + foot, with the inner arch haunch that meets the arch.
-  const eLegL = tile(ctx => {
-    fill(ctx, eSky);
-    for (let k = 0; k < 13; k++) { const x = Math.round(k * 0.15); ctx.fillStyle = eFe; ctx.fillRect(x, k, 4, 1); }
-    ctx.fillStyle = eFe; ctx.fillRect(0, 12, 8, 4);          // foot
-    ctx.fillStyle = eFeL; ctx.fillRect(0, 12, 8, 1);
-    ctx.fillStyle = eFeD; ctx.fillRect(0, 15, 8, 1);
-    ctx.fillStyle = eFe; ctx.fillRect(12, 0, 4, 6);          // inner arch haunch (toward centre)
-    ctx.fillStyle = eFeD; ctx.fillRect(12, 5, 4, 1);
-  });
-  atlas['t-eiffel-8'] = eLegL; atlas['t-eiffel-0'] = mirror(eLegL);
-  atlas['t-eiffel-9'] = tile(ctx => {        // grand arch (open) under the deck
-    fill(ctx, eSky);
-    ctx.fillStyle = eFe; ctx.fillRect(0, 0, 16, 3);         // 1st-platform beam joining the legs
-    ctx.fillStyle = eFeL; ctx.fillRect(0, 0, 16, 1);
-    ctx.fillStyle = eFe; ctx.fillRect(0, 3, 4, 5); ctx.fillRect(12, 3, 4, 5); // arch haunches
-    ctx.fillStyle = eFeD; ctx.fillRect(0, 3, 4, 1); ctx.fillRect(12, 3, 4, 1);
-    ctx.fillStyle = eFe; ctx.fillRect(2, 7, 2, 2); ctx.fillRect(12, 7, 2, 2);  // inner arch curve
-    // the middle/bottom stays open sky — the famous arch
-  });
+  // Eiffel Tower — ONE big sprite (112×108) blitted over the Paris sky. The old
+  // tile-by-tile tower read as a crane claw at this scale; this draws the whole
+  // iconic concave-leg silhouette in one piece, with two platforms + the grand arch.
+  {
+    const eFe = '#6e4a2e', eFeL = '#8a6440', eFeD = '#43301c';
+    const W = 112, H = 108, cx = W / 2;
+    const [cc, cg] = canvas(W, H);
+    // outer half-width of the iron at height y (0 top .. H bottom)
+    const wEdge = (y: number): number => {
+      if (y < 6) return 2;                                                       // antenna
+      if (y < 30) { const t = (y - 6) / 24; return 3 + t * 8; }                  // upper column 3→11
+      if (y < 68) { const t = (y - 30) / 38; return 11 + 19 * Math.pow(t, 1.7); } // concave legs 11→30
+      const t = (y - 68) / (H - 68); return 30 + 22 * t;                          // lower legs 30→52
+    };
+    // 1) solid silhouette with horizontal lattice rungs (every 4th row darker)
+    for (let y = 0; y < H; y++) {
+      const w = wEdge(y);
+      cg.fillStyle = (y % 4 === 0) ? eFeD : eFe;
+      cg.fillRect(Math.round(cx - w), y, Math.round(2 * w), 1);
+    }
+    // 2) left-edge highlight for a little dimensional rake
+    cg.fillStyle = eFeL;
+    for (let y = 6; y < H; y++) cg.fillRect(Math.round(cx - wEdge(y)), y, 1, 1);
+    // 3) the two observation decks
+    cg.fillStyle = eFe; cg.fillRect(cx - 16, 30, 32, 4); cg.fillRect(cx - 34, 67, 68, 5);
+    cg.fillStyle = eFeD; cg.fillRect(cx - 16, 33, 32, 1); cg.fillRect(cx - 34, 71, 68, 1);
+    cg.fillStyle = eFeL; cg.fillRect(cx - 16, 30, 32, 1); cg.fillRect(cx - 34, 67, 68, 1);
+    // 4) antenna + a red aircraft beacon
+    cg.fillStyle = eFe; cg.fillRect(cx - 1, 0, 2, 8);
+    cg.fillStyle = '#e0564e'; cg.fillRect(cx - 1, 0, 2, 2);
+    // 5) carve the open lattice: the gap between the legs + the grand arch
+    cg.globalCompositeOperation = 'destination-out';
+    cg.beginPath(); cg.moveTo(cx, 38); cg.lineTo(cx - 20, 66); cg.lineTo(cx + 20, 66); cg.closePath(); cg.fill();
+    cg.beginPath();
+    cg.moveTo(cx - 30, H); cg.lineTo(cx - 30, 88);
+    cg.quadraticCurveTo(cx, 70, cx + 30, 88);
+    cg.lineTo(cx + 30, H); cg.closePath(); cg.fill();
+    cg.globalCompositeOperation = 'source-over';
+    atlas['eiffel-big'] = cc;
+  }
 
   // ---- Community greenhouse ------------------------------------------------
   // Interior glass wall: white frame + pale teal panes.
