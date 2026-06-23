@@ -122,6 +122,7 @@ const city: SceneDef = {
     'K': T('t-nakatomi-r', true),  // sign over the door: "TOMI"
     'p': T('t-planter', true),     // flowering planter flanking the entrance
     'F': T('t-grass-v2'),          // clover/daisy grass detail (walkable)
+    'E': T('t-gh-front', true),    // community greenhouse glass facade (east of home)
   },
   outdoor: true,
   grid: [
@@ -136,9 +137,9 @@ const city: SceneDef = {
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'gTggggwwggggggggggggggggggggggfg',
-    'ggHHHHHHHHgggggggggggggggggggggg',
-    'ggHHHHNKHHgggggggggggggggggggggg',
-    'ggHHHHDDHHggggggggggTgggggggggfg',
+    'ggHHHHHHHHggggggEEgggggggggggggg',
+    'ggHHHHNKHHggggggEEgggggggggggggg',
+    'ggHHHHDDHHggggggDDggTgggggggggfg',
     'gggggpwwpggggggggggfgfgggggggggg',
     'wwwwwwwwgggggggggggggggnmmnggggg',
     'wwwwwwwwggggggggggggggojggjo~~gg',
@@ -155,6 +156,9 @@ const city: SceneDef = {
     { x: 29, y: 2, to: 'gacha', tx: 6, ty: 6, dir: 'up' },
     { x: 6, y: 13, to: 'apartment', tx: 12, ty: 8, dir: 'up' },
     { x: 7, y: 13, to: 'apartment', tx: 13, ty: 8, dir: 'up' },
+    // Into Granny Soto's community greenhouse (glass house just east of home).
+    { x: 16, y: 13, to: 'greenhouse', tx: 7, ty: 8, dir: 'up' },
+    { x: 17, y: 13, to: 'greenhouse', tx: 8, ty: 8, dir: 'up' },
     { x: 0, y: 15, to: 'shore', tx: 22, ty: 3, dir: 'left' },
     { x: 0, y: 16, to: 'shore', tx: 22, ty: 4, dir: 'left' },
     { x: 31, y: 5, to: 'badtown', tx: 1, ty: 5, dir: 'right' },
@@ -189,6 +193,7 @@ export interface SceneSign {
 }
 export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   city: [
+    { text: '温室 GREENHOUSE', x: 13, y: 10, color: '#aef0a0', bg: 'rgba(0,0,0,0.4)', font: 7 },
     { text: '♥ ドキドキ でんき ♥', x: 1, y: 0, color: '#16181d', bg: '#ffd24a', border: '#d05050', font: 8 },
     { text: 'DOKI DOKI DISCOUNT', x: 1, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: 'コンビニ 24時間・酒', x: 12, y: 0, color: '#7ce8a0', bg: '#0c2a1a', border: '#3da26b', blink: true, font: 8 },
@@ -234,7 +239,6 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   ],
   shrine: [
     { text: 'よし神社 YOSHI SHRINE', x: 6, y: 1, color: '#fff', bg: '#8e2a1e', border: '#ffd24a', font: 8 },
-    { text: '温室 GREENHOUSE', x: 1, y: 9, color: '#aef0a0', bg: 'rgba(0,0,0,0.4)', font: 7 },
   ],
   greenhouse: [
     { text: 'コミュニティ温室', x: 3, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 8 },
@@ -424,9 +428,9 @@ const badtown: SceneDef = {
     { x: 15, y: 2, to: 'garage', tx: 9, ty: 7, dir: 'up' },
     { x: 24, y: 2, to: 'casino', tx: 7, ty: 7, dir: 'up' },
     { x: 25, y: 2, to: 'casino', tx: 8, ty: 7, dir: 'up' },
-    // Museum entrance (bottom-left): walk DOWN into the door from the plaza.
-    { x: 2, y: 11, to: 'museum', tx: 7, ty: 8, dir: 'up' },
-    { x: 3, y: 11, to: 'museum', tx: 8, ty: 8, dir: 'up' },
+    // Museum entrance (bottom-left): the door is the 'DD' on facade row 10.
+    { x: 2, y: 10, to: 'museum', tx: 7, ty: 8, dir: 'up' },
+    { x: 3, y: 10, to: 'museum', tx: 8, ty: 8, dir: 'up' },
   ],
   interactables: [{ id: 'vending-dead', x: 22, y: 4, label: 'Vending machine?' }],
   npcs: [{ id: 'sketchy', x: 24, y: 11, sprite: 'npc-sketchy', dir: 'left' }],
@@ -632,8 +636,6 @@ const shrine: SceneDef = {
     'O': T('t-toro', true),        // stone ishidoro lantern
     'C': T('t-sakura', true),      // cherry-blossom tree
     'M': T('t-maple', true),       // autumn maple
-    'E': T('t-gh-front', true),    // community greenhouse glass facade (entrance)
-    'D': T('t-gh-door'),           // greenhouse door (walks into the greenhouse interior)
   },
   outdoor: true,
   grid: [
@@ -643,18 +645,15 @@ const shrine: SceneDef = {
     'TggggWWWWWWWWWWggggT',
     'TgggggggghhggggggggT',
     'TggggOgggppgggOggggT',
-    'TgggkgEEqppqgggkgggT',
-    'TggLggEEgppgggggLggT',
-    'TgggggDDqppqgggggggT',
+    'TgggkgggqppqgggkgggT',
+    'TggLgggggppgggggLggT',
+    'TgggggggqppqgggggggT',
     'TggggggggppggggggggT',
     'TTTTTTTTTppTTTTTTTTT',
   ],
   warps: [
     { x: 9, y: 10, to: 'city', tx: 24, ty: 13, dir: 'up' },
     { x: 10, y: 10, to: 'city', tx: 25, ty: 13, dir: 'up' },
-    // Into Granny Soto's community greenhouse (door under the glass facade).
-    { x: 6, y: 8, to: 'greenhouse', tx: 7, ty: 8, dir: 'up' },
-    { x: 7, y: 8, to: 'greenhouse', tx: 8, ty: 8, dir: 'up' },
   ],
   interactables: [{ id: 'shrine', x: 9, y: 4, w: 1, h: 1, label: 'Offer ¥500' }],
   npcs: [{ id: 'miko', x: 13, y: 5, sprite: 'npc-miko', dir: 'down' }],
@@ -693,8 +692,8 @@ const greenhouse: SceneDef = {
     'GGGGGGGDDGGGGGGG',
   ],
   warps: [
-    { x: 7, y: 9, to: 'shrine', tx: 6, ty: 9, dir: 'down' },
-    { x: 8, y: 9, to: 'shrine', tx: 7, ty: 9, dir: 'down' },
+    { x: 7, y: 9, to: 'city', tx: 16, ty: 14, dir: 'down' },
+    { x: 8, y: 9, to: 'city', tx: 17, ty: 14, dir: 'down' },
   ],
   interactables: [
     { id: 'gh-plot', x: 3, y: 2, label: 'Soil plot' },
@@ -899,8 +898,8 @@ const museum: SceneDef = {
     '#######DD#######',
   ],
   warps: [
-    { x: 7, y: 9, to: 'badtown', tx: 2, ty: 10, dir: 'up' },
-    { x: 8, y: 9, to: 'badtown', tx: 3, ty: 10, dir: 'up' },
+    { x: 7, y: 9, to: 'badtown', tx: 2, ty: 9, dir: 'down' },
+    { x: 8, y: 9, to: 'badtown', tx: 3, ty: 9, dir: 'down' },
   ],
   // One interactable per display slot — id 'museum-display', resolved by tile.
   interactables: MUSEUM_SLOTS.map(sl => ({ id: 'museum-display', x: sl.x, y: sl.y, label: sl.label })),

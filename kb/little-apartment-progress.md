@@ -18,6 +18,7 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 - [x] **Community Greenhouse** (`greenhouse` scene off shrine) — Granny Soto, sunflower MVP, sprinkler toggle, day-cycle growth (`growGreenhouse` in `finishSleep`); `CROPS`/`GREENHOUSE_PLOTS`, built to extend to a farming sim. Music `greenhouse.mp3`.
 - [x] **Kawamachi Museum** (`museum` scene in Downtown) — Bingus Doofelsmurt, 12 `MUSEUM_SLOTS` Stardew-CC donation framework, `save.museum.donated`, `donateToMuseum` ready for future collectibles. Music `museum.mp3`.
 - [x] Built via parallel worktree subagents + merge; all 88 tests pass, tsc/build clean, playtested each scene (shrine/greenhouse/museum/city/shore/Journal/dialogue).
+- [x] **Follow-up fixes**: greenhouse moved out of the shrine → into the **city** (east of home); museum entrance warp fixed (was on a solid facade row — couldn't walk in); **fishing reverted to the old catch-zone minigame** (overhauled stamina/tension version scrapped) + first-cast HOW TO FISH explainer; Genji's rod now just biases rare-fish bites (no minigame change).
 - [ ] **Future**: museum collectible items (wire `donateToMuseum` to found objects); more greenhouse crops; portraits for more NPCs.
 
 ## Part A — Games section (done earlier, unchanged)

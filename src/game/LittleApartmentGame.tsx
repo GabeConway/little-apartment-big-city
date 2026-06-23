@@ -49,7 +49,7 @@ import {
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
-import { startFishing, updateFishing } from './fishing';
+import { startFishing, updateFishing, ZONE_H } from './fishing';
 import type { FishingState } from './fishing';
 
 // ---- tiny sfx -------------------------------------------------------------
@@ -1147,6 +1147,17 @@ const LittleApartmentGame: React.FC = () => {
       showDialog(["You stare at the water. You have a rod somewhere, probably, but no idea how to use it.", 'Genji — the old fisherman on Sumikawa Shore — looks like the type who could teach you.']);
       return;
     }
+    // First cast ever: explain the minigame before they swing.
+    if (!s.storySeen.includes('fish-howto')) {
+      s.storySeen.push('fish-howto');
+      persistSave(s);
+      showDialog([
+        'HOW TO FISH: face the water and press E to cast, then wait for the bobber to dip.',
+        'The moment it bites (BITE! PRESS E!), press E to set the hook.',
+        'Then HOLD E to raise the green catch-bar — keep the darting fish inside it until the meter on the right fills. Release E and the bar sinks. Land it before it fills the wrong way.',
+      ]);
+      return;
+    }
     const cost = energyCost(s, CAST_COST);
     if (s.energy < cost) { showDialog(['You are too tired to cast. Eat something, or sleep.']); return; }
     s.energy -= cost;
@@ -1948,7 +1959,7 @@ const LittleApartmentGame: React.FC = () => {
           const base = fm.table === 'deep' ? DEEP_FISH : fm.table === 'tropical' ? TROPICAL_FISH : FISH;
           const boost = 0.5 * luck + 0.6 * rodPull;
           const table = boost === 0 ? base : base.map(f => (f.value >= 500 ? { ...f, weight: f.weight * (1 + boost) } : f));
-          fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table), sNow.fishRod), tile: fm.tile, table: fm.table };
+          fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table)), tile: fm.tile, table: fm.table };
         } else if (fm.t <= 0) {
           fishModeRef.current = null;
           sfxMiss();
@@ -2750,44 +2761,27 @@ const LittleApartmentGame: React.FC = () => {
 
     // fishing reel UI
     if (fm && fm.phase === 'reel') {
-      const st = fm.st;
       const barX = VIEW_PW - 26, barY = 12, barH = VIEW_PH - 36, barW = 8;
-      // panel (wider on the left to seat the tension gauge)
       ctx.fillStyle = 'rgba(10,10,12,0.85)';
-      ctx.fillRect(barX - 20, barY - 6, 42, barH + 22);
+      ctx.fillRect(barX - 14, barY - 6, 36, barH + 22);
       ctx.fillStyle = '#1d2430';
       ctx.fillRect(barX, barY, barW, barH);
-      // catch zone (zonePos is the bottom edge in 0..1; bar drawn top-down). It
-      // reddens as TENSION rises so you feel the line about to slip.
-      const zoneTopPx = barY + (1 - (st.zonePos + st.zoneH)) * barH;
-      const tNorm = Math.min(1, st.tension);
-      const zr = Math.round(61 + tNorm * 170), zg = Math.round(162 - tNorm * 90), zb = Math.round(107 - tNorm * 60);
-      ctx.fillStyle = `rgb(${zr},${zg},${zb})`;
-      ctx.fillRect(barX, zoneTopPx, barW, st.zoneH * barH);
-      // fish marker — flashes brighter mid-lunge so a hard dart reads instantly.
-      const fy = barY + (1 - st.fishPos) * barH - 3;
-      if (st.lunging > 0) { ctx.fillStyle = 'rgba(255,90,90,0.9)'; ctx.fillRect(barX - 1, fy - 1, barW + 2, 8); }
-      ctx.drawImage(atlas[st.fish.sprite], barX - 12, fy, 12, 6);
-      // landing meter (progress) on the right edge of the main bar
-      const progH = Math.round(st.progress * barH);
+      // catch zone (zonePos is the bottom edge in 0..1, bar is drawn top-down)
+      const zoneTopPx = barY + (1 - (fm.st.zonePos + ZONE_H)) * barH;
+      ctx.fillStyle = '#3da26b';
+      ctx.fillRect(barX, zoneTopPx, barW, ZONE_H * barH);
+      // fish marker
+      const fy = barY + (1 - fm.st.fishPos) * barH - 3;
+      ctx.drawImage(atlas[fm.st.fish.sprite], barX - 12, fy, 12, 6);
+      // progress
+      const progH = Math.round(fm.st.progress * barH);
       ctx.fillStyle = '#2a3340';
       ctx.fillRect(barX + barW + 3, barY, 4, barH);
-      ctx.fillStyle = st.progress > 0.6 ? '#ffd24a' : '#c97a4a';
+      ctx.fillStyle = fm.st.progress > 0.6 ? '#ffd24a' : '#c97a4a';
       ctx.fillRect(barX + barW + 3, barY + (barH - progH), 4, progH);
-      // tension gauge (left of the bar) — fills + reddens; warns before a snap.
-      const tx = barX - 8;
-      ctx.fillStyle = '#2a2330';
-      ctx.fillRect(tx, barY, 3, barH);
-      const tH = Math.round(tNorm * barH);
-      ctx.fillStyle = tNorm > 0.75 ? '#ff5a5a' : tNorm > 0.4 ? '#ffb24a' : '#9ad0c0';
-      ctx.fillRect(tx, barY + (barH - tH), 3, tH);
-      // stamina pips under the bar — the fish tiring out (your fight turning).
-      const tired = 1 - st.stamina;
-      ctx.fillStyle = '#1a2028'; ctx.fillRect(barX - 12, barY + barH + 4, barW + 12, 3);
-      ctx.fillStyle = '#7ce8a0'; ctx.fillRect(barX - 12, barY + barH + 4, Math.round((barW + 12) * tired), 3);
       ctx.font = 'bold 6px monospace';
       ctx.fillStyle = '#e8e0d0';
-      ctx.fillText('HOLD E', barX - 12, barY + barH + 13);
+      ctx.fillText('HOLD E', barX - 12, barY + barH + 9);
     } else if (fm) {
       ctx.font = 'bold 6px monospace';
       ctx.fillStyle = 'rgba(10,10,12,0.8)';
@@ -3419,7 +3413,7 @@ const LittleApartmentGame: React.FC = () => {
     showDialog([
       'Genji weighs the rod once, then holds it out. "Carbon. Light as a wish, strong as a grudge."',
       '"I bought it to finally land that golden carp. Never had the nerve to swim where it lives. You might."',
-      '(Upgraded rod equipped — wider catch zone, faster reel, and the deep monsters are in reach now.)',
+      '(Upgraded rod equipped — the bigger, rarer fish bite for you far more often now.)',
     ], 'Genji');
   };
 

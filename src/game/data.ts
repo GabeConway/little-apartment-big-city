@@ -324,12 +324,13 @@ export const TROPICAL_FISH: Fish[] = [
 
 // ---- Fishing rods -----------------------------------------------------------
 // Genji gives you tier 0 (a worn bamboo rod) the first time you meet him; he
-// SELLS tier 1 once you've fished a while. Tuning of the minigame effects lives
-// in fishing.ts (ROD_TIERS); this is just the shop-facing name/price/blurb.
+// SELLS tier 1 once you've fished a while. The upgraded rod doesn't change the
+// reel minigame — it just draws the bigger, rarer fish to the hook far more
+// often (see the bite roll in LittleApartmentGame.tsx). Shop-facing copy only.
 export interface Rod { tier: number; name: string; price: number; blurb: string }
 export const RODS: Rod[] = [
   { tier: 0, name: 'Worn Bamboo Rod', price: 0, blurb: "Genji's spare. Pulls the shallows in just fine." },
-  { tier: 1, name: "Genji's Carbon Rod", price: 6000, blurb: 'A wider catch zone, a faster reel, and enough backbone to drag up the deep monsters. The rod he never used to chase the carp.' },
+  { tier: 1, name: "Genji's Carbon Rod", price: 6000, blurb: 'Backbone enough to tempt the big ones — the rare and deep fish bite for you far more often. The rod he never used to chase the carp.' },
 ];
 export const rodInfo = (tier: number): Rod => RODS[Math.max(0, Math.min(RODS.length - 1, tier))];
 
