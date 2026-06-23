@@ -25,7 +25,7 @@ const drawVibeThumb = (el: HTMLCanvasElement | null, vibe: 'fem' | 'masc') => {
   cx.clearRect(0, 0, el.width, el.height);
   cx.drawImage(spr, 0, 0, el.width, el.height);
 };
-import { SCENES, SCENE_SIGNS, MANEKI_SLOT, ORE_SPOTS, CRAWLER_SPAWNS } from './maps';
+import { SCENES, SCENE_SIGNS, MANEKI_SLOT } from './maps';
 import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
@@ -40,7 +40,7 @@ import {
   allRaresOwned, sketchyOfferFor, gachaComplete,
   clockLabel, nightT, morningT, COLLAPSE_MIN,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
-  oreNodesFor, shrineLuck, syncMessages, unreadCount,
+  mineLayoutFor, shrineLuck, syncMessages, unreadCount,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
 } from './state';
 import type { OreNode } from './state';
@@ -83,6 +83,11 @@ const sfxCatch = () => blip([659, 880, 1175], 0.09);
 const sfxMiss = () => blip([330, 220], 0.12);
 const sfxBite = () => blip([1175, 1175], 0.06, 0.07);
 const sfxLetter = () => blip([784, 988], 0.12, 0.04);
+// Mining chime — brighter, fuller arpeggio for the rarer (more valuable) ore.
+const sfxMine = (value: number) =>
+  value >= 900 ? blip([784, 1175, 1568], 0.09, 0.06)
+    : value >= 400 ? blip([659, 988, 1319], 0.075, 0.055)
+      : blip([880, 1320], 0.06, 0.05);
 
 // One-shot sampled SFX (mp3). Cached + rewound so they can re-fire rapidly.
 // Independent of the music mute toggle, matching the blip SFX above.
@@ -585,6 +590,8 @@ const LittleApartmentGame: React.FC = () => {
   const nursedRef = useRef(false);
   const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap } | null>(null);
   const sparkleRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Floating "+N Mineral" pickup text that rises and fades over a mined node.
+  const mineTextRef = useRef<{ x: number; y: number; text: string; color: string; t: number } | null>(null);
   const hurtCooldownRef = useRef(0);
   const lastSafeTileRef = useRef<Vec | null>(null);
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
@@ -732,8 +739,9 @@ const LittleApartmentGame: React.FC = () => {
     checkMessages(); // visiting a place can unlock its texts (buzz if so)
     if (id !== 'nightclub') djPickRef.current = null; // the set ends when you leave
     if (id === 'mines') {
-      oreNodesRef.current = oreNodesFor(s, ORE_SPOTS);
-      crawlersRef.current = CRAWLER_SPAWNS.map(c => ({
+      const layout = mineLayoutFor(s);
+      oreNodesRef.current = layout.ore;
+      crawlersRef.current = layout.crawlers.map(c => ({
         x: c.x * TILE, y: c.y * TILE - 4, hp: 2, stepT: Math.random(), hurtT: 0, dir: 'down' as Dir,
       }));
     } else {
@@ -1034,13 +1042,21 @@ const LittleApartmentGame: React.FC = () => {
       if (node) {
         const cost = energyCost(s, MINE_COST);
         if (s.energy < cost) { showDialog(['Too tired to swing. The rock hums smugly.']); return; }
-        s.energy -= cost;
-        s.minerals[node.mineral.id] = (s.minerals[node.mineral.id] ?? 0) + 1;
-        s.today.mineralsMined += 1;
-        s.minedNodes.push(`${node.x},${node.y}`);
+        // Remove the node up front so a second swing can't re-hit it mid-frame.
         oreNodesRef.current = oreNodesRef.current.filter(n => n !== node);
-        sparkleRef.current = { x: node.x * TILE, y: node.y * TILE, t: 0.4 };
-        sfxCoin();
+        s.minedNodes.push(`${node.x},${node.y}`);
+        const amount = node.amount ?? 1;
+        s.energy -= cost;
+        s.minerals[node.mineral.id] = (s.minerals[node.mineral.id] ?? 0) + amount;
+        s.today.mineralsMined += amount;
+        // Satisfying pop: a sparkle burst + a floating "+N Mineral" pickup label.
+        sparkleRef.current = { x: node.x * TILE, y: node.y * TILE, t: 0.45 };
+        mineTextRef.current = {
+          x: node.x * TILE, y: node.y * TILE,
+          text: amount > 1 ? `+${amount} ${node.mineral.name}` : node.mineral.name,
+          color: node.mineral.color, t: 1.1,
+        };
+        sfxMine(node.mineral.value);
         award('miner');
         persistSave(s); refreshHud();
         return;
@@ -1598,6 +1614,10 @@ const LittleApartmentGame: React.FC = () => {
       sparkleRef.current.t -= dt;
       if (sparkleRef.current.t <= 0) sparkleRef.current = null;
     }
+    if (mineTextRef.current) {
+      mineTextRef.current.t -= dt;
+      if (mineTextRef.current.t <= 0) mineTextRef.current = null;
+    }
     // sparkle bolts
     if (projectilesRef.current.length > 0) {
       const scene2 = sceneRef.current;
@@ -1820,6 +1840,21 @@ const LittleApartmentGame: React.FC = () => {
     }
     if (sparkleRef.current) {
       ctx.drawImage(atlas['m-sparkle'], Math.round(sparkleRef.current.x) - cam.x, Math.round(sparkleRef.current.y) - cam.y + 2);
+    }
+    if (mineTextRef.current) {
+      const mt = mineTextRef.current;
+      const rise = (1.1 - mt.t) * 14;            // drifts upward as it fades
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, mt.t * 2.4));
+      ctx.font = 'bold 7px monospace';
+      ctx.textAlign = 'center';
+      const tx = Math.round(mt.x) - cam.x + 8;
+      const ty = Math.round(mt.y) - cam.y - Math.round(rise);
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.strokeText(mt.text, tx, ty);
+      ctx.fillStyle = mt.color;
+      ctx.fillText(mt.text, tx, ty);
+      ctx.restore();
     }
 
     // vehicles in the world
@@ -2094,8 +2129,9 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth(null);
     if (!s.visited.includes(s.scene)) s.visited.push(s.scene);
     if (s.scene === 'mines') {
-      oreNodesRef.current = oreNodesFor(s, ORE_SPOTS);
-      crawlersRef.current = CRAWLER_SPAWNS.map(c => ({
+      const layout = mineLayoutFor(s);
+      oreNodesRef.current = layout.ore;
+      crawlersRef.current = layout.crawlers.map(c => ({
         x: c.x * TILE, y: c.y * TILE - 4, hp: 2, stepT: Math.random(), hurtT: 0, dir: 'down' as Dir,
       }));
     } else {
