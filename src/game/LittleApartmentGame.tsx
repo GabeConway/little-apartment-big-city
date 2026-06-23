@@ -30,7 +30,8 @@ import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
-  MINERALS, mineralById, MINE_COST, WAND_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
+  MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
+  PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
   itemKind,
 } from './data';
 import type { StoryBeat, Fish } from './data';
@@ -40,11 +41,12 @@ import {
   allRaresOwned, sketchyOfferFor, gachaComplete,
   clockLabel, nightT, morningT, COLLAPSE_MIN,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
-  mineLayoutFor, shrineLuck, syncMessages, unreadCount,
+  mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
+  shrineLuck, syncMessages, unreadCount,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay,
 } from './state';
-import type { OreNode } from './state';
+import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
 import { startFishing, updateFishing, ZONE_H } from './fishing';
 import type { FishingState } from './fishing';
@@ -89,6 +91,8 @@ const sfxMine = (value: number) =>
   value >= 900 ? blip([784, 1175, 1568], 0.09, 0.06)
     : value >= 400 ? blip([659, 988, 1319], 0.075, 0.055)
       : blip([880, 1320], 0.06, 0.05);
+// AK-67 — a short, dry low-freq crack for each full-auto round.
+const sfxGun = () => blip([180, 90], 0.045, 0.06);
 
 // One-shot sampled SFX (mp3). Cached + rewound so they can re-fire rapidly.
 // Independent of the music mute toggle, matching the blip SFX above.
@@ -203,7 +207,10 @@ const SODAS: Soda[] = [
   { id: 'zonked',  name: '"Zonked! Energy Drink"',  price: 250, energy: 25, blurb: 'Wings sold separately. A genuinely irresponsible jolt.' },
 ];
 
-interface Crawler { x: number; y: number; hp: number; stepT: number; hurtT: number; dir: Dir }
+interface Crawler { x: number; y: number; hp: number; stepT: number; hurtT: number; dir: Dir; kind: CrawlerKind }
+// Per-kind tuning: hp = bolts/shots to kill, spd = movement multiplier.
+const CRAWLER_HP: Record<CrawlerKind, number> = { normal: 1, fast: 1, tank: 3, gold: 2 };
+const CRAWLER_SPD: Record<CrawlerKind, number> = { normal: 1, fast: 1.6, tank: 0.7, gold: 1 };
 
 // ---- Casino games -----------------------------------------------------------
 // Self-contained blackjack + slots, betting s.money. Pure helpers live here; the
@@ -316,7 +323,7 @@ type FishMode =
   | { phase: 'bite'; t: number; tile: Vec; table: FishTable }
   | { phase: 'reel'; st: FishingState; tile: Vec; table: FishTable };
 
-interface Projectile { x: number; y: number; dx: number; dy: number; t: number }
+interface Projectile { x: number; y: number; dx: number; dy: number; t: number; pierce?: boolean; dmg?: number; gun?: boolean }
 
 interface Hud {
   money: number; day: number; time: string; energy: number; max: number;
@@ -667,11 +674,19 @@ const LittleApartmentGame: React.FC = () => {
   const oreNodesRef = useRef<OreNode[]>([]);
   const crawlersRef = useRef<Crawler[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
+  const mineFloorRef = useRef(1);        // current mine depth (1 = top floor; reset on entry from surface)
+  const mineDownRef = useRef<{ x: number; y: number } | null>(null); // this floor's seeded descend-ladder tile
+  const gunCooldownRef = useRef(0);      // AK-67 full-auto fire timer
   const nursedRef = useRef(false);
+  // Jean-Pierre rescue cutscene (after a mines KO): he's stood in your apartment
+  // while he talks, then walks to the door and leaves before you can get up.
+  const cutsceneRef = useRef<{ actor: { x: number; y: number; dir: Dir; sprite: string }; phase: 'talk' | 'walk'; path: { x: number; y: number }[] } | null>(null);
   const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap } | null>(null);
   const sparkleRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Floating "+N Mineral" pickup text that rises and fades over a mined node.
   const mineTextRef = useRef<{ x: number; y: number; text: string; color: string; t: number } | null>(null);
+  // Brief "Floor N" banner shown when you descend a level.
+  const depthToastRef = useRef<{ floor: number; t: number } | null>(null);
   const hurtCooldownRef = useRef(0);
   const lastSafeTileRef = useRef<Vec | null>(null);
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
@@ -697,6 +712,8 @@ const LittleApartmentGame: React.FC = () => {
 
   const [achToast, setAchToast] = useState<{ title: string; desc: string } | null>(null);
   const achTimerRef = useRef<number | null>(null);
+  const [geodePop, setGeodePop] = useState<{ text: string; color: string } | null>(null);
+  const geodeTimerRef = useRef<number | null>(null);
 
   // Phone-message toast (mirrors the achievement toast). Fired by checkMessages
   // when a new text is delivered, with the notification sound.
@@ -767,6 +784,25 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker });
   }, [setOverlayBoth]);
 
+  // Record the deepest floor reached and fire the one-off depth milestones
+  // (achievements + the AK-67 unlock once you survive floor GUN_UNLOCK_FLOOR).
+  const reachFloor = useCallback((floor: number) => {
+    const s = saveRef.current;
+    if (floor <= s.deepestFloor) return;
+    s.deepestFloor = floor;
+    if (floor >= 5) award('delver');
+    if (floor >= 10) award('abyss');
+    if (floor >= GUN_UNLOCK_FLOOR && !s.storySeen.includes('gun-unlock')) {
+      s.storySeen.push('gun-unlock');
+      showDialog([
+        'Your phone buzzes, this far underground, which should not be possible.',
+        'THE MANAGER: "You have gone deep enough to be interesting, customer. I have something for the deep."',
+        '"An AK-67. Full automatic. The last thing the crawlers ever hear. Come up and see me when you can afford it."',
+      ], 'The Manager');
+    }
+    persistSave(s);
+  }, [award, showDialog]);
+
   const computeSolids = useCallback(() => {
     const set = new Set<string>();
     const scene = sceneRef.current;
@@ -820,10 +856,11 @@ const LittleApartmentGame: React.FC = () => {
     checkMessages(); // visiting a place can unlock its texts (buzz if so)
     if (id !== 'nightclub') djPickRef.current = null; // the set ends when you leave
     if (id === 'mines') {
-      const layout = mineLayoutFor(s);
+      const layout = mineLayoutFor(s, mineFloorRef.current);
       oreNodesRef.current = layout.ore;
+      mineDownRef.current = layout.down;
       crawlersRef.current = layout.crawlers.map(c => ({
-        x: c.x * TILE, y: c.y * TILE - 4, hp: 2, stepT: Math.random(), hurtT: 0, dir: 'down' as Dir,
+        x: c.x * TILE, y: c.y * TILE - 4, hp: CRAWLER_HP[c.kind], stepT: Math.random(), hurtT: 0, dir: 'down' as Dir, kind: c.kind,
       }));
     } else {
       crawlersRef.current = [];
@@ -885,11 +922,20 @@ const LittleApartmentGame: React.FC = () => {
     playMusicFor(sceneRef.current.id); // back to the world's music
     if (pending?.nursed) {
       nursedRef.current = false;
+      // Stand Jean-Pierre in the apartment, talking over you. When you dismiss the
+      // dialog he walks to the door and out (handled in the update loop) — and you
+      // can't get up until he's gone.
+      cutsceneRef.current = {
+        actor: { x: 4 * TILE, y: 2 * TILE - 4, dir: 'left', sprite: 'npc-tourist' },
+        phase: 'talk',
+        path: [{ x: 12 * TILE, y: 2 * TILE - 4 }, { x: 12 * TILE, y: 10 * TILE }],
+      };
       showDialog([
-        'You wake in your own bed. There is a damp towel on your forehead, folded with surprising precision.',
-        'Jean-Pierre is sitting backwards on your desk chair. "Bonjour. You were face-down in ze yellow place. Very dramatique."',
+        'You come to on the floor of your own apartment. There is a damp towel on your forehead, folded with surprising precision.',
+        'Jean-Pierre is standing over you, beret slightly askew. "Bonjour. You were face-down in ze yellow place. Very dramatique."',
         '"I carry you up ze ladder, through ze freezer, past ze nice monster. He says hello, by ze way."',
-        '"In France we have a saying: do not fight ze crawling things on an empty battery." He pats your head exactly once, and leaves.',
+        '"In France we have a saying: do not fight ze crawling things on an empty battery." He pats your head exactly once.',
+        '"I let myself out. Rest. Eat something." He turns for the door.',
       ], 'Jean-Pierre');
     }
   }, [setOverlayBoth, playMusicFor, showDialog]);
@@ -1123,28 +1169,53 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
-    // Mines: mine ore, or let the wand do the talking
+    // Mines: descend the (randomly-placed) ladder, mine ore / free a geode, or
+    // let your weapon do the talking.
     if (scene.id === 'mines') {
+      const d = mineDownRef.current;
+      if (d && ((faced.x === d.x && faced.y === d.y) || (feet.x === d.x && feet.y === d.y))) {
+        const nf = mineFloorRef.current + 1;   // descend one floor; drop in at the top
+        mineFloorRef.current = nf;
+        enterScene('mines', 2, 1, 'down');
+        sfxBackroomsWarp();
+        reachFloor(nf);
+        depthToastRef.current = { floor: nf, t: 2.2 };
+        return;
+      }
       const node = oreNodesRef.current.find(n => n.x === faced.x && n.y === faced.y);
       if (node) {
-        const cost = energyCost(s, MINE_COST);
+        const pick = pickaxeOf(s.pickaxe);
+        // Hardness gates: geodes and the harder ore need a real pickaxe.
+        if (node.geode) {
+          if (pick.power < GEODE_HARDNESS) { showDialog(['A sealed geode. Bare hands just bruise on it — you need a real pickaxe.']); return; }
+        } else if (pick.power < node.mineral.hardness) {
+          showDialog([`The ${node.mineral.name} is too hard for your ${pick.name}. Come back with a better pickaxe.`]); return;
+        }
+        const cost = energyCost(s, pick.cost);
         if (s.energy < cost) { showDialog(['Too tired to swing. The rock hums smugly.']); return; }
         // Remove the node up front so a second swing can't re-hit it mid-frame.
         oreNodesRef.current = oreNodesRef.current.filter(n => n !== node);
-        s.minedNodes.push(`${node.x},${node.y}`);
-        const amount = node.amount ?? 1;
+        s.minedNodes.push(minedKey(mineFloorRef.current, node.x, node.y));
         s.energy -= cost;
-        s.minerals[node.mineral.id] = (s.minerals[node.mineral.id] ?? 0) + amount;
-        s.today.mineralsMined += amount;
-        // Satisfying pop: a sparkle burst + a floating "+N Mineral" pickup label.
         sparkleRef.current = { x: node.x * TILE, y: node.y * TILE, t: 0.45 };
-        mineTextRef.current = {
-          x: node.x * TILE, y: node.y * TILE,
-          text: amount > 1 ? `+${amount} ${node.mineral.name}` : node.mineral.name,
-          color: node.mineral.color, t: 1.1,
-        };
-        sfxMine(node.mineral.value);
-        award('miner');
+        if (node.geode) {
+          s.geodes += 1;
+          mineTextRef.current = { x: node.x * TILE, y: node.y * TILE, text: 'Geode!', color: '#7ce8e0', t: 1.1 };
+          sfxMine(900);
+        } else {
+          let amount = node.amount ?? 1;
+          if (pick.bonusChance > 0 && Math.random() < pick.bonusChance) amount += 1; // pickaxe lucky strike
+          s.minerals[node.mineral.id] = (s.minerals[node.mineral.id] ?? 0) + amount;
+          s.today.mineralsMined += amount;
+          mineTextRef.current = {
+            x: node.x * TILE, y: node.y * TILE,
+            text: amount > 1 ? `+${amount} ${node.mineral.name}` : node.mineral.name,
+            color: node.mineral.color, t: 1.1,
+          };
+          sfxMine(node.mineral.value);
+          award('miner');
+          if (node.mineral.id === 'starstone') award('astral');
+        }
         persistSave(s); refreshHud();
         return;
       }
@@ -1275,8 +1346,9 @@ const LittleApartmentGame: React.FC = () => {
     if (!target) {
       // Open water: every direction is a fishing spot
       if (scene.id === 'deepsea') { startCast(faced, 'deep'); return; }
-      // Mines: no ladder, no ore, nobody — the wand speaks
+      // Mines: no ladder, no ore, nobody — your weapon speaks
       if (scene.id === 'mines') {
+        if (s.gun) return; // AK-67 is full-auto; firing is handled in the update loop (hold E)
         if (s.wand) {
           const d = dirRef.current;
           const SPD = 190;
@@ -1284,7 +1356,7 @@ const LittleApartmentGame: React.FC = () => {
             x: posRef.current.x + 4, y: posRef.current.y + 4,
             dx: d === 'left' ? -SPD : d === 'right' ? SPD : 0,
             dy: d === 'up' ? -SPD : d === 'down' ? SPD : 0,
-            t: 0.8,
+            t: 0.8, pierce: s.wand2, dmg: 1, // upgraded wand bolts punch through crawlers
           });
           sfxBite();
           return;
@@ -1416,7 +1488,7 @@ const LittleApartmentGame: React.FC = () => {
         showDialog(['The Seine slides past, brown and unhurried, carrying the lights of the bridges.', 'You could stand here a while. You are, technically, very far from home.']);
         break;
       case 'descend':
-        if (!s.wand) {
+        if (!s.wand && !s.gun) {
           showDialog([
             'A hand on your shoulder. Jean-Pierre, suddenly very serious.',
             '"Non non non, mon ami. Down zere? Wizout ze sparkle stick? Zey will EAT you. Conceptually AND literally."',
@@ -1424,18 +1496,23 @@ const LittleApartmentGame: React.FC = () => {
           ], 'Jean-Pierre');
           break;
         }
+        mineFloorRef.current = 1;       // a dive from the surface always starts at the top floor
+        enterMineStreak(s);             // count today's visit toward the daily streak
         enterScene('mines', 2, 1, 'down');
+        reachFloor(1);
         if (!s.storySeen.includes('mines-intro')) {
           s.storySeen.push('mines-intro');
           persistSave(s);
           showDialog([
             'The ladder goes down further than ladders should.',
             'The walls glitter with something that is not quite mineral and not quite awake.',
+            'A second ladder waits in the far corner — and below that, another. It keeps going down.',
             'Things skitter at the edge of the lamplight. Best to have something sparkly to wave at them.',
           ]);
         }
         break;
       case 'ascend':
+        mineFloorRef.current = 1;       // climbing out takes you all the way back to the surface
         enterScene('backrooms', 12, 9, 'down');
         break;
       case 'shop-denden':
@@ -1498,7 +1575,7 @@ const LittleApartmentGame: React.FC = () => {
       case 'fish-tropical': startCast(faced, 'tropical'); break;
       case 'fish-spot': startCast(faced, 'shallow'); break;
     }
-  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, enterScene, refreshHud, runTransition, award, playMusicFor]);
+  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, enterScene, refreshHud, runTransition, award, playMusicFor, reachFloor]);
 
   // ---- update -----------------------------------------------------------------
 
@@ -1545,6 +1622,29 @@ const LittleApartmentGame: React.FC = () => {
         input.consumeInteract(); input.consumeCancel(); input.consumeInventory();
       }
       movingRef.current = false;
+      return;
+    }
+
+    // Jean-Pierre rescue: he talks (during the dialog above), then walks out. Your
+    // input stays locked the whole time — you can't get up until he's gone.
+    if (cutsceneRef.current) {
+      const cs = cutsceneRef.current;
+      input.consumeInteract(); input.consumeInventory(); input.consumeCancel();
+      movingRef.current = false;
+      if (cs.phase === 'talk') {
+        cs.phase = 'walk'; // the dialog was dismissed — time for him to leave
+      } else {
+        const wp = cs.path[0];
+        if (!wp) { cutsceneRef.current = null; } // he's out the door — you can move
+        else {
+          const a = cs.actor;
+          const step = 70 * dt;
+          const ddx = wp.x - a.x, ddy = wp.y - a.y;
+          if (Math.abs(ddx) <= step && Math.abs(ddy) <= step) { a.x = wp.x; a.y = wp.y; cs.path.shift(); }
+          else if (Math.abs(ddx) > Math.abs(ddy)) { a.x += Math.sign(ddx) * step; a.dir = ddx > 0 ? 'right' : 'left'; }
+          else { a.y += Math.sign(ddy) * step; a.dir = ddy > 0 ? 'down' : 'up'; }
+        }
+      }
       return;
     }
 
@@ -1703,13 +1803,13 @@ const LittleApartmentGame: React.FC = () => {
           else c.dir = (['up', 'down', 'left', 'right'] as Dir[])[Math.floor(Math.random() * 4)];
         }
         const near2 = Math.abs(p.x - c.x) + Math.abs(p.y - c.y) < 2.5 * TILE;
-        const sp = (near2 ? 70 : 40) * dt; // lunges harder when it's right on you
+        const sp = (near2 ? 70 : 40) * CRAWLER_SPD[c.kind] * dt; // lunges harder when it's right on you; fast kinds are faster
         const dx = c.dir === 'left' ? -sp : c.dir === 'right' ? sp : 0;
         const dy = c.dir === 'up' ? -sp : c.dir === 'down' ? sp : 0;
         const next = tryMove(sceneRef.current, { x: c.x, y: c.y }, dx, dy, solidsRef.current);
         c.x = next.x; c.y = next.y;
-        // bite check
-        if (hurtCooldownRef.current <= 0 && Math.abs(c.x - p.x) < 10 && Math.abs(c.y - p.y) < 10) {
+        // bite check (god mode: crawlers can't touch you)
+        if (!s.god && hurtCooldownRef.current <= 0 && Math.abs(c.x - p.x) < 10 && Math.abs(c.y - p.y) < 10) {
           hurtCooldownRef.current = 1;
           s.energy = Math.max(0, s.energy - CRAWLER_HIT_ENERGY);
           sfxMiss();
@@ -1733,7 +1833,30 @@ const LittleApartmentGame: React.FC = () => {
       mineTextRef.current.t -= dt;
       if (mineTextRef.current.t <= 0) mineTextRef.current = null;
     }
-    // sparkle bolts
+    if (depthToastRef.current) {
+      depthToastRef.current.t -= dt;
+      if (depthToastRef.current.t <= 0) depthToastRef.current = null;
+    }
+    // AK-67: full-auto while you hold the action button down in the mines.
+    if (sceneRef.current.id === 'mines' && s.gun && input.actionHeld
+        && !overlayRef.current && !fishModeRef.current) {
+      gunCooldownRef.current -= dt;
+      if (gunCooldownRef.current <= 0) {
+        gunCooldownRef.current = 0.08; // ~12 rounds/sec
+        const d = dirRef.current;
+        const SPD = 340;
+        projectilesRef.current.push({
+          x: posRef.current.x + 4, y: posRef.current.y + 4,
+          dx: d === 'left' ? -SPD : d === 'right' ? SPD : 0,
+          dy: d === 'up' ? -SPD : d === 'down' ? SPD : 0,
+          t: 0.55, pierce: true, dmg: 3, gun: true,
+        });
+        sfxGun();
+      }
+    } else {
+      gunCooldownRef.current = 0; // ready to fire instantly next trigger pull
+    }
+    // weapon bolts (wand sparkle / AK-67 rounds)
     if (projectilesRef.current.length > 0) {
       const scene2 = sceneRef.current;
       projectilesRef.current = projectilesRef.current.filter(pr => {
@@ -1747,23 +1870,31 @@ const LittleApartmentGame: React.FC = () => {
         }
         const hitC = crawlersRef.current.find(c => Math.abs(c.x + 8 - (pr.x + 4)) < 10 && Math.abs(c.y + 8 - (pr.y + 4)) < 10);
         if (hitC) {
-          hitC.hp -= 1;
+          hitC.hp -= (pr.dmg ?? 1);
           hitC.hurtT = 0.3;
           // knock the crawler back along the bolt's path
           hitC.x += Math.sign(pr.dx) * 10; hitC.y += Math.sign(pr.dy) * 10;
           sparkleRef.current = { x: hitC.x, y: hitC.y, t: 0.35 };
           if (hitC.hp <= 0) {
+            const gold = hitC.kind === 'gold';
             crawlersRef.current = crawlersRef.current.filter(c => c !== hitC);
             award('slayer');
             sfxCatch();
-            if (Math.random() < 0.6) {
-              const m = MINERALS[Math.floor(Math.random() * MINERALS.length)];
+            if (gold) {
+              // the rare gold crawler pays out big
+              s.money += 1500;
+              s.minerals['crystal'] = (s.minerals['crystal'] ?? 0) + 2;
+              s.today.mineralsMined += 2;
+              mineTextRef.current = { x: hitC.x, y: hitC.y, text: '+¥1,500 + 2 Crystal!', color: '#ffd24a', t: 1.3 };
+              persistSave(s); refreshHud();
+            } else if (Math.random() < 0.6) {
+              const m = MINERALS[Math.floor(Math.random() * 3)]; // common drop (coal/iron/shard tier)
               s.minerals[m.id] = (s.minerals[m.id] ?? 0) + 1;
               s.today.mineralsMined += 1;
               persistSave(s); refreshHud();
             }
           }
-          return false;
+          if (!pr.pierce) return false; // pierce rounds carry through to the next crawler
         }
         return true;
       });
@@ -1942,17 +2073,30 @@ const LittleApartmentGame: React.FC = () => {
 
     // the mines: ore nodes, crawlers, sparkle VFX
     if (scene.id === 'mines') {
+      if (mineDownRef.current) {
+        ctx.drawImage(atlas['t-ladder-down'], mineDownRef.current.x * TILE - cam.x, mineDownRef.current.y * TILE - cam.y);
+      }
       for (const node of oreNodesRef.current) {
-        ctx.drawImage(atlas[`ore-${node.mineral.id}`], node.x * TILE - cam.x, node.y * TILE - cam.y);
+        const key = node.geode ? 'ore-geode' : `ore-${node.mineral.id}`;
+        ctx.drawImage(atlas[key], node.x * TILE - cam.x, node.y * TILE - cam.y);
       }
       const cFrame = Math.floor(t * 6) % 2;
       for (const c of crawlersRef.current) {
         if (c.hurtT > 0 && Math.floor(t * 20) % 2 === 0) continue; // hit flicker
         ctx.drawImage(atlas['m-shadow'], Math.round(c.x) - cam.x, Math.round(c.y) - cam.y + 2);
-        ctx.drawImage(atlas[`crawler-${cFrame}`], Math.round(c.x) - cam.x, Math.round(c.y) - cam.y);
+        const sprite = c.kind === 'normal' ? `crawler-${cFrame}` : `crawler-${c.kind}-${cFrame}`;
+        ctx.drawImage(atlas[sprite], Math.round(c.x) - cam.x, Math.round(c.y) - cam.y);
       }
       for (const pr of projectilesRef.current) {
-        ctx.drawImage(atlas['m-sparkle'], Math.round(pr.x) - cam.x, Math.round(pr.y) - cam.y, 9, 9);
+        if (pr.gun) {
+          // AK-67 tracer: a short bright streak with a glowing tip
+          ctx.fillStyle = '#fff0a0';
+          ctx.fillRect(Math.round(pr.x) - cam.x + 2, Math.round(pr.y) - cam.y + 2, 4, 4);
+          ctx.fillStyle = '#ffb030';
+          ctx.fillRect(Math.round(pr.x - pr.dx * 0.012) - cam.x + 3, Math.round(pr.y - pr.dy * 0.012) - cam.y + 3, 2, 2);
+        } else {
+          ctx.drawImage(atlas['m-sparkle'], Math.round(pr.x) - cam.x, Math.round(pr.y) - cam.y, 9, 9);
+        }
       }
     }
     if (sparkleRef.current) {
@@ -2026,6 +2170,17 @@ const LittleApartmentGame: React.FC = () => {
           const frame = (w.moving || dancing) ? (Math.floor(animRef.current * (dancing ? 9 : 7)) % 2) : 0;
           const bob = dancing ? -(Math.abs(Math.sin(animRef.current * 7 + w.homeX)) > 0.5 ? 1 : 0) : 0;
           ctx.drawImage(atlas[`${w.sprite}-${w.dir}-${frame}`], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + bob);
+        },
+      });
+    }
+    if (cutsceneRef.current) {
+      const a = cutsceneRef.current.actor;
+      ents.push({
+        y: a.y,
+        draw: () => {
+          ctx.drawImage(atlas['m-shadow'], Math.round(a.x) - cam.x, Math.round(a.y) - cam.y + 2);
+          const frame = cutsceneRef.current!.phase === 'walk' ? (Math.floor(animRef.current * 7) % 2) : 0;
+          ctx.drawImage(atlas[`${a.sprite}-${a.dir}-${frame}`], Math.round(a.x) - cam.x, Math.round(a.y) - cam.y);
         },
       });
     }
@@ -2223,7 +2378,8 @@ const LittleApartmentGame: React.FC = () => {
     // lights a little further). Makes the crawlers genuinely scary.
     if (scene.id === 'mines') {
       const pcx = Math.round(p.x) - cam.x + 8, pcy = Math.round(p.y) - cam.y + 8;
-      const lr = saveRef.current.wand ? 104 : 70;
+      const sv0 = saveRef.current;
+      const lr = (sv0.gun || sv0.wand2) ? 124 : sv0.wand ? 104 : 70;
       const flick = 1 + Math.sin(t * 11) * 0.03; // faint lantern flicker
       const dark = ctx.createRadialGradient(pcx, pcy, lr * 0.34, pcx, pcy, lr * flick);
       dark.addColorStop(0, 'rgba(6,6,10,0)');
@@ -2231,6 +2387,35 @@ const LittleApartmentGame: React.FC = () => {
       dark.addColorStop(1, 'rgba(3,3,7,0.95)');
       ctx.fillStyle = dark;
       ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+
+      // Mine HUD: depth, the day's challenge, and your streak — top-left, above the dark.
+      const sv1 = saveRef.current;
+      const ch = mineChallengeFor(sv1);
+      ctx.save();
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'left';
+      const line = (str: string, y: number, color: string) => {
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.strokeText(str, 4, y); ctx.fillStyle = color; ctx.fillText(str, 4, y);
+      };
+      line(`FLOOR ${mineFloorRef.current}`, 10, '#ffe9a0');
+      line(ch.name, 19, ch.color);
+      if (sv1.mineStreak > 1) line(`Streak ×${sv1.mineStreak}`, 28, '#9ad0c0');
+      ctx.restore();
+
+      // Depth toast — a brief banner when you drop a floor.
+      if (depthToastRef.current) {
+        const dt2 = depthToastRef.current;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, dt2.t * 1.5));
+        ctx.font = 'bold 16px monospace';
+        ctx.textAlign = 'center';
+        const cy = Math.round(VIEW_PH * 0.32);
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.strokeText(`FLOOR ${dt2.floor}`, VIEW_PW / 2, cy);
+        ctx.fillStyle = '#ffe9a0'; ctx.fillText(`FLOOR ${dt2.floor}`, VIEW_PW / 2, cy);
+        ctx.restore();
+      }
     }
 
     // interact prompt
@@ -2251,7 +2436,7 @@ const LittleApartmentGame: React.FC = () => {
         if (onCar(faced) || onCar(feet)) label = 'Drive';
       }
       if (it?.id === 'boat' && !sv.vehicles.includes('boat')) label = 'Fish';
-      if (scene.id === 'mines' && sv.wand && !label) label = 'Sparkle!';
+      if (scene.id === 'mines' && !label) label = sv.gun ? 'Fire (hold)' : sv.wand ? 'Sparkle!' : undefined;
       if (!sv.canFish && (label === 'Fish' || label === 'Drop a line')) label = 'Fish? (ask Genji)';
       if (scene.id === 'deepsea' && !label) label = (feet.y >= 10 || faced.y >= 11) ? 'Sail south to go home' : 'Drop a line';
       // the freezer keeps its secret until you've been through once
@@ -2259,14 +2444,16 @@ const LittleApartmentGame: React.FC = () => {
       // the Paris seam looks like a blank wall until The Manager reveals it
       if (it?.id === 'paris-portal' && !saveRef.current.parisRevealed) label = npcT ? 'Talk' : undefined;
       if (scene.id === 'mines') {
+        const d = mineDownRef.current;
         const node = oreNodesRef.current.find(n => n.x === faced.x && n.y === faced.y);
-        if (node) label = `Mine ${node.mineral.name}`;
+        if (d && ((faced.x === d.x && faced.y === d.y) || (feet.x === d.x && feet.y === d.y))) label = 'Descend deeper';
+        else if (node) label = node.geode ? 'Crack geode' : `Mine ${node.mineral.name}`;
         else {
           const cr = crawlersRef.current.find(c => {
             const ct = feetTile({ x: c.x, y: c.y });
             return ct.x === faced.x && ct.y === faced.y;
           });
-          if (cr) label = saveRef.current.wand ? 'Sparkle!' : 'Shoo...?';
+          if (cr) label = sv.gun ? 'Fire (hold)' : sv.wand ? 'Sparkle!' : 'Shoo...?';
         }
       }
       if (scene.id === 'apartment') {
@@ -2337,10 +2524,12 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth(null);
     if (!s.visited.includes(s.scene)) s.visited.push(s.scene);
     if (s.scene === 'mines') {
-      const layout = mineLayoutFor(s);
+      mineFloorRef.current = 1; // a reload resumes at the top floor (layout reseeds)
+      const layout = mineLayoutFor(s, 1);
       oreNodesRef.current = layout.ore;
+      mineDownRef.current = layout.down;
       crawlersRef.current = layout.crawlers.map(c => ({
-        x: c.x * TILE, y: c.y * TILE - 4, hp: 2, stepT: Math.random(), hurtT: 0, dir: 'down' as Dir,
+        x: c.x * TILE, y: c.y * TILE - 4, hp: CRAWLER_HP[c.kind], stepT: Math.random(), hurtT: 0, dir: 'down' as Dir, kind: c.kind,
       }));
     } else {
       crawlersRef.current = [];
@@ -2816,6 +3005,49 @@ const LittleApartmentGame: React.FC = () => {
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
   };
 
+  const buyWand2 = () => {
+    const s = saveRef.current;
+    if (!s.wand || s.wand2 || s.money < WAND2_PRICE) return;
+    s.money -= WAND2_PRICE;
+    s.wand2 = true;
+    sfxBuy();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  // Pickaxes are bought strictly in order (each tier needs the previous).
+  const buyPickaxe = (tier: number) => {
+    const s = saveRef.current;
+    const pick = PICKAXES[tier];
+    if (!pick || tier !== s.pickaxe + 1 || s.money < pick.price) return;
+    s.money -= pick.price;
+    s.pickaxe = tier;
+    sfxBuy();
+    if (tier === 3) award('toolmaster');
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const buyGun = () => {
+    const s = saveRef.current;
+    if (s.gun || s.deepestFloor < GUN_UNLOCK_FLOOR || s.money < GUN_PRICE) return;
+    s.money -= GUN_PRICE;
+    s.gun = true;
+    sfxBuy();
+    award('gunner');
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  const doCrackGeode = () => {
+    const s = saveRef.current;
+    const res = crackGeode(s);
+    if (!res) return;
+    award('geode-crack');
+    sfxCatch();
+    setGeodePop(res);
+    if (geodeTimerRef.current) window.clearTimeout(geodeTimerRef.current);
+    geodeTimerRef.current = window.setTimeout(() => setGeodePop(null), 2600);
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
   const craftRare = (itemId: string) => {
     const s = saveRef.current;
     const recipe = CRAFT_RECIPES[itemId];
@@ -3033,6 +3265,10 @@ const LittleApartmentGame: React.FC = () => {
       case 'come again another day':
         s.forceRain = true;
         setCheatMsg('Rain, rain — here to stay. Until tomorrow, anyway.');
+        break;
+      case 'im god':
+        s.god = !s.god;
+        setCheatMsg(s.god ? 'GOD MODE on. The crawlers can no longer touch you.' : 'God mode off. Mortal again.');
         break;
       default:
         setCheatMsg(code ? `"${code}"? Never heard of it.` : '');
@@ -3430,6 +3666,7 @@ const LittleApartmentGame: React.FC = () => {
               ['nightfall', 'Time → 10:00 PM'],
               ['midnight', 'Time → 1:30 AM'],
               ['come again another day', 'Force rain today'],
+              ['im god', 'Toggle: no crawler damage in mines'],
             ].map(([code, desc]) => (
               <p key={code} className="text-sm flex justify-between gap-3 py-px"><span className="text-[#7ce8a0]">{code}</span><span className="opacity-55">{desc}</span></p>
             ))}
@@ -3872,6 +4109,22 @@ const LittleApartmentGame: React.FC = () => {
       const sellableTotal = MINERALS.reduce((sum, m) => sum + mineralCount(m.id) * m.value, 0);
       return (
         <ShopFrame title="THE MANAGER" subtitle={'"Ahh. Crisp. Legally distinct. You are my favorite customer in nine hundred years."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-base text-[#b06ad0]/80">TOOLS &amp; WEAPONS — "For the work, and for the things that object to the work."</p>
+          {(() => {
+            const cur = s.pickaxe;
+            const next = PICKAXES[cur + 1];
+            return (
+              <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+                <div className="flex-grow min-w-0">
+                  <p className="text-xl leading-tight">{next ? next.name : pickaxeOf(cur).name} ⛏️</p>
+                  <p className="text-sm opacity-60 leading-tight">{next ? next.blurb : 'The finest pick there is. The rock fears you now.'}</p>
+                </div>
+                {next
+                  ? <button className={`${btnCls} shrink-0`} disabled={s.money < next.price} onClick={() => buyPickaxe(cur + 1)}>¥{next.price.toLocaleString()}</button>
+                  : <span className="text-[#b06ad0] text-base shrink-0">MAXED</span>}
+              </div>
+            );
+          })()}
           {!s.wand && (
             <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
               <div className="flex-grow min-w-0">
@@ -3879,6 +4132,35 @@ const LittleApartmentGame: React.FC = () => {
                 <p className="text-sm opacity-60 leading-tight">"For the crawlers downstairs. Point the sparkly end away from yourself."</p>
               </div>
               <button className={`${btnCls} shrink-0`} disabled={s.money < WAND_PRICE} onClick={buyWand}>¥{WAND_PRICE.toLocaleString()}</button>
+            </div>
+          )}
+          {s.wand && !s.wand2 && (
+            <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+              <div className="flex-grow min-w-0">
+                <p className="text-xl leading-tight">Wand Upgrade 💗</p>
+                <p className="text-sm opacity-60 leading-tight">"Now the sparkle goes THROUGH them — and it lights your way that little bit further."</p>
+              </div>
+              <button className={`${btnCls} shrink-0`} disabled={s.money < WAND2_PRICE} onClick={buyWand2}>¥{WAND2_PRICE.toLocaleString()}</button>
+            </div>
+          )}
+          {s.deepestFloor >= GUN_UNLOCK_FLOOR && !s.gun && (
+            <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+              <div className="flex-grow min-w-0">
+                <p className="text-xl leading-tight">AK-67 🔫</p>
+                <p className="text-sm opacity-60 leading-tight">"Full automatic. The best weapon down there. Hold to fire. They will not bother you again."</p>
+              </div>
+              <button className={`${btnCls} shrink-0`} disabled={s.money < GUN_PRICE} onClick={buyGun}>¥{GUN_PRICE.toLocaleString()}</button>
+            </div>
+          )}
+          {s.gun && <p className="text-base text-[#ffd24a]/80 py-1">AK-67 — equipped. Hold the action button in the mines to fire.</p>}
+          {s.geodes > 0 && (
+            <div className="flex items-center gap-3 py-1.5 border-b border-white/10">
+              <div className="flex-grow min-w-0">
+                <p className="text-xl leading-tight">Crack a Geode 🪨 <span className="text-sm opacity-50">(×{s.geodes})</span></p>
+                <p className="text-sm opacity-60 leading-tight">"Sealed rock from the deep. I do so love a surprise. Mostly."</p>
+                {geodePop && <p className="text-sm leading-tight mt-0.5" style={{ color: geodePop.color }}>{geodePop.text}</p>}
+              </div>
+              <button className={`${btnCls} shrink-0`} onClick={doCrackGeode}>CRACK</button>
             </div>
           )}
           <p className="text-base text-[#b06ad0]/80 mt-1">FURNITURE — "Money? Quaint. Down here we work in minerals."</p>

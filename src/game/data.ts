@@ -98,31 +98,109 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'miner', title: 'Yellow Rock Candy', desc: 'Mined your first mineral.', hint: 'The backrooms go further down.' },
   { id: 'slayer', title: 'Sparkle Sparkle', desc: 'Defeated a crawler with the wand.', hint: 'They scatter like bad thoughts.' },
   { id: 'crafted', title: 'Void Carpenter', desc: 'Crafted furniture from minerals.', hint: 'The Manager accepts more than money.' },
+  { id: 'delver', title: 'Going Down', desc: 'Descended to mine floor 5.', hint: 'The ladder is not the bottom.' },
+  { id: 'abyss', title: 'The Down There', desc: 'Descended to mine floor 10.', hint: 'Keep climbing down. It keeps going.' },
+  { id: 'geode-crack', title: 'What Is Inside', desc: 'Cracked open a geode.', hint: 'Some rocks are hollow. Bring a pick.' },
+  { id: 'astral', title: 'Star Candy', desc: 'Mined an Astral Stone.', hint: 'Only the deep, only the best pick.' },
+  { id: 'toolmaster', title: 'Last Pick', desc: 'Bought the Diamond Pickaxe.', hint: 'The Manager sells tools, too.' },
+  { id: 'gunner', title: 'AK-67', desc: 'Claimed the machine gun from the deep.', hint: 'Descend far enough and The Manager makes an offer.' },
   { id: 'blessed', title: 'Five Thousand Yen Faith', desc: 'Earned the shrine\'s favor. The fish noticed.', hint: 'The little shrine in the park accepts offerings.' },
   { id: 'furnished', title: 'Welcome Home', desc: 'Furnished the whole apartment.', hint: 'The whole point.' },
   { id: 'broke', title: 'i dont have enough money for chicken nugget', desc: 'Dropped under ¥100. The nuggets remain a dream.', hint: 'Spend almost all of it.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------
+// The mine is a multi-floor descent. Each floor you climb DOWN is richer and more
+// dangerous; you ascend (one ladder) all the way back to the surface in one go.
+// minFloor = the shallowest floor an ore can appear on (deep ore stays deep, so
+// descending is the only way to the good stuff). hardness = the pickaxe `power`
+// required to break the node (gates ore behind tool upgrades).
 
-export interface Mineral { id: string; name: string; value: number; weight: number; color: string }
+export interface Mineral {
+  id: string; name: string; value: number; weight: number; color: string;
+  minFloor: number;   // deepest ore won't spawn until you've descended this far
+  hardness: number;   // pickaxe power needed to crack it
+}
 export const MINERALS: Mineral[] = [
-  { id: 'shard', name: 'Yellow Shard', value: 150, weight: 12, color: '#ffd24a' },
-  { id: 'crystal', name: 'Hum Crystal', value: 400, weight: 6, color: '#7ce8e0' },
-  { id: 'opal', name: 'Void Opal', value: 900, weight: 2, color: '#b06ad0' },
+  { id: 'coal',      name: 'Cave Coal',    value: 60,   weight: 18, color: '#5a5a66', minFloor: 1, hardness: 1 },
+  { id: 'iron',      name: 'Iron Chunk',   value: 110,  weight: 14, color: '#c0a890', minFloor: 1, hardness: 1 },
+  { id: 'shard',     name: 'Yellow Shard', value: 150,  weight: 12, color: '#ffd24a', minFloor: 1, hardness: 1 },
+  { id: 'crystal',   name: 'Hum Crystal',  value: 400,  weight: 6,  color: '#7ce8e0', minFloor: 2, hardness: 2 },
+  { id: 'opal',      name: 'Void Opal',    value: 900,  weight: 2,  color: '#b06ad0', minFloor: 4, hardness: 3 },
+  { id: 'starstone', name: 'Astral Stone', value: 2200, weight: 1,  color: '#ff7cc4', minFloor: 6, hardness: 4 },
 ];
 export const mineralById = (id: string): Mineral => MINERALS.find(m => m.id === id)!;
 
-export const MINE_COST = 5;            // energy per swing at an ore node
+export const MINE_COST = 5;            // energy per swing with bare hands (tier 0)
 export const WAND_PRICE = 3000;        // The Manager's price for the wand
+export const WAND2_PRICE = 9000;       // The Manager's price for the wand upgrade (pierces, brighter)
 export const CRAWLER_HIT_ENERGY = 8;   // energy lost when a crawler gets you
 
-// Craft the Manager's rare furniture from minerals instead of paying cash.
+// The AK-67 — a full-auto machine gun, the best weapon in the mines. The Manager
+// only offers it once you've proven you can survive the deep (reached the floor
+// below). Bullets are fast, pierce, and shred any crawler.
+export const GUN_PRICE = 25000;
+export const GUN_UNLOCK_FLOOR = 10;
+
+// ---- Pickaxe tiers ----------------------------------------------------------
+// Bought from The Manager. `cost` = energy per swing, `power` = the hardness it
+// can crack, `bonusChance` = odds of a +1 yield. Tier 0 is your bare hands.
+export interface Pickaxe {
+  tier: number; name: string; price: number;
+  cost: number; power: number; bonusChance: number;
+  sprite: string; blurb: string;
+}
+export const PICKAXES: Pickaxe[] = [
+  { tier: 0, name: 'Bare Hands',   price: 0,     cost: 5, power: 1, bonusChance: 0,    sprite: '',             blurb: 'Just you and the rock. It hurts a little.' },
+  { tier: 1, name: 'Tin Pick',     price: 1200,  cost: 4, power: 2, bonusChance: 0.10, sprite: 'pick-tin',     blurb: 'A real tool at last. Cheaper swings — and it cracks Hum Crystal.' },
+  { tier: 2, name: 'Steel Pick',   price: 4500,  cost: 3, power: 3, bonusChance: 0.20, sprite: 'pick-steel',   blurb: 'Bites deep. Cracks Void Opal, and the veins give more.' },
+  { tier: 3, name: 'Diamond Pick', price: 14000, cost: 2, power: 4, bonusChance: 0.35, sprite: 'pick-diamond', blurb: 'The last pick you will ever buy. Cracks anything down there.' },
+];
+export const pickaxeOf = (tier: number): Pickaxe =>
+  PICKAXES[Math.max(0, Math.min(PICKAXES.length - 1, tier))];
+
+// ---- Geodes -----------------------------------------------------------------
+// A sealed rock node. Mining it (needs a Tin pick or better) drops a GEODE into
+// your bag instead of ore; crack it at The Manager for a weighted random reward.
+export const GEODE_HARDNESS = 2;       // pickaxe power needed to free a geode
+export interface GeodeReward { id: string; weight: number }
+export const GEODE_REWARDS: GeodeReward[] = [
+  { id: 'cash',      weight: 30 },     // a yen burst
+  { id: 'crystal',   weight: 24 },     // a bundle of Hum Crystal
+  { id: 'opal',      weight: 14 },     // a couple Void Opal
+  { id: 'gacha',     weight: 12 },     // a random gachapon figure
+  { id: 'starstone', weight: 6 },      // an Astral Stone
+  { id: 'jackpot',   weight: 4 },      // big yen + rare ore
+];
+
+// ---- Daily mine modifier ----------------------------------------------------
+// One challenge is in effect each in-game day (seeded by the day). It nudges the
+// layout and is surfaced on the mine HUD so the day feels different.
+export interface MineChallenge { id: string; name: string; desc: string; color: string }
+export const MINE_CHALLENGES: MineChallenge[] = [
+  { id: 'calm',     name: 'Quiet Day',      desc: 'Steady ore, few crawlers.',           color: '#9ad0c0' },
+  { id: 'rich',     name: 'Rich Veins',     desc: 'Nodes yield extra minerals.',         color: '#ffd24a' },
+  { id: 'infested', name: 'Infested',       desc: 'Crawlers everywhere — but loot too.',  color: '#e857a8' },
+  { id: 'crystal',  name: 'Crystal Rush',   desc: 'Hum Crystal is everywhere today.',     color: '#7ce8e0' },
+  { id: 'deep',     name: 'The Deep Calls',  desc: 'Ore skews rarer the deeper you go.',  color: '#b06ad0' },
+  { id: 'geode',    name: 'Geode Day',      desc: 'Sealed geodes are plentiful.',         color: '#ff7cc4' },
+];
+
+// Floors that fire a one-off milestone (achievement + Manager text).
+export const DEPTH_MILESTONES = [5, 10];
+
+// Craft the Manager's rare furniture from minerals. Each recipe is deliberately
+// pinned to a depth/pickaxe tier so the rares unlock in a progression ladder —
+// you can't craft the good stuff until you've earned the pick and the depth:
+//   neon     → Tin pick (power 2) + floor 2  (Hum Crystal)        — first rare
+//   kotatsu  → Tin pick + floor 2
+//   aquarium → Steel pick (power 3) + floor 4 (Void Opal)         — mid
+//   arcade   → Diamond pick (power 4) + floor 6 (Astral Stone)    — endgame
 export const CRAFT_RECIPES: Record<string, Record<string, number>> = {
-  kotatsu: { shard: 6, crystal: 2 },
-  aquarium: { crystal: 4, opal: 1 },
-  arcade: { crystal: 6, opal: 2 },
-  neon: { shard: 8, opal: 1 },
+  neon: { shard: 8, crystal: 4 },
+  kotatsu: { iron: 10, crystal: 8 },
+  aquarium: { crystal: 10, opal: 3 },
+  arcade: { opal: 5, starstone: 2 },
 };
 
 // Gachapon — ¥300 a capsule, 10 figures to collect. Full set = golden maneki trophy.

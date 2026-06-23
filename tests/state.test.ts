@@ -5,7 +5,8 @@ import {
   allFurnished, itemFootprintW, placeItem, unplaceItem,
   WAKE_MIN, type GameSave,
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
-  orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor,
+  orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
+  mineChallengeFor, enterMineStreak, crackGeode,
 } from '../src/game/state';
 import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, GACHA_FIGURES } from '../src/game/data';
 import { SCENES } from '../src/game/maps';
@@ -207,9 +208,85 @@ describe('mineLayoutFor (daily mine generation)', () => {
     const first = mineLayoutFor(s);
     expect(first.ore.length).toBeGreaterThan(0);
     const gone = first.ore[0];
-    s.minedNodes.push(`${gone.x},${gone.y}`);
+    s.minedNodes.push(minedKey(1, gone.x, gone.y));
     const after = mineLayoutFor(s);
     expect(after.ore.some(n => n.x === gone.x && n.y === gone.y)).toBe(false);
+  });
+
+  it('mined-node hiding is floor-scoped (same tile on a deeper floor is untouched)', () => {
+    const s = newSave(); s.day = 12;
+    const f1 = mineLayoutFor(s, 1);
+    const gone = f1.ore[0];
+    s.minedNodes.push(minedKey(1, gone.x, gone.y));
+    // The deeper floor reseeds independently; the key for floor 2 differs.
+    expect(s.minedNodes.includes(minedKey(2, gone.x, gone.y))).toBe(false);
+    expect(mineLayoutFor(s, 1).ore.some(n => n.x === gone.x && n.y === gone.y)).toBe(false);
+  });
+
+  it('deeper floors yield more ore and only the deep floors carry the rarest ore', () => {
+    let shallow = 0, deep = 0, sawStarstoneShallow = false, sawStarstoneDeep = false;
+    for (let day = 1; day <= 40; day++) {
+      const s = newSave(); s.day = day;
+      const f1 = mineLayoutFor(s, 1);
+      const f8 = mineLayoutFor(s, 8);
+      shallow += f1.ore.length; deep += f8.ore.length;
+      if (f1.ore.some(n => n.mineral.id === 'starstone')) sawStarstoneShallow = true;
+      if (f8.ore.some(n => n.mineral.id === 'starstone')) sawStarstoneDeep = true;
+    }
+    expect(deep).toBeGreaterThan(shallow);              // depth → richer
+    expect(sawStarstoneShallow).toBe(false);            // gated by minFloor
+    expect(sawStarstoneDeep).toBe(true);                // shows up once deep enough
+  });
+
+  it('tougher crawler kinds only appear with depth', () => {
+    let shallowTank = false, deepTank = false;
+    for (let day = 1; day <= 40; day++) {
+      const s = newSave(); s.day = day;
+      if (mineLayoutFor(s, 1).crawlers.some(c => c.kind === 'tank')) shallowTank = true;
+      if (mineLayoutFor(s, 6).crawlers.some(c => c.kind === 'tank')) deepTank = true;
+    }
+    expect(shallowTank).toBe(false); // tanks need depth >= 2
+    expect(deepTank).toBe(true);
+  });
+
+  it('mine streak increments on consecutive days and resets after a gap', () => {
+    const s = newSave();
+    s.day = 1; enterMineStreak(s); expect(s.mineStreak).toBe(1);
+    enterMineStreak(s); expect(s.mineStreak).toBe(1);   // same day doesn't double-count
+    s.day = 2; enterMineStreak(s); expect(s.mineStreak).toBe(2);
+    s.day = 5; enterMineStreak(s); expect(s.mineStreak).toBe(1); // skipped days reset it
+  });
+
+  it('the descend ladder is seeded, far from the entry, and never under ore/crawlers', () => {
+    const seen = new Set<string>();
+    for (let floor = 1; floor <= 6; floor++) {
+      const s = newSave(); s.day = 21;
+      const { ore, crawlers, down } = mineLayoutFor(s, floor);
+      expect(Math.abs(down.x - 2) + Math.abs(down.y - 1)).toBeGreaterThanOrEqual(7); // away from entry (2,1)
+      expect(ore.some(n => n.x === down.x && n.y === down.y)).toBe(false);
+      expect(crawlers.some(c => c.x === down.x && c.y === down.y)).toBe(false);
+      seen.add(`${down.x},${down.y}`);
+    }
+    expect(seen.size).toBeGreaterThan(1); // not always the same spot across floors
+  });
+
+  it('mineChallengeFor is deterministic per day', () => {
+    const a = newSave(); a.day = 7;
+    const b = newSave(); b.day = 7;
+    expect(mineChallengeFor(a).id).toBe(mineChallengeFor(b).id);
+  });
+
+  it('crackGeode consumes a geode and pays out something', () => {
+    const s = newSave(); s.geodes = 1; s.money = 0;
+    const before = { money: s.money, minerals: { ...s.minerals }, gacha: { ...s.gacha } };
+    const res = crackGeode(s);
+    expect(res).not.toBeNull();
+    expect(s.geodes).toBe(0);
+    const gainedMoney = s.money > before.money;
+    const gainedMineral = Object.keys(s.minerals).length > 0;
+    const gainedFigure = Object.keys(s.gacha).length > 0;
+    expect(gainedMoney || gainedMineral || gainedFigure).toBe(true);
+    expect(crackGeode(s)).toBeNull(); // none left
   });
 
   it('shrine favor secretly yields more/rarer ore and fewer crawlers (averaged)', () => {

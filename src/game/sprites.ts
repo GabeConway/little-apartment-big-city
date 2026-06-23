@@ -457,6 +457,89 @@ const addCrawler = (atlas: Atlas) => {
   atlas['crawler-1'] = strSprite(CRAWLER_1, { c: '#1d1924', y: '#e857a8' });
 };
 
+// Fast crawler — lean, narrow, spindly legs.
+const CRAWLER_FAST_0 = [
+  '................',
+  '................',
+  '................',
+  '......cccc......',
+  '.....cccccc.....',
+  '....cycccyc.....',
+  '....cccccccc....',
+  '....cc.cc.cc....',
+  '.....cccccc.....',
+  '...c.c.cc.c.c...',
+  '..c..........c..',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+const CRAWLER_FAST_1 = [
+  '................',
+  '................',
+  '................',
+  '......cccc......',
+  '.....cccccc.....',
+  '....cycccyc.....',
+  '....cccccccc....',
+  '....cc.cc.cc....',
+  '.....cccccc.....',
+  '..c.c.cc.c.c....',
+  '...c..........c.',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+// Tank crawler — bulky, wide, heavy body with stubby legs.
+const CRAWLER_TANK_0 = [
+  '................',
+  '...cc......cc...',
+  '..cccc....cccc..',
+  '.cccccccccccccc.',
+  'cccccccccccccccc',
+  'ccyccccccccyccc.',
+  'cccccccccccccccc',
+  '.cccccccccccccc.',
+  '.cccccccccccccc.',
+  '..cc.cc.cc.cc...',
+  '..c..c..c..c....',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+const CRAWLER_TANK_1 = [
+  '................',
+  '...cc......cc...',
+  '..cccc....cccc..',
+  '.cccccccccccccc.',
+  'cccccccccccccccc',
+  'ccyccccccccyccc.',
+  'cccccccccccccccc',
+  '.cccccccccccccc.',
+  '.cccccccccccccc.',
+  '.cc.cc.cc.cc.cc.',
+  '.c..c..c..c..c..',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+const addCrawlerVariants = (atlas: Atlas) => {
+  atlas['crawler-fast-0'] = strSprite(CRAWLER_FAST_0, { c: '#241d2e', y: '#7ce8e0' });
+  atlas['crawler-fast-1'] = strSprite(CRAWLER_FAST_1, { c: '#241d2e', y: '#7ce8e0' });
+  atlas['crawler-tank-0'] = strSprite(CRAWLER_TANK_0, { c: '#1a1622', y: '#ff7cc4' });
+  atlas['crawler-tank-1'] = strSprite(CRAWLER_TANK_1, { c: '#1a1622', y: '#ff7cc4' });
+  atlas['crawler-gold-0'] = strSprite(CRAWLER_0, { c: '#bd9a3a', y: '#fff0b0' });
+  atlas['crawler-gold-1'] = strSprite(CRAWLER_1, { c: '#bd9a3a', y: '#fff0b0' });
+};
+
 // ---- Tiles (16x16, procedural) ------------------------------------------
 
 type Draw = (ctx: CanvasRenderingContext2D) => void;
@@ -969,6 +1052,63 @@ const buildTiles = (atlas: Atlas) => {
   atlas['ore-shard'] = ore('#ffd24a');
   atlas['ore-crystal'] = ore('#7ce8e0');
   atlas['ore-opal'] = ore('#b06ad0');
+  // Coal: lumpy dull chunks, barely any sparkle.
+  atlas['ore-coal'] = tile(ctx => {
+    fill(ctx, '#4a4252');
+    ctx.fillStyle = '#3a3344'; ctx.fillRect(2, 6, 12, 9); ctx.fillRect(4, 4, 8, 3);
+    ctx.fillStyle = '#5a5a66'; ctx.fillRect(5, 7, 3, 3); ctx.fillRect(9, 9, 3, 2); ctx.fillRect(7, 5, 2, 2);
+    ctx.fillStyle = '#444450'; ctx.fillRect(6, 10, 2, 2); ctx.fillRect(10, 7, 2, 2); // dull lumps
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(5, 7, 1, 1); // faint single glint
+  });
+  atlas['ore-iron'] = ore('#c0a890');
+  // Starstone: brightest pink astral gem, two white highlights (rarest).
+  atlas['ore-starstone'] = tile(ctx => {
+    fill(ctx, '#4a4252');
+    ctx.fillStyle = '#3a3344'; ctx.fillRect(2, 6, 12, 9); ctx.fillRect(4, 4, 8, 3);
+    ctx.fillStyle = '#ff7cc4'; ctx.fillRect(5, 7, 3, 3); ctx.fillRect(9, 9, 3, 2); ctx.fillRect(7, 5, 2, 2);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(5, 7, 1, 1); ctx.fillRect(9, 9, 1, 1); ctx.fillRect(7, 5, 1, 1);
+  });
+  // Geode: sealed grey rock with a sparkle peeking through a thin diagonal crack.
+  atlas['ore-geode'] = tile(ctx => {
+    fill(ctx, '#4a4252');
+    ctx.fillStyle = '#3a3344'; ctx.fillRect(3, 5, 10, 9); ctx.fillRect(4, 4, 8, 1); ctx.fillRect(4, 14, 8, 1); // round lump
+    ctx.fillStyle = '#2f2a3a'; ctx.fillRect(3, 12, 10, 2); // base shadow
+    ctx.fillStyle = '#4a4358'; ctx.fillRect(4, 5, 6, 1); // top lit edge
+    ctx.fillStyle = '#16121d'; ctx.fillRect(6, 6, 1, 6); ctx.fillRect(7, 7, 1, 4); // dark crack
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(6, 8, 1, 1); ctx.fillRect(7, 9, 1, 1); // inner sparkle
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(6, 8, 1, 1);
+  });
+  // Descend ladder: wood rails up top fading into a dark hole below.
+  atlas['t-ladder-down'] = tile(ctx => {
+    fill(ctx, '#4a4252');
+    ctx.fillStyle = '#16121d'; ctx.fillRect(2, 6, 12, 10); // dark hole (lower half)
+    ctx.fillStyle = '#221c2c'; ctx.fillRect(2, 6, 12, 2); // hole rim
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(4, 0, 2, 16); ctx.fillRect(10, 0, 2, 16); // rails into the dark
+    for (let y = 2; y < 16; y += 4) { ctx.fillStyle = '#a9805a'; ctx.fillRect(4, y, 8, 1); }
+  });
+
+  // Pickaxe item icons — transparent bg (UI), wooden handle + metal head.
+  const pick = (head: string, glint?: string) => tile(ctx => {
+    ctx.fillStyle = '#8a6644'; for (let i = 0; i < 8; i++) ctx.fillRect(6 + i, 5 + i, 2, 2); // diagonal handle
+    ctx.fillStyle = '#6e4a2f'; for (let i = 0; i < 8; i++) ctx.fillRect(7 + i, 6 + i, 1, 1); // handle shade
+    ctx.fillStyle = head;
+    ctx.fillRect(2, 3, 12, 2);                                  // head bar
+    ctx.fillRect(2, 2, 3, 1); ctx.fillRect(11, 2, 3, 1);        // point tops
+    ctx.fillRect(1, 4, 2, 1); ctx.fillRect(13, 4, 2, 1);        // point tips
+    if (glint) { ctx.fillStyle = glint; ctx.fillRect(4, 3, 2, 1); }
+  });
+  atlas['pick-tin'] = pick('#9a9aa6');
+  atlas['pick-steel'] = pick('#c4ccd6', '#e6ecf2');
+  atlas['pick-diamond'] = pick('#bfeef0', '#ffffff');
+  // Geode inventory icon — centered grey rock with cyan sparkle crack.
+  atlas['i-geode'] = tile(ctx => {
+    ctx.fillStyle = '#3a3344'; ctx.fillRect(4, 4, 8, 9); ctx.fillRect(5, 3, 6, 1); ctx.fillRect(5, 13, 6, 1);
+    ctx.fillStyle = '#2f2a3a'; ctx.fillRect(4, 11, 8, 2); // base shadow
+    ctx.fillStyle = '#4a4358'; ctx.fillRect(5, 4, 5, 1);  // top lit edge
+    ctx.fillStyle = '#16121d'; ctx.fillRect(7, 5, 1, 6); ctx.fillRect(8, 6, 1, 4); // crack
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(7, 7, 1, 1); ctx.fillRect(8, 8, 1, 1); // sparkle
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(7, 7, 1, 1);
+  });
 
   // Shrine grounds
   // Torii gate, built across a 2×2 footprint: the two LEG tiles below
@@ -1512,6 +1652,7 @@ export const buildAtlas = (): Atlas => {
   for (const [key, def] of Object.entries(NPC_DEFS)) addCharacter(atlas, key, def.pal, def.acc);
   addMonster(atlas);
   addCrawler(atlas);
+  addCrawlerVariants(atlas);
   buildTiles(atlas);
   buildFurniture(atlas);
   addFish(atlas, 'fish-minnow', '#8a9aa6');

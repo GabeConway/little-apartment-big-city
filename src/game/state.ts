@@ -51,6 +51,14 @@ export interface GameSave {
   parisRevealed: boolean;       // The Manager revealed the secret Paris entrance in the backrooms (after all his furniture)
   minerals: Record<string, number>; // mineral id -> count
   wand: boolean;                // the magical girl wand
+  wand2: boolean;               // upgraded wand — bolts pierce, wider light (needs wand)
+  gun: boolean;                 // the AK-67 machine gun — full-auto, unlocked deep in the mines
+  god: boolean;                 // cheat: crawlers can't hurt you in the mines ("im god")
+  pickaxe: number;              // pickaxe tier owned (0 = bare hands; see PICKAXES)
+  geodes: number;               // uncracked geodes in your bag
+  deepestFloor: number;         // deepest mine floor ever reached (milestones)
+  mineStreak: number;           // consecutive days mined (resets if you skip a day)
+  mineLastDay: number;          // last day you entered the mines (0 = never)
   visited: string[];            // scene ids seen (the DJ only plays places you know)
   metStores: string[];          // store ids you've interacted with (gave your number → they can text you)
   zamazonkApp: boolean;         // downloaded the ZamaZonk app (after reading the island poster)
@@ -123,6 +131,14 @@ export const newSave = (): GameSave => ({
   parisRevealed: false,
   minerals: {},
   wand: false,
+  wand2: false,
+  gun: false,
+  god: false,
+  pickaxe: 0,
+  geodes: 0,
+  deepestFloor: 0,
+  mineStreak: 0,
+  mineLastDay: 0,
   visited: ['apartment'],
   metStores: [],
   zamazonkApp: false,
@@ -293,25 +309,31 @@ export const shrineLuck = (s: GameSave): number =>
   s.donated >= 20000 ? 2 : s.donated >= 5000 ? 1 : 0;
 
 // ---- the mines ---------------------------------------------------------------------
-// Ore nodes spawn at seeded positions each day; mined ones stay gone until sleep.
+// A multi-floor descent. Each floor reseeds richer + deadlier; you ascend all the
+// way back to the surface in one go. Mined nodes stay gone until you sleep.
 
-import { MINERALS } from './data';
-import type { Mineral } from './data';
+import { MINERALS, MINE_CHALLENGES, GEODE_REWARDS, GACHA_FIGURES as GEODE_FIGURES } from './data';
+import type { Mineral, MineChallenge } from './data';
 
-export interface OreNode { x: number; y: number; mineral: Mineral; amount: number }
+export type CrawlerKind = 'normal' | 'fast' | 'tank' | 'gold';
+export interface OreNode { x: number; y: number; mineral: Mineral; amount: number; geode?: boolean }
+export interface MineCrawler { x: number; y: number; kind: CrawlerKind }
 
 // ---- daily mine layout ------------------------------------------------------------
-// The mine is regenerated fresh every in-game DAY: ore nodes and crawlers are
-// scattered across the walkable cave floor at seeded-random positions. The seed is
-// the day number, so a day's layout is stable (re-entering the mine, reloading the
-// save) but every day is different. High variance is intentional — some days are
-// nearly barren / crawler-infested (terrible), some are loaded with rare ore
-// (jackpot). Mined nodes stay gone until you sleep (cleared on day change above).
+// Regenerated per in-game DAY and per FLOOR. Seed = day + floor, so a given day's
+// given floor is stable (re-enter / reload safe) but every day and every depth is
+// different. Variance is intentional — lean days, jackpot days. Deeper floors push
+// toward MORE ore, RARER ore, and MORE / TOUGHER crawlers.
 //
-// SECRET: praying / donating at the shrine quietly biases the day toward MORE and
-// RARER ore and FEWER crawlers (via shrineLuck + total donated). Never surfaced.
+// A daily CHALLENGE (mineChallengeFor) nudges the whole day. The shrine secretly
+// biases toward more/rarer ore and fewer crawlers (shrineLuck + total donated), and
+// a mining STREAK adds a small luck bonus. Mined-node keys are floor-scoped so the
+// same tile on different floors is tracked separately.
 
-export interface MineLayout { ore: OreNode[]; crawlers: { x: number; y: number }[] }
+export interface MineLayout { ore: OreNode[]; crawlers: MineCrawler[]; down: { x: number; y: number } }
+
+// Floor-scoped key for the mined-node set (so floor 1 and floor 2 don't collide).
+export const minedKey = (floor: number, x: number, y: number): string => `${floor}:${x},${y}`;
 
 // Walkable cave-floor tiles of the mines, derived once from the static map
 // (`.` floor only — excludes walls and the climb-up ladder).
@@ -328,61 +350,132 @@ const MINE_FLOOR: { x: number; y: number }[] = (() => {
 // on it, and crawlers keep a few tiles of breathing room around it.
 const MINE_ENTRY = { x: 2, y: 1 };
 
-export const mineLayoutFor = (s: GameSave): MineLayout => {
+// The day's modifier — seeded by the day so it's stable, surfaced on the HUD.
+export const mineChallengeFor = (s: GameSave): MineChallenge => {
+  const rand = mulberry32(s.day * 6700417 + 11);
+  return MINE_CHALLENGES[Math.floor(rand() * MINE_CHALLENGES.length)];
+};
+
+// Mark today's dive for the streak (call once when you enter from the surface).
+export const enterMineStreak = (s: GameSave): void => {
+  if (s.mineLastDay === s.day) return;            // already counted today
+  s.mineStreak = s.mineLastDay === s.day - 1 ? s.mineStreak + 1 : 1;
+  s.mineLastDay = s.day;
+};
+
+export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   if (s.minedDay !== s.day) { s.minedDay = s.day; s.minedNodes = []; }
-  const rand = mulberry32(s.day * 2654435761 + 97);
+  const ch = mineChallengeFor(s);
+  const rand = mulberry32(s.day * 2654435761 + floor * 40503 + 97);
   const luck = shrineLuck(s);                          // 0 / 1 / 2 shrine tiers
   const grace = Math.min(0.35, s.donated / 120000);    // smooth nudge from total offered
+  const streakBonus = Math.min(0.2, s.mineStreak * 0.02);
+  const depth = floor - 1;                              // 0 on the first floor
 
   // Seeded Fisher–Yates over the floor so picks scatter (and stay walkable),
   // skipping the entry tile entirely.
-  const floor = MINE_FLOOR.filter(t => !(t.x === MINE_ENTRY.x && t.y === MINE_ENTRY.y));
-  for (let i = floor.length - 1; i > 0; i--) {
+  const tiles = MINE_FLOOR.filter(t => !(t.x === MINE_ENTRY.x && t.y === MINE_ENTRY.y));
+  for (let i = tiles.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
-    [floor[i], floor[j]] = [floor[j], floor[i]];
+    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
   }
+
+  // The descend ladder: a seeded floor tile, well away from the entry so you have
+  // to cross the floor to reach it. Different spot every floor / day. Reserved so
+  // no ore or crawler spawns on top of it.
+  const down = tiles.find(t => Math.abs(t.x - MINE_ENTRY.x) + Math.abs(t.y - MINE_ENTRY.y) >= 7) ?? tiles[tiles.length - 1];
+  const reserved = new Set<string>([`${down.x},${down.y}`]);
 
   // richness drives BOTH how many nodes and how rare they skew. Squared so lean
-  // days are the norm; the shrine pushes it toward the jackpot end.
+  // days are the norm; depth, the shrine, and your streak push toward the jackpot.
   let richness = rand() * rand();
-  richness = Math.min(1, richness + luck * 0.22 + grace);
-  const oreCount = Math.round(2 + richness * 12);       // 2..14 nodes
+  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06);
+  if (ch.id === 'rich') richness = Math.min(1, richness + 0.2);
+  if (ch.id === 'calm') richness = Math.min(1, richness + 0.05);
+  const oreCount = Math.round(3 + richness * 12 + depth);
 
-  // Tilt mineral weights toward the scarcer (more valuable) ore as richness/luck
-  // rise; the common shard keeps its base weight so it never vanishes.
-  const tilt = 1 + richness * 1.6 + luck * 0.9;
-  const tiltedW = (m: Mineral) => (m.id === 'shard' ? m.weight : m.weight * tilt);
-  const tTotal = MINERALS.reduce((sum, m) => sum + tiltedW(m), 0);
+  // Mineral pool is gated by floor — deep ore simply isn't here until you descend.
+  const pool = MINERALS.filter(m => m.minFloor <= floor);
+
+  // Tilt toward the scarcer (valuable) ore as richness / luck / depth rise; the
+  // cheap coal & iron keep base weight so the shallows never go fully barren.
+  let tilt = 1 + richness * 1.4 + luck * 0.8 + depth * 0.25;
+  if (ch.id === 'deep') tilt += depth * 0.4;
+  const tiltedW = (m: Mineral) => {
+    const base = (m.id === 'coal' || m.id === 'iron') ? m.weight : m.weight * tilt;
+    return ch.id === 'crystal' && m.id === 'crystal' ? base * 4 : base;  // Crystal Rush
+  };
+  const tTotal = pool.reduce((sum, m) => sum + tiltedW(m), 0);
+
+  // How often a node is a sealed geode instead of plain ore.
+  let geodeChance = 0.05 + depth * 0.012;
+  if (ch.id === 'geode') geodeChance += 0.18;
 
   const ore: OreNode[] = [];
-  const used = new Set<string>();
-  for (let i = 0; i < oreCount && i < floor.length; i++) {
-    const c = floor[i];
+  const used = new Set<string>(reserved);   // the descend ladder tile stays clear
+  for (let i = 0, placed = 0; placed < oreCount && i < tiles.length; i++) {
+    const c = tiles[i];
+    const key = `${c.x},${c.y}`;
+    if (reserved.has(key)) continue;         // never bury the ladder under ore
+    used.add(key);
+    placed++;
+    if (rand() < geodeChance) { ore.push({ x: c.x, y: c.y, mineral: pool[0], amount: 1, geode: true }); continue; }
     let r = rand() * tTotal;
-    let mineral = MINERALS[0];
-    for (const m of MINERALS) { r -= tiltedW(m); if (r <= 0) { mineral = m; break; } }
-    // Occasional rich vein — a node that yields extra (value variance).
+    let mineral = pool[0];
+    for (const m of pool) { r -= tiltedW(m); if (r <= 0) { mineral = m; break; } }
+    // Rich veins yield extra; deeper floors hit them more often.
     const vein = rand();
-    const amount = vein < 0.02 + richness * 0.05 ? 3 : vein < 0.07 + richness * 0.13 ? 2 : 1;
+    const hi = 0.02 + richness * 0.05 + depth * 0.01;
+    const mid = 0.07 + richness * 0.13 + depth * 0.03;
+    const amount = vein < hi ? 3 : vein < mid ? 2 : 1;
     ore.push({ x: c.x, y: c.y, mineral, amount });
-    used.add(`${c.x},${c.y}`);
   }
 
-  // Crawlers: their own roll, reduced by shrine favor. Some days infested, some
-  // empty. Never on an ore tile, never crowding the ladder entry.
-  let crawlerCount = Math.round(rand() * 6);
+  // Crawlers: scale with depth and the challenge, reduced by shrine favor.
+  let crawlerCount = Math.round(rand() * 4 + depth * 0.8);
   crawlerCount = Math.max(0, crawlerCount - luck - (grace > 0.15 ? 1 : 0));
-  const crawlers: { x: number; y: number }[] = [];
-  for (const t of floor) {
+  if (ch.id === 'infested') crawlerCount += 3;
+  if (ch.id === 'calm') crawlerCount = Math.max(0, crawlerCount - 2);
+
+  const crawlers: MineCrawler[] = [];
+  for (const t of tiles) {
     if (crawlers.length >= crawlerCount) break;
     const key = `${t.x},${t.y}`;
     if (used.has(key)) continue;
     if (Math.abs(t.x - MINE_ENTRY.x) + Math.abs(t.y - MINE_ENTRY.y) < 3) continue;
     used.add(key);
-    crawlers.push({ x: t.x, y: t.y });
+    // Kind skews tougher with depth; a rare gold crawler can show up anywhere.
+    const k = rand();
+    let kind: CrawlerKind = 'normal';
+    if (k < 0.05 + depth * 0.005) kind = 'gold';
+    else if (depth >= 2 && k < 0.3) kind = 'tank';
+    else if (depth >= 1 && k < 0.55) kind = 'fast';
+    crawlers.push({ x: t.x, y: t.y, kind });
   }
 
-  return { ore: ore.filter(n => !s.minedNodes.includes(`${n.x},${n.y}`)), crawlers };
+  return { ore: ore.filter(n => !s.minedNodes.includes(minedKey(floor, n.x, n.y))), crawlers, down };
+};
+
+// ---- geodes ------------------------------------------------------------------------
+// Crack one for a weighted random reward. Mutates the save and returns a short blurb
+// (text + accent color) for the popup, or null if you have none.
+export const crackGeode = (s: GameSave): { text: string; color: string } | null => {
+  if (s.geodes <= 0) return null;
+  s.geodes -= 1;
+  const total = GEODE_REWARDS.reduce((a, r) => a + r.weight, 0);
+  let r = Math.random() * total;
+  let pick = GEODE_REWARDS[0];
+  for (const g of GEODE_REWARDS) { r -= g.weight; if (r <= 0) { pick = g; break; } }
+  const add = (id: string, n: number) => { s.minerals[id] = (s.minerals[id] ?? 0) + n; };
+  switch (pick.id) {
+    case 'cash': { const amt = 300 + Math.floor(Math.random() * 1200); s.money += amt; return { text: `¥${amt.toLocaleString()} spills out!`, color: '#ffd24a' }; }
+    case 'crystal': { const n = 2 + Math.floor(Math.random() * 3); add('crystal', n); return { text: `${n}× Hum Crystal!`, color: '#7ce8e0' }; }
+    case 'opal': { const n = 1 + Math.floor(Math.random() * 2); add('opal', n); return { text: `${n}× Void Opal!`, color: '#b06ad0' }; }
+    case 'starstone': { add('starstone', 1); return { text: 'An Astral Stone!', color: '#ff7cc4' }; }
+    case 'gacha': { const fig = GEODE_FIGURES[Math.floor(Math.random() * GEODE_FIGURES.length)]; s.gacha[fig] = (s.gacha[fig] ?? 0) + 1; return { text: `A figure: ${fig}!`, color: '#ff7cc4' }; }
+    case 'jackpot': { s.money += 5000; add('opal', 2); return { text: 'JACKPOT! ¥5,000 + 2 Void Opal!', color: '#ffd24a' }; }
+  }
+  return null;
 };
 
 // ---- in-game achievements (separate from the site's cake system) ------------------

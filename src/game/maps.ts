@@ -586,6 +586,9 @@ const mines: SceneDef = {
     '####################',
   ],
   warps: [],
+  // The descend ladder ('t-ladder-down') is placed at a seeded-random floor tile
+  // each floor by mineLayoutFor (state.ts) and handled dynamically — NOT a static
+  // interactable. Only the climb-up ladder is fixed.
   interactables: [{ id: 'ascend', x: 1, y: 1, label: 'Climb up' }],
   npcs: [],
 };
