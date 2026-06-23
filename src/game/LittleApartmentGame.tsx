@@ -823,7 +823,7 @@ const LittleApartmentGame: React.FC = () => {
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
   const shrineHealRef = useRef(0);   // accumulates real seconds for the very-slow shrine energy heal
   const signGlowRef = useRef(new Map<object, HTMLCanvasElement>()); // cached neon-bloom sprites per sign (built once, not per frame)
-  const signSpriteRef = useRef(new Map<object, { c: HTMLCanvasElement; w: number; h: number }>()); // each sign's panel+text rendered once, then blitted (no per-frame font switching)
+  const signSpriteRef = useRef(new Map<object, { c: HTMLCanvasElement; w: number; h: number; s: number }>()); // each sign's panel+text rendered once at device scale, then blitted (no per-frame font switching); rebuilt if the scale changes
   const skyGradRef = useRef<CanvasGradient | null>(null);  // night sky band — built once, alpha modulated per frame
   const sunGradRef = useRef<CanvasGradient | null>(null);  // morning sun rake — same
   const glowSpriteRef = useRef(new Map<string, HTMLCanvasElement>()); // cached radial light sprites (club lights, street lamps) — built once, blitted per frame
@@ -2394,14 +2394,20 @@ const LittleApartmentGame: React.FC = () => {
       // (keyed by the sign object) and then blitted every frame. Walking glyphs
       // with per-char font switches + measureText every frame — in both the base
       // pass AND the night re-light pass — was the framerate sink, worst at night.
+      // Rendered at the live device scale (canvas integer scale × DPR) so the
+      // pixel text stays crisp when blitted back at logical size — a 1× sprite
+      // upscaled by the canvas transform looked blurry.
+      const S = scaleRef.current * RR;
       const sprite = (sg: typeof signs[number]) => {
         let e = signSpriteRef.current.get(sg);
-        if (e) return e;
+        if (e && e.s === S) return e;
         const size = sg.font ?? 6;
         const w = sg.vertical ? size + 5 : Math.ceil(measureRun(sg.text, size)) + 5;
         const h = sg.vertical ? [...sg.text].length * (size + 1) + 4 : size + 4;
-        const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h);
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.ceil(w * S)); c.height = Math.max(1, Math.ceil(h * S));
         const g = c.getContext('2d')!;
+        g.setTransform(S, 0, 0, S, 0, 0);
         g.textBaseline = 'top';
         g.fillStyle = sg.bg ?? 'rgba(0,0,0,0.45)';
         g.fillRect(0, 0, w, h);
@@ -2412,16 +2418,17 @@ const LittleApartmentGame: React.FC = () => {
         } else {
           let cx = 2; for (const ch of sg.text) { g.font = charFont(ch, size); g.fillText(ch, cx, 2); cx += g.measureText(ch).width; }
         }
-        e = { c, w, h };
+        e = { c, w, h, s: S };
         signSpriteRef.current.set(sg, e);
         return e;
       };
       const dims = (sg: typeof signs[number]) => sprite(sg); // {w,h}, cached
       const paint = (sg: typeof signs[number]) => {
         const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
+        const sp = sprite(sg);
         const blinkOff = sg.blink && !neonOn;
         if (blinkOff) { ctx.save(); ctx.globalAlpha = 0.4; }
-        ctx.drawImage(sprite(sg).c, sx - 2, sy - 2);
+        ctx.drawImage(sp.c, sx - 2, sy - 2, sp.w, sp.h); // blit at logical size (1:1 with the device-scaled bitmap)
         if (blinkOff) ctx.restore();
       };
       for (const sign of signs) paint(sign);
