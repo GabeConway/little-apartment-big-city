@@ -290,6 +290,10 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#8a8a8a', k: '#6b6b6b', s: '#e8c098', e: '#222', t: '#7a3b3b', u: '#5c2c2c', p: '#3a3a3a', b: '#222' },
     acc: [ACC.shades('#16181d')],
   },
+  'npc-casino': { // Kaiju Palace dealer — yakuza-sharp: black tux, gold bowtie, shades
+    pal: { h: '#15151a', k: '#0a0a0d', s: '#caa27c', e: '#222', t: '#1a1d24', u: '#101218', p: '#15171c', b: '#0d0d10' },
+    acc: [ACC.bowtie('#c9a227'), ACC.shades('#16181d')],
+  },
   'npc-granny': { // Granny Sato — silver hair, round glasses
     pal: { h: '#dcdcdc', k: '#b8b8b8', s: '#eec6a2', e: '#222', t: '#a86b8a', u: '#82506a', p: '#5a5a6a', b: '#444' },
     acc: [ACC.glasses('#6b5d4f', '#cfe2ee')],
@@ -819,6 +823,47 @@ const buildTiles = (atlas: Atlas) => {
     const balls = ['#ffd24a', '#7ce8a0', '#50a0d0', '#e857a8', '#e07840'];
     balls.forEach((b, i) => { ctx.fillStyle = b; ctx.fillRect(3 + (i % 4) * 3, 4 + Math.floor(i / 4) * 3, 2, 2); });
     ctx.fillStyle = '#222'; ctx.fillRect(6, 11, 4, 2);
+  });
+
+  // Casino (Kaiju Palace) — burgundy carpet, red slot cabinets, green felt tables
+  atlas['t-casino-carpet'] = tile(ctx => {
+    fill(ctx, '#7a2230');
+    ctx.fillStyle = '#8e2a38'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1);
+    speckle(ctx, '#6a1d28', 83, 8);
+    ctx.fillStyle = '#c9a227';                              // gold diamond motif
+    ctx.fillRect(7, 2, 2, 1); ctx.fillRect(6, 3, 4, 1); ctx.fillRect(5, 4, 6, 1); ctx.fillRect(6, 5, 4, 1); ctx.fillRect(7, 6, 2, 1);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 4, 2, 1);    // lit center
+  });
+  atlas['t-casino-wall'] = tile(ctx => {
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#3a2230'; ctx.fillRect(0, 0, 16, 3);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 3, 16, 1);   // gold trim band
+    ctx.fillStyle = '#1d1018'; ctx.fillRect(0, 13, 16, 3);
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(2, 6, 2, 4); ctx.fillRect(12, 6, 2, 4); // neon sconces
+    ctx.fillStyle = '#ffd5ec'; ctx.fillRect(2, 6, 1, 4); ctx.fillRect(12, 6, 1, 4);
+  });
+  atlas['t-slot'] = tile(ctx => {
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 1, 12, 14);  // red cabinet
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(2, 1, 12, 1); ctx.fillRect(2, 14, 12, 1);
+    ctx.fillStyle = '#16181d'; ctx.fillRect(3, 3, 10, 5);   // reel window
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 4, 2, 3);
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(7, 4, 2, 3);
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(10, 4, 2, 3);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(3, 9, 10, 3);   // payline panel
+    ctx.fillStyle = '#16181d'; ctx.fillRect(5, 10, 6, 1);
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(14, 5, 1, 4);   // lever arm
+    ctx.fillStyle = '#d05050'; ctx.fillRect(14, 4, 2, 2);   // lever knob
+  });
+  atlas['t-blackjack'] = tile(ctx => {
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#2c6e44'; ctx.fillRect(1, 3, 14, 11);  // green felt
+    ctx.fillStyle = '#368351'; ctx.fillRect(1, 3, 14, 2);   // felt highlight
+    ctx.fillStyle = '#1f5233'; ctx.fillRect(1, 12, 14, 2);  // felt shadow
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(1, 7, 14, 1);   // gold bet arc
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 8, 3, 4); ctx.fillRect(9, 8, 3, 4); // two dealt cards
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(5, 9, 1, 1);
+    ctx.fillStyle = '#16181d'; ctx.fillRect(10, 9, 1, 1);
   });
 
   // Mines

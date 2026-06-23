@@ -122,6 +122,7 @@ const SCENE_MUSIC: Record<string, string> = {
   nightclub: '/music/the-club.mp3',
   garage: '/music/garage-theme.mp3',
   badtown: '/music/badside.mp3',
+  casino: '/music/the-club.mp3',
   backrooms: '/music/backrooms.mp3',
   mines: '/music/backrooms.mp3',
   gacha: '/music/gacha.mp3',
@@ -151,9 +152,66 @@ const MUSIC_FADE_MS = 700;
 
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki';
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki'
+  | 'casino' | 'blackjack' | 'slots';
 
 interface Crawler { x: number; y: number; hp: number; stepT: number; hurtT: number; dir: Dir }
+
+// ---- Casino games -----------------------------------------------------------
+// Self-contained blackjack + slots, betting s.money. Pure helpers live here; the
+// live hand/reel state hangs off a ref in the component (no save-shape changes).
+interface Card { rank: number; suit: number } // rank 1..13 (1=A), suit 0..3
+const CARD_SUITS = ['♠', '♥', '♦', '♣']; // ♠ ♥ ♦ ♣
+const CARD_RANKS = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const makeDeck = (): Card[] => {
+  const d: Card[] = [];
+  for (let suit = 0; suit < 4; suit++) for (let rank = 1; rank <= 13; rank++) d.push({ rank, suit });
+  for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+  return d;
+};
+const cardValue = (c: Card) => (c.rank > 10 ? 10 : c.rank);
+// Best hand total: aces count 11 unless that busts, then 1.
+const handValue = (cards: Card[]): number => {
+  let total = 0, aces = 0;
+  for (const c of cards) { total += cardValue(c); if (c.rank === 1) aces++; }
+  while (aces > 0 && total + 10 <= 21) { total += 10; aces--; }
+  return total;
+};
+const isBlackjack = (cards: Card[]) => cards.length === 2 && handValue(cards) === 21;
+
+type BJPhase = 'bet' | 'player' | 'done';
+interface BlackjackState {
+  bet: number; deck: Card[]; player: Card[]; dealer: Card[];
+  phase: BJPhase; hideHole: boolean; result: '' | 'win' | 'lose' | 'push' | 'blackjack'; payout: number;
+}
+const freshBlackjack = (): BlackjackState =>
+  ({ bet: 1000, deck: [], player: [], dealer: [], phase: 'bet', hideHole: true, result: '', payout: 0 });
+
+// Slots: 3 reels of weighted symbols. Index → emoji + rarity (lower = commoner).
+const SLOT_SYMBOLS = ['\u{1F352}', '\u{1F514}', '\u{1F34B}', '⭐', '\u{1F48E}', '7️⃣']; // 🍒 🔔 🍋 ⭐ 💎 7️⃣
+const SLOT_POOL = [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]; // weighted draw pool
+const pickSlot = () => SLOT_POOL[Math.floor(Math.random() * SLOT_POOL.length)];
+// Payout in yen for a settled spin (bet already debited; this is the credit).
+const slotPayout = (reels: number[], bet: number): number => {
+  const [a, b, c] = reels;
+  if (a === b && b === c) {
+    if (a === 5) return bet * 50;   // 7️⃣ jackpot
+    if (a === 4) return bet * 20;   // 💎
+    if (a === 3) return bet * 10;   // ⭐
+    return bet * 5;                 // any other three-of-a-kind
+  }
+  if (a === b || b === c || a === c) return bet * 2; // any pair — small
+  return 0;
+};
+type SlotPhase = 'idle' | 'spin' | 'done';
+interface SlotState {
+  bet: number; reels: number[]; final: number[]; stopped: boolean[];
+  phase: SlotPhase; win: number; timer: number | null;
+}
+const freshSlots = (): SlotState =>
+  ({ bet: 500, reels: [0, 1, 2], final: [0, 1, 2], stopped: [true, true, true], phase: 'idle', win: 0, timer: null });
+
+interface CasinoState { bj: BlackjackState; slot: SlotState }
 
 interface DayRecap {
   day: number;            // the day that just ended
@@ -380,6 +438,18 @@ const LittleApartmentGame: React.FC = () => {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0 });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
+  const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots() }); // live casino game state
+  // Stop the slot reels spinning if the player leaves the slots overlay (Esc, etc.).
+  useEffect(() => {
+    const slot = casinoRef.current.slot;
+    const onSlots = overlay?.type === 'shop' && overlay.shop === 'slots';
+    if (!onSlots && slot.timer != null) {
+      window.clearInterval(slot.timer);
+      slot.timer = null;
+      if (slot.phase === 'spin') slot.phase = 'idle';
+    }
+  }, [overlay]);
+  useEffect(() => () => { const t = casinoRef.current.slot.timer; if (t != null) window.clearInterval(t); }, []);
   const [isCoarse] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
   const [isPortrait, setIsPortrait] = useState(() => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches);
   const [musicMuted, setMusicMuted] = useState(readMuted);
@@ -743,6 +813,21 @@ const LittleApartmentGame: React.FC = () => {
     showDialog(lines);
   }, [showDialog, refreshHud]);
 
+  // Open the casino game UIs (reset to a fresh hand / idle reels first).
+  const startBlackjack = useCallback(() => {
+    const prev = casinoRef.current.bj.bet;
+    casinoRef.current.bj = { ...freshBlackjack(), bet: prev };
+    setOverlayBoth({ type: 'shop', shop: 'blackjack' });
+    setShopTick(v => v + 1);
+  }, [setOverlayBoth]);
+  const startSlots = useCallback(() => {
+    const slot = casinoRef.current.slot;
+    if (slot.timer != null) { window.clearInterval(slot.timer); }
+    casinoRef.current.slot = { ...freshSlots(), bet: slot.bet };
+    setOverlayBoth({ type: 'shop', shop: 'slots' });
+    setShopTick(v => v + 1);
+  }, [setOverlayBoth]);
+
   // A legal parking spot: two walkable tiles, neither of them a warp (doors stay clear).
   const findParkSpot = (scene: typeof SCENES[string], feet: Vec): Vec | null => {
     const isWarpAt = (x: number, y: number) => scene.warps.some(w => w.x === x && w.y === y);
@@ -835,6 +920,7 @@ const LittleApartmentGame: React.FC = () => {
     if (npc) {
       // Merchants open their stalls; everyone else just talks.
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
+      if (npc.id === 'casino-host') { setOverlayBoth({ type: 'shop', shop: 'casino' }); return; }
       if (npc.id === 'monster') { setOverlayBoth({ type: 'shop', shop: 'monster' }); return; }
       if (npc.id === 'tex') { setOverlayBoth({ type: 'shop', shop: 'hat' }); return; }
       if (npc.id === 'dj') { setOverlayBoth({ type: 'shop', shop: 'dj' }); return; }
@@ -1005,10 +1091,12 @@ const LittleApartmentGame: React.FC = () => {
         break;
       }
       case 'tiki': setOverlayBoth({ type: 'shop', shop: 'tiki' }); break;
+      case 'casino-slots': startSlots(); break;
+      case 'casino-blackjack': startBlackjack(); break;
       case 'fish-tropical': startCast(faced, 'tropical'); break;
       case 'fish-spot': startCast(faced, 'shallow'); break;
     }
-  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, enterScene, refreshHud, runTransition, award]);
+  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, enterScene, refreshHud, runTransition, award]);
 
   // ---- update -----------------------------------------------------------------
 
@@ -1902,6 +1990,98 @@ const LittleApartmentGame: React.FC = () => {
     };
   }, [screen, update, render]);
 
+  // ---- casino game actions --------------------------------------------------
+
+  const setBjBet = (bet: number) => {
+    const bj = casinoRef.current.bj;
+    if (bj.phase !== 'bet') return;
+    bj.bet = bet;
+    setShopTick(v => v + 1);
+  };
+  const resolveBlackjack = () => {
+    const s = saveRef.current;
+    const bj = casinoRef.current.bj;
+    const pv = handValue(bj.player), dv = handValue(bj.dealer);
+    const pBJ = isBlackjack(bj.player), dBJ = isBlackjack(bj.dealer);
+    bj.hideHole = false;
+    let payout = 0;
+    if (pBJ && !dBJ) { bj.result = 'blackjack'; payout = Math.floor(bj.bet * 2.5); } // 3:2
+    else if (pv > 21) { bj.result = 'lose'; }
+    else if (dv > 21) { bj.result = 'win'; payout = bj.bet * 2; }
+    else if (pv > dv) { bj.result = 'win'; payout = bj.bet * 2; }
+    else if (pv < dv) { bj.result = 'lose'; }
+    else { bj.result = 'push'; payout = bj.bet; } // includes BJ vs BJ
+    bj.payout = payout;
+    bj.phase = 'done';
+    if (payout > 0) { s.money += payout; sfxCoin(); }
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+  const dealBlackjack = () => {
+    const s = saveRef.current;
+    const bj = casinoRef.current.bj;
+    if (bj.phase !== 'bet' || bj.bet <= 0 || s.money < bj.bet) return;
+    s.money -= bj.bet; sfxBuy();
+    bj.deck = makeDeck();
+    bj.player = [bj.deck.pop()!, bj.deck.pop()!];
+    bj.dealer = [bj.deck.pop()!, bj.deck.pop()!];
+    bj.hideHole = true; bj.result = ''; bj.payout = 0; bj.phase = 'player';
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+    if (isBlackjack(bj.player) || isBlackjack(bj.dealer)) resolveBlackjack(); // naturals resolve at once
+  };
+  const hitBlackjack = () => {
+    const bj = casinoRef.current.bj;
+    if (bj.phase !== 'player') return;
+    bj.player.push(bj.deck.pop()!);
+    if (handValue(bj.player) >= 21) {
+      while (handValue(bj.dealer) < 17) bj.dealer.push(bj.deck.pop()!);
+      resolveBlackjack();
+    } else { setShopTick(v => v + 1); }
+  };
+  const standBlackjack = () => {
+    const bj = casinoRef.current.bj;
+    if (bj.phase !== 'player') return;
+    while (handValue(bj.dealer) < 17) bj.dealer.push(bj.deck.pop()!);
+    resolveBlackjack();
+  };
+
+  const setSlotBet = (bet: number) => {
+    const slot = casinoRef.current.slot;
+    if (slot.phase === 'spin') return;
+    slot.bet = bet;
+    setShopTick(v => v + 1);
+  };
+  const spinSlots = () => {
+    const s = saveRef.current;
+    const slot = casinoRef.current.slot;
+    if (slot.phase === 'spin' || slot.bet <= 0 || s.money < slot.bet) return;
+    s.money -= slot.bet; sfxBuy();
+    slot.phase = 'spin'; slot.win = 0;
+    slot.final = [pickSlot(), pickSlot(), pickSlot()];
+    slot.stopped = [false, false, false];
+    persistSave(s); refreshHud();
+    const start = performance.now();
+    const stopAt = [550, 850, 1150];
+    if (slot.timer != null) window.clearInterval(slot.timer);
+    slot.timer = window.setInterval(() => {
+      const el = performance.now() - start;
+      for (let i = 0; i < 3; i++) {
+        if (slot.stopped[i]) continue;
+        if (el >= stopAt[i]) { slot.stopped[i] = true; slot.reels[i] = slot.final[i]; }
+        else slot.reels[i] = Math.floor(Math.random() * SLOT_SYMBOLS.length);
+      }
+      setShopTick(v => v + 1);
+      if (slot.stopped[2]) {
+        if (slot.timer != null) window.clearInterval(slot.timer);
+        slot.timer = null;
+        slot.phase = 'done';
+        const win = slotPayout(slot.final, slot.bet);
+        slot.win = win;
+        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCoin(); persistSave(s2); refreshHud(); }
+        setShopTick(v => v + 1);
+      }
+    }, 80);
+  };
+
   // ---- shop actions ---------------------------------------------------------
 
   const buyAtPrice = (itemId: string, price: number) => {
@@ -2688,6 +2868,105 @@ const LittleApartmentGame: React.FC = () => {
     void shopTick;
     const s = saveRef.current;
     const close = () => setOverlayBoth(null);
+
+    if (ov.shop === 'casino') {
+      return (
+        <ShopFrame title="KAIJU PALACE" subtitle={'"The house likes company. And the house always wins."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">
+            The dealer — pressed black tux, gold bowtie, the same cold courtesy as the boys who run the Downtown toll — fans a deck one-handed. "Welcome to the Palace. Pick your poison."
+          </p>
+          <div className="flex flex-col gap-2 mt-3">
+            <button className={`${btnCls} w-full`} onClick={startBlackjack}>🃏 BLACKJACK — beat the dealer to 21</button>
+            <button className={`${btnCls} w-full`} onClick={startSlots}>🎰 SLOT MACHINES — pull for the jackpot</button>
+          </div>
+          <p className="text-xs opacity-40 mt-3">Bet responsibly. The maneki-neko is watching.</p>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'blackjack') {
+      const bj = casinoRef.current.bj;
+      const chips = [500, 1000, 2500, 5000];
+      const pv = handValue(bj.player), dv = handValue(bj.dealer);
+      const red = (c: Card) => c.suit === 1 || c.suit === 2;
+      const cardChip = (c: Card, hidden: boolean, key: number) => (
+        <span key={key} className={`inline-flex flex-col items-center justify-center w-9 h-12 rounded-sm border-2 mr-1 text-base font-bold leading-none ${hidden ? 'bg-[#3d2030] border-[#c9a227] text-[#c9a227]' : 'bg-[#e8e0d0] border-[#7a7468]'}`}>
+          {hidden ? '?' : (<>
+            <span className={red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}>{CARD_RANKS[c.rank]}</span>
+            <span className={red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}>{CARD_SUITS[c.suit]}</span>
+          </>)}
+        </span>
+      );
+      const profit = bj.payout - bj.bet;
+      const resultText =
+        bj.result === 'blackjack' ? `BLACKJACK! +¥${profit.toLocaleString()}` :
+        bj.result === 'win' ? `YOU WIN  +¥${profit.toLocaleString()}` :
+        bj.result === 'push' ? 'PUSH — your bet is returned' :
+        bj.result === 'lose' ? `DEALER WINS  −¥${bj.bet.toLocaleString()}` : '';
+      return (
+        <ShopFrame title="BLACKJACK" subtitle="Dealer stands on 17 · Blackjack pays 3:2" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {bj.phase === 'bet' ? (
+            <div className="py-2">
+              <p className="text-base opacity-70 mb-2">Place your bet, then deal.</p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {chips.map(c => (
+                  <button key={c} className={`${btnCls} ${bj.bet === c ? 'bg-[#ffd24a] text-black' : ''}`} disabled={s.money < c} onClick={() => setBjBet(c)}>¥{c.toLocaleString()}</button>
+                ))}
+              </div>
+              <button className={`${btnCls} w-full`} disabled={s.money < bj.bet} onClick={dealBlackjack}>DEAL · bet ¥{bj.bet.toLocaleString()}</button>
+              <button className={`${btnCls} w-full mt-2 text-sm`} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
+            </div>
+          ) : (
+            <div className="py-2">
+              <p className="text-sm opacity-60 mb-1">DEALER{bj.hideHole ? '' : ` · ${dv}${dv > 21 ? ' BUST' : ''}`}</p>
+              <div className="mb-3">{bj.dealer.map((c, i) => cardChip(c, bj.hideHole && i === 1, i))}</div>
+              <p className="text-sm opacity-60 mb-1">YOU · {pv}{pv > 21 ? ' BUST' : ''}</p>
+              <div className="mb-3">{bj.player.map((c, i) => cardChip(c, false, i))}</div>
+              {bj.phase === 'player' ? (
+                <div className="flex gap-2">
+                  <button className={`${btnCls} flex-grow`} onClick={hitBlackjack}>HIT</button>
+                  <button className={`${btnCls} flex-grow`} onClick={standBlackjack}>STAND</button>
+                </div>
+              ) : (
+                <div>
+                  <p className={`text-xl mb-2 ${bj.result === 'lose' ? 'text-[#d05050]' : 'text-[#7ce8a0]'}`}>{resultText}</p>
+                  <div className="flex gap-2">
+                    <button className={`${btnCls} flex-grow`} disabled={s.money < bj.bet} onClick={() => { casinoRef.current.bj = { ...freshBlackjack(), bet: bj.bet }; setShopTick(v => v + 1); }}>NEW HAND</button>
+                    <button className={btnCls} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>LOBBY</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'slots') {
+      const slot = casinoRef.current.slot;
+      const chips = [100, 500, 1000, 2500];
+      const spinning = slot.phase === 'spin';
+      const reelBox = (i: number) => (
+        <span key={i} className={`inline-flex items-center justify-center w-16 h-16 mx-1 rounded border-2 text-4xl ${spinning && !slot.stopped[i] ? 'border-[#ffd24a] bg-[#1d1018]' : 'border-[#c9a227] bg-[#2a1822]'}`}>
+          {SLOT_SYMBOLS[slot.reels[i]]}
+        </span>
+      );
+      const winText = slot.phase === 'done' ? (slot.win > 0 ? `WIN  +¥${slot.win.toLocaleString()}!` : 'No match. Spin again.') : (spinning ? '…' : ' ');
+      return (
+        <ShopFrame title="SLOT MACHINES" subtitle="Line up three · 7️⃣7️⃣7️⃣ = 50× your bet" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <div className="flex justify-center py-3">{[0, 1, 2].map(reelBox)}</div>
+          <p className={`text-center text-xl h-7 ${slot.win > 0 ? 'text-[#7ce8a0]' : 'opacity-60'}`}>{winText}</p>
+          <div className="flex flex-wrap gap-2 justify-center my-2">
+            {chips.map(c => (
+              <button key={c} className={`${btnCls} ${slot.bet === c ? 'bg-[#ffd24a] text-black' : ''}`} disabled={spinning || s.money < c} onClick={() => setSlotBet(c)}>¥{c.toLocaleString()}</button>
+            ))}
+          </div>
+          <button className={`${btnCls} w-full text-xl`} disabled={spinning || s.money < slot.bet} onClick={spinSlots}>{spinning ? 'SPINNING…' : `PULL · bet ¥${slot.bet.toLocaleString()}`}</button>
+          <button className={`${btnCls} w-full mt-2 text-sm`} disabled={spinning} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
+          <p className="text-xs opacity-40 mt-2 text-center">7️⃣×3 = 50× · 💎×3 = 20× · ⭐×3 = 10× · any 3 = 5× · any pair = 2×</p>
+        </ShopFrame>
+      );
+    }
 
     if (ov.shop === 'denden') {
       return (

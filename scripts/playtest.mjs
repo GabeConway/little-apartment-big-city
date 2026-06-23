@@ -32,6 +32,7 @@ const SCENE_SPAWN = {
   denden: { px: 128, py: 128 },
   konbini: { px: 112, py: 112 },
   badtown: { px: 16, py: 80 },
+  casino: { px: 112, py: 112 },
 };
 
 // Partial saves merged over newSave() by loadSave(). Keep them shape-light; the
