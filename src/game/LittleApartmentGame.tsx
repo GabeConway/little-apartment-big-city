@@ -347,6 +347,14 @@ const npcDynamicLines = (id: string, s: GameSave): string[] => {
 
 const PLAYER_SPEED = 72; // px/s
 
+// NPCs that gently pace around their home tile instead of standing still.
+const WANDER_IDS = new Set(['granny']);
+type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: number; homeY: number; dir: Dir; moving: boolean; stepT: number };
+const makeWanderers = (scene: SceneDef): Wanderer[] =>
+  scene.npcs.filter(n => WANDER_IDS.has(n.id)).map(n => ({
+    id: n.id, sprite: n.sprite, x: n.x * TILE, y: n.y * TILE, homeX: n.x * TILE, homeY: n.y * TILE, dir: n.dir, moving: false, stepT: Math.random() * 1.5,
+  }));
+
 const LittleApartmentGame: React.FC = () => {
   const [screen, setScreen] = useState<'title' | 'playing'>('title');
   const [vibePick, setVibePick] = useState(false);   // "what's your vibe?" new-game step
@@ -482,6 +490,7 @@ const LittleApartmentGame: React.FC = () => {
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
   const shrineHealRef = useRef(0);   // accumulates real seconds for the very-slow shrine energy heal
   const signGlowRef = useRef(new Map<object, HTMLCanvasElement>()); // cached neon-bloom sprites per sign (built once, not per frame)
+  const wanderersRef = useRef<Wanderer[]>([]); // live positions of gently-pacing NPCs in the current scene
   const djPickRef = useRef<string | null>(null);
 
   // ---- furniture Arrange mode (drag-and-drop placement) ----------------------
@@ -576,6 +585,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     for (const npc of scene.npcs) {
       if (npc.id === 'yakuza' && s.gangPaid) continue; // paid off — no longer blocks
+      if (WANDER_IDS.has(npc.id)) continue; // wanderers move; not part of the static solid set
       set.add(`${npc.x},${npc.y}`);
     }
     if (scene.id === 'apartment') {
@@ -612,6 +622,7 @@ const LittleApartmentGame: React.FC = () => {
       s.leftKonbiniAt = s.day * 1440 + s.timeMin;
     }
     sceneRef.current = SCENES[id];
+    wanderersRef.current = makeWanderers(SCENES[id]);
     posRef.current = { x: tx * TILE, y: ty * TILE - 4 };
     dirRef.current = dir;
     warpCooldownRef.current = 0.6; // don't re-trigger a nearby warp for a beat after arriving
@@ -905,7 +916,11 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
-    const npc = scene.npcs.find(n => n.x === faced.x && n.y === faced.y);
+    // Prefer a wanderer at the faced tile (they move; their static tile is stale).
+    const wanderHit = wanderersRef.current.find(w => Math.round(w.x / TILE) === faced.x && Math.round(w.y / TILE) === faced.y);
+    const npc = wanderHit
+      ? { id: wanderHit.id, x: faced.x, y: faced.y, sprite: wanderHit.sprite, dir: wanderHit.dir }
+      : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id));
     if (npc) {
       // Merchants open their stalls; everyone else just talks.
       if (npc.id === 'yakuza') {
@@ -1164,6 +1179,29 @@ const LittleApartmentGame: React.FC = () => {
       if (s2.timeMin >= COLLAPSE_MIN) {
         doSleep(true); // 2 AM: you fade out, the city carries you home
         return;
+      }
+    }
+
+    // Gentle NPC wandering (e.g. Granny pacing her block — never far from home).
+    for (const w of wanderersRef.current) {
+      w.stepT -= dt;
+      if (w.stepT <= 0) {
+        w.stepT = 1.2 + Math.random() * 2.8;
+        const dx = w.homeX - w.x, dy = w.homeY - w.y;
+        if (Math.abs(dx) + Math.abs(dy) > 2.2 * TILE) { // wandered too far — head back
+          w.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+          w.moving = true;
+        } else {
+          w.moving = Math.random() < 0.6;
+          if (w.moving) w.dir = (['up', 'down', 'left', 'right'] as Dir[])[Math.floor(Math.random() * 4)];
+        }
+      }
+      if (w.moving) {
+        const sp = 20 * dt; // slow shuffle
+        const ndx = w.dir === 'left' ? -sp : w.dir === 'right' ? sp : 0;
+        const ndy = w.dir === 'up' ? -sp : w.dir === 'down' ? sp : 0;
+        const nx = tryMove(sceneRef.current, { x: w.x, y: w.y }, ndx, ndy, solidsRef.current);
+        w.x = nx.x; w.y = nx.y;
       }
     }
 
@@ -1549,11 +1587,22 @@ const LittleApartmentGame: React.FC = () => {
     const ents: { y: number; draw: () => void }[] = [];
     for (const npc of scene.npcs) {
       if (npc.id === 'yakuza' && saveRef.current.gangPaid) continue; // paid off — gone
+      if (WANDER_IDS.has(npc.id)) continue; // wanderers are drawn from their live positions below
       ents.push({
         y: npc.y * TILE,
         draw: () => {
           ctx.drawImage(atlas['m-shadow'], npc.x * TILE - cam.x, npc.y * TILE - cam.y + 2);
           ctx.drawImage(atlas[`${npc.sprite}-${npc.dir}-0`], npc.x * TILE - cam.x, npc.y * TILE - cam.y);
+        },
+      });
+    }
+    for (const w of wanderersRef.current) {
+      ents.push({
+        y: w.y,
+        draw: () => {
+          ctx.drawImage(atlas['m-shadow'], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + 2);
+          const frame = w.moving ? (Math.floor(animRef.current * 7) % 2) : 0;
+          ctx.drawImage(atlas[`${w.sprite}-${w.dir}-${frame}`], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y);
         },
       });
     }
@@ -1663,7 +1712,8 @@ const LittleApartmentGame: React.FC = () => {
     if (!overlayRef.current && !fm) {
       const faced = facedTile(p, dirRef.current);
       const feet = feetTile(p);
-      const npcT = scene.npcs.find(n => n.x === faced.x && n.y === faced.y);
+      const npcT = wanderersRef.current.some(w => Math.round(w.x / TILE) === faced.x && Math.round(w.y / TILE) === faced.y)
+        || scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id));
       const hit = (it: Interactable, tt: Vec) =>
         tt.x >= it.x && tt.x < it.x + (it.w ?? 1) && tt.y >= it.y && tt.y < it.y + (it.h ?? 1);
       const it = scene.interactables.find(i => hit(i, faced) || hit(i, feet));
@@ -1751,6 +1801,7 @@ const LittleApartmentGame: React.FC = () => {
     if (fresh) { s.vibe = pendingVibeRef.current; s.name = pendingNameRef.current; } // apply the new-game pick
     saveRef.current = s;
     sceneRef.current = SCENES[s.scene] ?? SCENES.apartment;
+    wanderersRef.current = makeWanderers(sceneRef.current);
     posRef.current = { x: s.px, y: s.py };
     dirRef.current = s.dir;
     pendingBeatsRef.current = [];
