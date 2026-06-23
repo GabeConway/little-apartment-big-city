@@ -49,6 +49,7 @@ Open the phone (**P** / 📱) → **Codes** app, type a code, APPLY:
 | `sunrise` | Set time to 7:00 AM (morning) |
 | `nightfall` | Set time to 10:00 PM (night) |
 | `midnight` | Set time to 1:30 AM |
+| `come again another day` | Force rain for the current day |
 
 ## Quick start (dev)
 ```sh
@@ -77,6 +78,16 @@ them to a draft GitHub Release:
 | **Windows** | NSIS installer (`.exe`) **and** a portable one-click `LittleApartmentBigCity-noinstall.exe` (no install; needs the WebView2 runtime, preinstalled on Windows 11) |
 | **macOS** (Apple Silicon) | `.dmg` (drag-to-install) |
 | **Linux** | `.deb` (Debian/Ubuntu) **and** `.AppImage` (portable, distro-agnostic) |
+
+> **macOS "app is damaged and can't be opened":** the build is ad-hoc signed, not
+> notarized (no paid Apple Developer ID), so after a browser download macOS
+> quarantines it and Gatekeeper refuses to open it. Strip the quarantine flag once,
+> after dragging the app to **Applications**:
+> ```sh
+> xattr -dr com.apple.quarantine "/Applications/Little Apartment, Big City.app"
+> ```
+> Then open it normally. (Equivalently: **right-click → Open** and confirm — but the
+> `xattr` line is the reliable fix for the "damaged" message specifically.)
 
 ## Tests
 ```sh

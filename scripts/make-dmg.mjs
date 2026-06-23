@@ -70,6 +70,24 @@ const out = join(outDir, `${slug}_${version}_aarch64.dmg`);
 const stage = mkdtempSync(join(tmpdir(), 'labdmg-'));
 try {
   execFileSync('cp', ['-R', appPath, stage]);
+  const stagedApp = join(stage, appName);
+
+  // The Rust linker only emits a weak "linker-signed" ad-hoc signature that
+  // doesn't seal the bundle's resources or bind Info.plist (`Sealed
+  // Resources=none`). Once the .dmg is downloaded through a browser the
+  // quarantine flag turns that incomplete signature into the dreaded
+  // "<app> is damaged and can't be opened" on Apple Silicon. Re-sign the
+  // staged copy with a PROPER deep ad-hoc signature so the whole bundle is
+  // sealed — that's the most we can do without a paid Developer ID. (Users
+  // still get the unsigned-developer prompt; see the README for `xattr`.)
+  try {
+    execFileSync('codesign', ['--force', '--deep', '--sign', '-', stagedApp], { stdio: 'inherit' });
+    execFileSync('codesign', ['--verify', '--deep', '--strict', stagedApp], { stdio: 'inherit' });
+    console.log('make-dmg: re-signed the staged .app (deep ad-hoc, resources sealed).');
+  } catch (e) {
+    console.warn('make-dmg: codesign step failed — the .dmg may report "damaged" on download.', e?.message ?? e);
+  }
+
   execFileSync('ln', ['-s', '/Applications', join(stage, 'Applications')]);
   execFileSync('rm', ['-f', out]);
   execFileSync('hdiutil', [

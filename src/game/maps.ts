@@ -735,6 +735,8 @@ const casino: SceneDef = {
     '.': T('t-casino-carpet'),
     'S': T('t-slot', true),
     'B': T('t-blackjack', true),
+    'R': T('t-roulette', true),
+    'r': T('t-roulette-felt', true),
     'D': T('t-door'),
   },
   grid: [
@@ -743,7 +745,7 @@ const casino: SceneDef = {
     '#..............#',
     '#...B.....B....#',
     '#..............#',
-    '#..............#',
+    '#......Rr......#',
     '#SS.SS....SS.SS#',
     '#..............#',
     '#..............#',
@@ -759,6 +761,7 @@ const casino: SceneDef = {
     { id: 'casino-slots', x: 10, y: 6, w: 5, h: 1, label: 'Slot machine' },
     { id: 'casino-blackjack', x: 4, y: 3, w: 1, h: 1, label: 'Blackjack table' },
     { id: 'casino-blackjack', x: 10, y: 3, w: 1, h: 1, label: 'Blackjack table' },
+    { id: 'casino-roulette', x: 7, y: 5, w: 2, h: 1, label: 'Roulette table' },
   ],
   npcs: [{ id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' }],
 };

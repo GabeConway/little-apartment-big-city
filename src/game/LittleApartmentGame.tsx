@@ -42,6 +42,7 @@ import {
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   mineLayoutFor, shrineLuck, syncMessages, unreadCount,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
+  isRainyDay,
 } from './state';
 import type { OreNode } from './state';
 import type { GameSave, Vibe } from './state';
@@ -159,6 +160,9 @@ const DJ_SETLIST: { scene: string; label: string }[] = [
 ];
 const MUSIC_VOL = 0.35;
 const MUSIC_FADE_MS = 700;
+// Rain ambience layered OVER the scene music on rainy days while outdoors.
+const RAIN_SRC = '/music/rain.mp3';
+const RAIN_VOL = 0.36; // 20% quieter than the old 0.45
 
 // Fake-hacker terminal lines for the backrooms→Paris "the game got hacked"
 // transition. Purely cosmetic; scrolls past while Paris "loads". (Feature #21.)
@@ -186,7 +190,7 @@ const HACK_LINES = [
 // ---- overlay model ----------------------------------------------------------
 
 type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza'
-  | 'casino' | 'blackjack' | 'slots';
+  | 'casino' | 'blackjack' | 'slots' | 'roulette';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
 // bag for energy (Peepis can also be fed to The Manager / given to David).
@@ -255,7 +259,33 @@ interface SlotState {
 const freshSlots = (): SlotState =>
   ({ bet: 500, reels: [0, 1, 2], final: [0, 1, 2], stopped: [true, true, true], phase: 'idle', win: 0, timer: null });
 
-interface CasinoState { bj: BlackjackState; slot: SlotState }
+// Roulette: single-zero (European) wheel, 0..36. Outside bets pay even money
+// (returns 2× the stake); a straight-up number pays 35:1 (returns 36×). 0 is
+// green and loses every outside bet.
+const ROULETTE_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+type RouletteBet = 'red' | 'black' | 'even' | 'odd' | 'low' | 'high' | 'number';
+// Total credit (stake included) for a settled spin; 0 = lose the stake.
+const roulettePayout = (kind: RouletteBet, chosen: number, result: number, bet: number): number => {
+  if (kind === 'number') return chosen === result ? bet * 36 : 0; // 35:1
+  if (result === 0) return 0;                                     // green kills outside bets
+  const wins =
+    kind === 'red' ? ROULETTE_RED.has(result) :
+    kind === 'black' ? !ROULETTE_RED.has(result) :
+    kind === 'even' ? result % 2 === 0 :
+    kind === 'odd' ? result % 2 === 1 :
+    kind === 'low' ? result <= 18 :
+    /* high */ result >= 19;
+  return wins ? bet * 2 : 0;
+};
+type RoulettePhase = 'idle' | 'spin' | 'done';
+interface RouletteState {
+  bet: number; kind: RouletteBet; pick: number; // pick = chosen number for a straight-up bet
+  display: number; result: number; phase: RoulettePhase; win: number; timer: number | null;
+}
+const freshRoulette = (): RouletteState =>
+  ({ bet: 500, kind: 'red', pick: 7, display: 0, result: 0, phase: 'idle', win: 0, timer: null });
+
+interface CasinoState { bj: BlackjackState; slot: SlotState; roul: RouletteState }
 
 interface DayRecap {
   day: number;            // the day that just ended
@@ -496,24 +526,39 @@ const LittleApartmentGame: React.FC = () => {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0 });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
-  const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots() }); // live casino game state
-  // Stop the slot reels spinning if the player leaves the slots overlay (Esc, etc.).
+  const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette() }); // live casino game state
+  // Stop the slot reels / roulette wheel spinning if the player leaves the overlay (Esc, etc.).
   useEffect(() => {
-    const slot = casinoRef.current.slot;
+    const { slot, roul } = casinoRef.current;
     const onSlots = overlay?.type === 'shop' && overlay.shop === 'slots';
     if (!onSlots && slot.timer != null) {
       window.clearInterval(slot.timer);
       slot.timer = null;
       if (slot.phase === 'spin') slot.phase = 'idle';
     }
+    const onRoul = overlay?.type === 'shop' && overlay.shop === 'roulette';
+    if (!onRoul && roul.timer != null) {
+      window.clearInterval(roul.timer);
+      roul.timer = null;
+      if (roul.phase === 'spin') roul.phase = 'idle';
+    }
   }, [overlay]);
-  useEffect(() => () => { const t = casinoRef.current.slot.timer; if (t != null) window.clearInterval(t); }, []);
+  useEffect(() => () => {
+    const { slot, roul } = casinoRef.current;
+    if (slot.timer != null) window.clearInterval(slot.timer);
+    if (roul.timer != null) window.clearInterval(roul.timer);
+  }, []);
   const [isCoarse] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
   const [isPortrait, setIsPortrait] = useState(() => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches);
   const [musicMuted, setMusicMuted] = useState(readMuted);
   const tracksRef = useRef(new Map<string, HTMLAudioElement>());
   const currentTrackRef = useRef<string | null>(null);
   const fadeTimersRef = useRef(new Map<HTMLAudioElement, number>());
+  // Rain ambience: one looping element. On rainy days outdoors it REPLACES the
+  // scene music (the music is suppressed to volume 0 while it rains).
+  const rainAudioRef = useRef<HTMLAudioElement | null>(null);
+  const rainOnRef = useRef(false);
+  const musicSuppressedRef = useRef(false); // true while rain is standing in for music
 
   // Gradual volume ramp; pauses the element when faded fully out.
   const fadeAudio = useCallback((audio: HTMLAudioElement, target: number) => {
@@ -545,9 +590,12 @@ const LittleApartmentGame: React.FC = () => {
     const src = djSrc ?? SCENE_MUSIC[sceneId] ?? DEFAULT_MUSIC;
     const tracks = tracksRef.current;
     const prevSrc = currentTrackRef.current;
+    // While rain stands in for the music, keep the scene track loaded but silent
+    // (volume 0) so it can swell back in the instant the rain stops.
+    const vol = musicSuppressedRef.current ? 0 : MUSIC_VOL;
     if (prevSrc === src) {
       const cur = tracks.get(src);
-      if (cur) { cur.muted = readMuted(); cur.play().catch(() => {}); fadeAudio(cur, MUSIC_VOL); }
+      if (cur) { cur.muted = readMuted(); if (vol > 0) cur.play().catch(() => {}); fadeAudio(cur, vol); }
     }
     if (prevSrc && prevSrc !== src) {
       const old = tracks.get(prevSrc);
@@ -562,8 +610,37 @@ const LittleApartmentGame: React.FC = () => {
     }
     audio.muted = readMuted();
     currentTrackRef.current = src;
-    audio.play().catch(() => { /* autoplay blocked or file missing */ });
-    fadeAudio(audio, MUSIC_VOL);
+    if (vol > 0) audio.play().catch(() => { /* autoplay blocked or file missing */ });
+    fadeAudio(audio, vol);
+  }, [fadeAudio]);
+
+  // Start/stop the rain loop to match `on`. Rain REPLACES the scene music: when
+  // it starts, the current track fades to silence; when it stops, the scene's
+  // music swells back. The draw loop calls this every frame, so it no-ops unless
+  // the desired state changed. Honors the global mute.
+  const syncRain = useCallback((on: boolean) => {
+    if (on === rainOnRef.current) {
+      if (on && rainAudioRef.current) rainAudioRef.current.muted = readMuted();
+      return;
+    }
+    rainOnRef.current = on;
+    musicSuppressedRef.current = on;
+    let ra = rainAudioRef.current;
+    if (!ra) {
+      ra = new Audio(RAIN_SRC);
+      ra.loop = true;
+      rainAudioRef.current = ra;
+    }
+    ra.volume = RAIN_VOL;
+    ra.muted = readMuted();
+    const cur = currentTrackRef.current ? tracksRef.current.get(currentTrackRef.current) : null;
+    if (on) {
+      if (cur) fadeAudio(cur, 0);          // duck the music out
+      ra.play().catch(() => { /* autoplay blocked or file missing */ });
+    } else {
+      ra.pause();                          // rain off → bring the music back
+      if (cur) { cur.muted = readMuted(); cur.play().catch(() => {}); fadeAudio(cur, MUSIC_VOL); }
+    }
   }, [fadeAudio]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -966,6 +1043,12 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth({ type: 'shop', shop: 'slots' });
     setShopTick(v => v + 1);
   }, [setOverlayBoth]);
+  const startRoulette = useCallback(() => {
+    const prev = casinoRef.current.roul;
+    casinoRef.current.roul = { ...freshRoulette(), bet: prev.bet, kind: prev.kind, pick: prev.pick };
+    setOverlayBoth({ type: 'shop', shop: 'roulette' });
+    setShopTick(v => v + 1);
+  }, [setOverlayBoth]);
 
   // A legal parking spot: two walkable tiles, neither of them a warp (doors stay clear).
   const findParkSpot = (scene: typeof SCENES[string], feet: Vec): Vec | null => {
@@ -1236,14 +1319,26 @@ const LittleApartmentGame: React.FC = () => {
       }
       case 'gacha': rollGacha(); break;
       case 'shrine': {
+        if (s.shrineDay === s.day) { showDialog(['You have already made your offering today. The kami are not a vending machine.', 'Come back tomorrow.']); break; }
         if (s.money < 500) { showDialog(['The offering box waits patiently. It has waited longer than you have been broke.']); break; }
         s.money -= 500;
+        s.shrineDay = s.day;
         const prevTier = shrineLuck(s);
         s.donated += 500;
         const tier = shrineLuck(s);
         sfxCoin();
         if (tier === 1) award('blessed');
+        // Offer while it's raining → 25% chance the rain suddenly stops for the day.
+        const stoppedRain = isRainyDay(s) && Math.random() < 0.25;
+        if (stoppedRain) s.rainCleared = true;
         persistSave(s); refreshHud();
+        if (stoppedRain) {
+          showDialog([
+            'You drop the coin, bow twice, clap twice — and above you the rain thins to nothing. The clouds peel back like a curtain.',
+            'The miko does not look the least bit surprised.',
+          ], 'Yoshi Shrine');
+          break;
+        }
         if (tier > prevTier) {
           sfxCatch();
           showDialog([
@@ -1395,10 +1490,11 @@ const LittleApartmentGame: React.FC = () => {
         break;
       case 'casino-slots': startSlots(); break;
       case 'casino-blackjack': startBlackjack(); break;
+      case 'casino-roulette': startRoulette(); break;
       case 'fish-tropical': startCast(faced, 'tropical'); break;
       case 'fish-spot': startCast(faced, 'shallow'); break;
     }
-  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, enterScene, refreshHud, runTransition, award, playMusicFor]);
+  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, enterScene, refreshHud, runTransition, award, playMusicFor]);
 
   // ---- update -----------------------------------------------------------------
 
@@ -2025,6 +2121,35 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // Rain: a looping ambient track over the scene music + slanted streaks, on
+    // rainy days while you're anywhere outdoors (the shrine counts; interiors,
+    // mines and the backrooms don't). `isRainyDay` is day-1-safe and seeded.
+    {
+      const raining = scene.outdoor && isRainyDay(saveRef.current);
+      syncRain(raining);
+      if (raining) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(180, 205, 235, 0.5)';
+        ctx.lineWidth = 1;
+        const DROPS = 90, SLANT = 4, LEN = 11, SPD = 520;
+        for (let i = 0; i < DROPS; i++) {
+          const seed = i * 9301 + 49297;
+          const bx = (seed % 997) / 997 * (VIEW_PW + 40) - 20;
+          const phase = (seed % 911) / 911;
+          const y = ((t * SPD * (0.7 + phase * 0.6) + i * 53) % (VIEW_PH + LEN)) - LEN;
+          const x = bx + (y / VIEW_PH) * SLANT * 6;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - SLANT, y + LEN);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // faint cool wash so the whole scene reads overcast
+        ctx.fillStyle = 'rgba(70, 90, 120, 0.12)';
+        ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      }
+    }
+
     // Mines: claustrophobic dark — you only see a few tiles around you (the wand
     // lights a little further). Makes the crawlers genuinely scary.
     if (scene.id === 'mines') {
@@ -2189,6 +2314,7 @@ const LittleApartmentGame: React.FC = () => {
       const next = !prev;
       try { localStorage.setItem(MUSIC_MUTE_KEY, next ? '1' : '0'); } catch { /* private mode */ }
       tracksRef.current.forEach(a => { a.muted = next; });
+      if (rainAudioRef.current) rainAudioRef.current.muted = next;
       return next;
     });
   }, []);
@@ -2250,6 +2376,8 @@ const LittleApartmentGame: React.FC = () => {
     fadeTimersRef.current.clear();
     tracksRef.current.forEach(a => a.pause());
     tracksRef.current.clear();
+    rainAudioRef.current?.pause();
+    rainOnRef.current = false;
     currentTrackRef.current = null;
     transTimers.current.forEach(id => window.clearTimeout(id));
     transTimers.current = [];
@@ -2259,6 +2387,7 @@ const LittleApartmentGame: React.FC = () => {
   // try immediately and also arm a one-shot listener for the first input.
   useEffect(() => {
     if (screen !== 'title') return;
+    syncRain(false); // no rain on the title screen
     playMusicFor('title');
     const kick = () => playMusicFor('title');
     window.addEventListener('pointerdown', kick, { once: true });
@@ -2267,7 +2396,7 @@ const LittleApartmentGame: React.FC = () => {
       window.removeEventListener('pointerdown', kick);
       window.removeEventListener('keydown', kick);
     };
-  }, [screen, playMusicFor]);
+  }, [screen, playMusicFor, syncRain]);
 
   // The saved game (or null), re-read whenever a new game starts or it's wiped.
   const saved = useMemo(() => loadSave(), [saveTick]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2485,6 +2614,54 @@ const LittleApartmentGame: React.FC = () => {
     }, 80);
   };
 
+  const setRoulBet = (bet: number) => {
+    const roul = casinoRef.current.roul;
+    if (roul.phase === 'spin') return;
+    roul.bet = bet;
+    setShopTick(v => v + 1);
+  };
+  const setRoulKind = (kind: RouletteBet) => {
+    const roul = casinoRef.current.roul;
+    if (roul.phase === 'spin') return;
+    roul.kind = kind;
+    setShopTick(v => v + 1);
+  };
+  const setRoulPick = (n: number) => {
+    const roul = casinoRef.current.roul;
+    if (roul.phase === 'spin') return;
+    roul.pick = Math.max(0, Math.min(36, n));
+    roul.kind = 'number';
+    setShopTick(v => v + 1);
+  };
+  const spinRoulette = () => {
+    const s = saveRef.current;
+    const roul = casinoRef.current.roul;
+    if (roul.phase === 'spin' || roul.bet <= 0 || s.money < roul.bet) return;
+    s.money -= roul.bet; sfxBuy();
+    roul.phase = 'spin'; roul.win = 0;
+    roul.result = Math.floor(Math.random() * 37); // 0..36
+    persistSave(s); refreshHud();
+    const start = performance.now();
+    const SPIN_MS = 2200;
+    if (roul.timer != null) window.clearInterval(roul.timer);
+    roul.timer = window.setInterval(() => {
+      const el = performance.now() - start;
+      if (el >= SPIN_MS) {
+        roul.display = roul.result;
+        if (roul.timer != null) window.clearInterval(roul.timer);
+        roul.timer = null;
+        roul.phase = 'done';
+        const win = roulettePayout(roul.kind, roul.pick, roul.result, roul.bet);
+        roul.win = win;
+        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCoin(); persistSave(s2); refreshHud(); }
+        setShopTick(v => v + 1);
+      } else {
+        roul.display = Math.floor(Math.random() * 37); // flicker while it spins
+        setShopTick(v => v + 1);
+      }
+    }, 70);
+  };
+
   // ---- shop actions ---------------------------------------------------------
 
   const buyAtPrice = (itemId: string, price: number) => {
@@ -2684,6 +2861,17 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth(null);
     runTransition('fade', () => {
       s.gangPaid = true;
+      // The enforcers part with an "invitation" to the house they run.
+      pushMessage(s, {
+        id: 'yakuza-casino',
+        from: 'Unknown Number',
+        avatar: '🎴',
+        body: [
+          'You paid like a gentleman. We remember gentlemen.',
+          'Come spend it properly. The Kinryū Lounge, off Downtown — blackjack, slots, and the wheel.',
+          'Ask for nothing. The house already knows your name.',
+        ],
+      });
       computeSolids();
       persistSave(s); refreshHud();
     }, 550, 1100);
@@ -2772,6 +2960,10 @@ const LittleApartmentGame: React.FC = () => {
       case 'gimmegimme':
         for (const f of FURNITURE) if (!s.owned.includes(f.id)) s.owned.push(f.id);
         setCheatMsg('All base furniture delivered to your boxes. Place it yourself, slacker.');
+        break;
+      case 'come again another day':
+        s.forceRain = true;
+        setCheatMsg('Rain, rain — here to stay. Until tomorrow, anyway.');
         break;
       default:
         setCheatMsg(code ? `"${code}"? Never heard of it.` : '');
@@ -3168,6 +3360,7 @@ const LittleApartmentGame: React.FC = () => {
               ['sunrise', 'Time → 7:00 AM'],
               ['nightfall', 'Time → 10:00 PM'],
               ['midnight', 'Time → 1:30 AM'],
+              ['come again another day', 'Force rain today'],
             ].map(([code, desc]) => (
               <p key={code} className="text-sm flex justify-between gap-3 py-px"><span className="text-[#7ce8a0]">{code}</span><span className="opacity-55">{desc}</span></p>
             ))}
@@ -3349,6 +3542,7 @@ const LittleApartmentGame: React.FC = () => {
           <div className="flex flex-col gap-2 mt-3">
             <button className={`${btnCls} w-full`} onClick={startBlackjack}>🃏 BLACKJACK — beat the dealer to 21</button>
             <button className={`${btnCls} w-full`} onClick={startSlots}>🎰 SLOT MACHINES — pull for the jackpot</button>
+            <button className={`${btnCls} w-full`} onClick={startRoulette}>🔴 ROULETTE — pick a color, a number, your fate</button>
           </div>
           <p className="text-xs opacity-40 mt-3">Bet responsibly. The maneki-neko is watching.</p>
         </ShopFrame>
@@ -3460,6 +3654,55 @@ const LittleApartmentGame: React.FC = () => {
           <button className={`${btnCls} w-full text-xl`} disabled={spinning || s.money < slot.bet} onClick={spinSlots}>{spinning ? 'SPINNING…' : `PULL · bet ¥${slot.bet.toLocaleString()}`}</button>
           <button className={`${btnCls} w-full mt-2 text-sm`} disabled={spinning} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
           <p className="text-xs opacity-40 mt-2 text-center">7️⃣×3 = 50× · 💎×3 = 20× · ⭐×3 = 10× · any 3 = 5× · any pair = 2×</p>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'roulette') {
+      const roul = casinoRef.current.roul;
+      const chips = [100, 500, 1000, 2500];
+      const spinning = roul.phase === 'spin';
+      const r = roul.display;
+      const green = r === 0;
+      const isRed = ROULETTE_RED.has(r);
+      const numColor = green ? 'bg-[#1f6b3a] text-white' : isRed ? 'bg-[#b03030] text-white' : 'bg-[#1a1a1a] text-white';
+      const kinds: [RouletteBet, string][] = [
+        ['red', 'RED'], ['black', 'BLACK'], ['even', 'EVEN'], ['odd', 'ODD'], ['low', '1–18'], ['high', '19–36'],
+      ];
+      const profit = roul.win - roul.bet;
+      const resultText = roul.phase === 'done'
+        ? (roul.win > 0 ? `WIN  +¥${profit.toLocaleString()}!` : 'House takes it. Spin again.')
+        : (spinning ? 'No more bets…' : ' ');
+      const betLabel =
+        roul.kind === 'number' ? `straight up on ${roul.pick}` :
+        roul.kind === 'red' ? 'on RED' : roul.kind === 'black' ? 'on BLACK' :
+        roul.kind === 'even' ? 'on EVEN' : roul.kind === 'odd' ? 'on ODD' :
+        roul.kind === 'low' ? 'on 1–18' : 'on 19–36';
+      return (
+        <ShopFrame title="ROULETTE" subtitle="Single zero · outside bets pay even · a number pays 35:1" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <div className="flex justify-center py-3">
+            <span className={`inline-flex items-center justify-center w-20 h-20 rounded-full border-4 border-[#c9a227] text-4xl font-bold ${numColor}`}>{r}</span>
+          </div>
+          <p className={`text-center text-xl h-7 ${roul.win > 0 ? 'text-[#7ce8a0]' : 'opacity-60'}`}>{resultText}</p>
+          <p className="text-sm opacity-60 text-center mb-2">Betting ¥{roul.bet.toLocaleString()} {betLabel}</p>
+          <div className="flex flex-wrap gap-2 justify-center mb-2">
+            {kinds.map(([k, lbl]) => (
+              <button key={k} className={`${btnCls} text-sm ${roul.kind === k ? 'bg-[#ffd24a] text-black' : ''}`} disabled={spinning} onClick={() => setRoulKind(k)}>{lbl}</button>
+            ))}
+          </div>
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <button className={`${btnCls} text-sm ${roul.kind === 'number' ? 'bg-[#ffd24a] text-black' : ''}`} disabled={spinning} onClick={() => setRoulKind('number')}>NUMBER</button>
+            <button className={`${btnCls} text-sm`} disabled={spinning} onClick={() => setRoulPick(roul.pick - 1)}>−</button>
+            <span className="text-xl w-8 text-center">{roul.pick}</span>
+            <button className={`${btnCls} text-sm`} disabled={spinning} onClick={() => setRoulPick(roul.pick + 1)}>+</button>
+          </div>
+          <div className="flex flex-wrap gap-2 justify-center my-2">
+            {chips.map(c => (
+              <button key={c} className={`${btnCls} ${roul.bet === c ? 'bg-[#ffd24a] text-black' : ''}`} disabled={spinning || s.money < c} onClick={() => setRoulBet(c)}>¥{c.toLocaleString()}</button>
+            ))}
+          </div>
+          <button className={`${btnCls} w-full text-xl`} disabled={spinning || s.money < roul.bet} onClick={spinRoulette}>{spinning ? 'SPINNING…' : `SPIN · bet ¥${roul.bet.toLocaleString()}`}</button>
+          <button className={`${btnCls} w-full mt-2 text-sm`} disabled={spinning} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
         </ShopFrame>
       );
     }

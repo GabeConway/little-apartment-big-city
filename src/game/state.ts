@@ -69,6 +69,9 @@ export interface GameSave {
   today: DayLog;                // running tally for the end-of-day recap
   messages: PhoneMessage[];     // smartphone texts delivered so far
   orders: ZamaOrder[];          // ZamaZonk furniture in transit (arrives next morning)
+  forceRain: boolean;           // cheat: force rain for the current day (cleared next morning)
+  rainCleared: boolean;         // a shrine offering made the rain suddenly stop today (cleared next morning)
+  shrineDay: number;            // last day an offering was made at the shrine (0 = never); one per day
 }
 
 // A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
@@ -138,6 +141,9 @@ export const newSave = (): GameSave => ({
   today: freshDayLog(3000),
   messages: [],
   orders: [],
+  forceRain: false,
+  rainCleared: false,
+  shrineDay: 0,
 });
 
 export const loadSave = (): GameSave | null => {
@@ -196,7 +202,16 @@ export const sleep = (s: GameSave): void => {
   const max = maxEnergy(s);
   s.energy = s.placed['bed'] ? max : Math.round((SLEEP_RESTORE_FUTON / 100) * max);
   s.today = freshDayLog(s.money); // start a clean tally for the new day
+  s.forceRain = false;           // a forced-rain cheat only lasts the one day
+  s.rainCleared = false;         // a shrine-stopped rain only counts for that day
 };
+
+// Weather: a 20% chance of rain on any day after day 1 (never day 1). The roll
+// is a per-day deterministic seed so it stays stable across reloads within a
+// day. The `come again another day` cheat (forceRain) overrides the roll; a
+// shrine offering that "suddenly stops" the rain (rainCleared) wins over both.
+export const isRainyDay = (s: GameSave): boolean =>
+  !s.rainCleared && (s.forceRain || (s.day > 1 && mulberry32(s.day * 1013904223 + 53)() < 0.2));
 
 export const clockLabel = (s: GameSave): string => {
   const m = Math.floor(s.timeMin) % (24 * 60);

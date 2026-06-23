@@ -888,6 +888,40 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#c0392b'; ctx.fillRect(5, 9, 1, 1);
     ctx.fillStyle = '#16181d'; ctx.fillRect(10, 9, 1, 1);
   });
+  // Roulette table = a 2-tile prop: left tile is the wheel, right tile the felt
+  // betting layout. Author neutral; the gold/green read matches the other tables.
+  atlas['t-roulette'] = tile(ctx => {                       // wheel half
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#1f5233'; ctx.fillRect(1, 2, 15, 12);  // felt to the right edge (meets the layout)
+    ctx.fillStyle = '#2c6e44'; ctx.fillRect(1, 2, 15, 2);   // felt highlight
+    // wheel disk — gold rim, drawn as stacked rows for a round silhouette
+    const rim: [number, number, number][] = [[6,3,4],[5,4,6],[4,5,8],[3,6,10],[3,7,10],[3,8,10],[3,9,10],[4,10,8],[5,11,6],[6,12,4]];
+    ctx.fillStyle = '#c9a227'; for (const [x,y,w] of rim) ctx.fillRect(x,y,w,1);
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(4,5,8,1);       // rim top highlight
+    // pocket ring (black) inside the rim
+    const ring: [number, number, number][] = [[6,4,4],[5,5,6],[4,6,8],[4,7,8],[4,8,8],[4,9,8],[5,10,6],[6,11,4]];
+    ctx.fillStyle = '#16181d'; for (const [x,y,w] of ring) ctx.fillRect(x,y,w,1);
+    // alternating red pockets around the ring
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(6,4,2,1); ctx.fillRect(10,5,1,1); ctx.fillRect(4,6,2,1); ctx.fillRect(11,8,1,1); ctx.fillRect(5,10,2,1); ctx.fillRect(9,11,1,1);
+    // gold spokes + hub
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(7,5,2,6); ctx.fillRect(5,7,6,2);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7,7,2,2);       // hub
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(9,6,1,1);       // the ball
+  });
+  atlas['t-roulette-felt'] = tile(ctx => {                  // betting-layout half
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#1f5233'; ctx.fillRect(0, 2, 15, 12);  // felt (meets the wheel on the left)
+    ctx.fillStyle = '#2c6e44'; ctx.fillRect(0, 2, 15, 2);
+    ctx.fillStyle = '#1a4429'; ctx.fillRect(0, 12, 15, 2);  // felt shadow
+    ctx.fillStyle = '#c9a227';                              // gold grid lines
+    for (let x = 1; x < 15; x += 3) ctx.fillRect(x, 4, 1, 8);
+    ctx.fillRect(0, 7, 15, 1);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 5, 1, 1); ctx.fillRect(8, 5, 1, 1); ctx.fillRect(5, 9, 1, 1); ctx.fillRect(11, 9, 1, 1); // red cells
+    ctx.fillStyle = '#16181d'; ctx.fillRect(5, 5, 1, 1); ctx.fillRect(11, 5, 1, 1); ctx.fillRect(2, 9, 1, 1); ctx.fillRect(8, 9, 1, 1); // black cells
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(12, 3, 2, 1);   // stacked chips
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(12, 2, 2, 1);
+  });
 
   // Mines
   atlas['t-cave-wall'] = tile(ctx => {
