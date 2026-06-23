@@ -93,6 +93,8 @@ const sfxMine = (value: number) =>
       : blip([880, 1320], 0.06, 0.05);
 // AK-67 — a short, dry low-freq crack for each full-auto round.
 const sfxGun = () => blip([180, 90], 0.045, 0.06);
+// Climbing down a floor — a soft two-step descending tick (nothing dramatic).
+const sfxDescend = () => blip([392, 294], 0.07, 0.04);
 
 // One-shot sampled SFX (mp3). Cached + rewound so they can re-fire rapidly.
 // Independent of the music mute toggle, matching the blip SFX above.
@@ -1177,7 +1179,7 @@ const LittleApartmentGame: React.FC = () => {
         const nf = mineFloorRef.current + 1;   // descend one floor; drop in at the top
         mineFloorRef.current = nf;
         enterScene('mines', 2, 1, 'down');
-        sfxBackroomsWarp();
+        sfxDescend();
         reachFloor(nf);
         depthToastRef.current = { floor: nf, t: 2.2 };
         return;
