@@ -221,6 +221,11 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   ],
   shrine: [
     { text: 'よし神社 YOSHI SHRINE', x: 6, y: 1, color: '#fff', bg: '#8e2a1e', border: '#ffd24a', font: 8 },
+    { text: '温室 GREENHOUSE', x: 1, y: 9, color: '#aef0a0', bg: 'rgba(0,0,0,0.4)', font: 7 },
+  ],
+  greenhouse: [
+    { text: 'コミュニティ温室', x: 3, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 8 },
+    { text: "GRANNY SOTO'S GREENHOUSE", x: 1, y: 1, color: '#aef0a0', bg: 'rgba(0,0,0,0.45)' },
   ],
   island: [
     { text: 'きわみじま KIWAMI', x: 7, y: 3, color: '#16181d', bg: '#ffe9a0', border: '#b08a50', font: 8 },
@@ -607,6 +612,8 @@ const shrine: SceneDef = {
     'h': T('t-shrine', true),
     'k': T('t-komainu', true),
     'L': T('t-lantern', true),
+    'E': T('t-gh-front', true),    // community greenhouse glass facade (entrance)
+    'D': T('t-gh-door'),           // greenhouse door (walks into the greenhouse interior)
   },
   outdoor: true,
   grid: [
@@ -616,18 +623,66 @@ const shrine: SceneDef = {
     'TggggWWWWWWWWWWggggT',
     'TgggggggghhggggggggT',
     'TggggkgggppgggkggggT',
-    'TgggLggggppggggLgggT',
-    'TggggggggppggggggggT',
-    'TggggggggppggggggggT',
+    'TgggLgEEgppggggLgggT',
+    'TgggggEEgppggggggggT',
+    'TgggggDDgppggggggggT',
     'TggggggggppggggggggT',
     'TTTTTTTTTppTTTTTTTTT',
   ],
   warps: [
     { x: 9, y: 10, to: 'city', tx: 24, ty: 13, dir: 'up' },
     { x: 10, y: 10, to: 'city', tx: 25, ty: 13, dir: 'up' },
+    // Into Granny Soto's community greenhouse (door under the glass facade).
+    { x: 6, y: 8, to: 'greenhouse', tx: 7, ty: 8, dir: 'up' },
+    { x: 7, y: 8, to: 'greenhouse', tx: 8, ty: 8, dir: 'up' },
   ],
   interactables: [{ id: 'shrine', x: 9, y: 4, w: 1, h: 1, label: 'Offer ¥500' }],
   npcs: [{ id: 'miko', x: 13, y: 5, sprite: 'npc-miko', dir: 'down' }],
+};
+
+// ---- Community Greenhouse (off the shrine grounds) -----------------------------------
+// Granny Soto's glass house. Plant a sunflower in a soil plot, flip the sprinklers
+// on, and it climbs a stage each watered morning until it blooms — then harvest it.
+// Built to extend toward a small farming sim (see CROPS in data.ts + GREENHOUSE_PLOTS).
+
+// Plot tile coords inside the greenhouse, indexed to save.greenhouse.plots[i].
+export const GREENHOUSE_PLOTS: { x: number; y: number }[] = [
+  { x: 3, y: 2 }, { x: 6, y: 2 }, { x: 9, y: 2 },
+];
+
+const greenhouse: SceneDef = {
+  id: 'greenhouse',
+  name: 'Community Greenhouse',
+  legend: {
+    'G': T('t-gh-glass', true),
+    '.': T('t-gh-floor'),
+    'o': T('t-gh-soil', true),
+    'v': T('t-gh-sprinkler', true),
+    'D': T('t-door'),
+  },
+  grid: [
+    'GGGGGGGGGGGGGGGG',
+    'G..............G',
+    'G..o..o..o.....G',
+    'G..............G',
+    'G......v.......G',
+    'G..............G',
+    'G..............G',
+    'G..............G',
+    'G..............G',
+    'GGGGGGGDDGGGGGGG',
+  ],
+  warps: [
+    { x: 7, y: 9, to: 'shrine', tx: 6, ty: 9, dir: 'down' },
+    { x: 8, y: 9, to: 'shrine', tx: 7, ty: 9, dir: 'down' },
+  ],
+  interactables: [
+    { id: 'gh-plot', x: 3, y: 2, label: 'Soil plot' },
+    { id: 'gh-plot', x: 6, y: 2, label: 'Soil plot' },
+    { id: 'gh-plot', x: 9, y: 2, label: 'Soil plot' },
+    { id: 'gh-sprinkler', x: 7, y: 4, label: 'Sprinkler valve' },
+  ],
+  npcs: [{ id: 'granny-soto', x: 12, y: 2, sprite: 'npc-granny', dir: 'down' }],
 };
 
 // ---- Kiwami Island (by skiff from the shore) --------------------------------------------
@@ -795,5 +850,5 @@ const paris: SceneDef = {
 };
 
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, island, deepsea, casino, paris,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, deepsea, casino, paris,
 };

@@ -1383,6 +1383,86 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = eFeD; ctx.fillRect(0, 3, 2, 1); ctx.fillRect(14, 3, 2, 1);
     // the middle/bottom stays open sky — the famous arch
   });
+
+  // ---- Community greenhouse ------------------------------------------------
+  // Interior glass wall: white frame + pale teal panes.
+  atlas['t-gh-glass'] = tile(ctx => {
+    fill(ctx, '#a6d4c0');
+    ctx.fillStyle = '#cdeede'; ctx.fillRect(2, 2, 5, 5); ctx.fillRect(9, 2, 5, 5); ctx.fillRect(2, 9, 5, 5); ctx.fillRect(9, 9, 5, 5);
+    ctx.fillStyle = '#e8f4ec'; ctx.fillRect(2, 2, 2, 2); ctx.fillRect(9, 2, 2, 2);   // pane glints
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(0, 7, 16, 2); ctx.fillRect(7, 0, 2, 16); // white mullion frame
+    ctx.fillStyle = '#c4bca8'; ctx.fillRect(0, 14, 16, 2);                            // base shadow
+  });
+  // Floor: pale gravel flagstones with the odd stray sprout.
+  atlas['t-gh-floor'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');
+    ctx.fillStyle = '#c9bd9e'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1); ctx.fillRect(5, 0, 1, 5); ctx.fillRect(10, 6, 1, 5);
+    speckle(ctx, '#bfb18e', 61, 7);
+    ctx.fillStyle = '#7cb86a'; ctx.fillRect(2, 13, 1, 1); ctx.fillRect(13, 3, 1, 1);
+  });
+  // Empty soil plot (raised bed): dark tilled earth with furrows.
+  atlas['t-gh-soil'] = tile(ctx => {
+    fill(ctx, '#5a3c24');
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(0, 0, 16, 2);
+    ctx.fillStyle = '#4a3120'; ctx.fillRect(0, 14, 16, 2); ctx.fillRect(2, 5, 12, 1); ctx.fillRect(2, 9, 12, 1); // rim + furrows
+    speckle(ctx, '#6e4a2f', 67, 8); speckle(ctx, '#3a2716', 71, 6);
+  });
+  // Sprinkler valve: standpipe + red hand-wheel.
+  atlas['t-gh-sprinkler'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(7, 4, 2, 11);
+    ctx.fillStyle = '#8a8d93'; ctx.fillRect(7, 4, 1, 11);
+    ctx.fillStyle = '#a8abb1'; ctx.fillRect(5, 6, 6, 2);                              // valve body
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(4, 3, 8, 2); ctx.fillRect(7, 2, 2, 1);    // red wheel
+    ctx.fillStyle = '#e07840'; ctx.fillRect(5, 3, 1, 1); ctx.fillRect(10, 3, 1, 1);
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(5, 14, 6, 2);                             // base flange
+  });
+  // Exterior facade (shrine-side entrance): a little glass house.
+  atlas['t-gh-front'] = tile(ctx => {
+    fill(ctx, '#a6d4c0');
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(0, 0, 16, 2);
+    ctx.fillStyle = '#cdeede'; ctx.fillRect(2, 3, 5, 10); ctx.fillRect(9, 3, 5, 10);
+    ctx.fillStyle = '#e8f4ec'; ctx.fillRect(2, 3, 2, 3); ctx.fillRect(9, 3, 2, 3);
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(7, 2, 2, 14); ctx.fillRect(0, 8, 16, 1);
+    ctx.fillStyle = '#7cb86a'; ctx.fillRect(3, 10, 2, 3); ctx.fillRect(11, 9, 2, 4);  // plants behind the glass
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(11, 9, 1, 1);
+  });
+  // Exterior greenhouse door (walkable).
+  atlas['t-gh-door'] = tile(ctx => {
+    fill(ctx, '#cdbb8e');
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 0, 12, 15);                            // white frame
+    ctx.fillStyle = '#bfe3d0'; ctx.fillRect(4, 1, 8, 12);                             // glass
+    ctx.fillStyle = '#cdeede'; ctx.fillRect(4, 1, 3, 5);                              // glint
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(8, 1, 1, 12);                             // center mullion
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 7, 2, 2);                              // handle
+  });
+  // Sunflower growth stages (drawn over a soil plot — transparent background).
+  atlas['t-crop-sun-0'] = tile(ctx => {                                              // just-planted seed
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(6, 11, 4, 2);
+    ctx.fillStyle = '#2c1d10'; ctx.fillRect(7, 10, 2, 1);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(7, 9, 1, 1);
+  });
+  atlas['t-crop-sun-1'] = tile(ctx => {                                              // sprout
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 7, 2, 6);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(4, 8, 3, 2); ctx.fillRect(9, 9, 3, 2);
+    ctx.fillStyle = '#8fc24f'; ctx.fillRect(4, 8, 1, 1); ctx.fillRect(11, 9, 1, 1);
+  });
+  atlas['t-crop-sun-2'] = tile(ctx => {                                              // budding
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 5, 2, 9);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(3, 8, 4, 2); ctx.fillRect(9, 10, 4, 2);
+    ctx.fillStyle = '#8fc24f'; ctx.fillRect(3, 8, 1, 1); ctx.fillRect(12, 10, 1, 1);
+    ctx.fillStyle = '#5e8a3a'; ctx.fillRect(5, 2, 6, 4);                              // green bud
+    ctx.fillStyle = '#7cb84f'; ctx.fillRect(6, 2, 4, 1);
+    ctx.fillStyle = '#caa23a'; ctx.fillRect(7, 4, 2, 1);                             // hint of petal
+  });
+  atlas['t-crop-sun-3'] = tile(ctx => {                                              // bloom
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 7, 2, 7);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(2, 9, 4, 2); ctx.fillRect(10, 10, 4, 2);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 1, 8, 8); ctx.fillRect(3, 3, 10, 4);   // petals
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(5, 1, 2, 1); ctx.fillRect(9, 1, 2, 1); ctx.fillRect(3, 4, 1, 2); ctx.fillRect(12, 4, 1, 2);
+    ctx.fillStyle = '#8a5a2a'; ctx.fillRect(6, 3, 4, 4);                              // seed disc
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 4, 2, 2);
+  });
 };
 
 // ---- Furniture (procedural; bed/sofa/futon are 32x16) -------------------
