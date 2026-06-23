@@ -17,17 +17,19 @@ with keyboard, touch, or a game controller. Fully offline; saves live in the dev
 
 <p align="center">
   <img src="docs/shot-shore.png" alt="The shore — Tex's hat shop and the fishing spot" width="49%">
-  <img src="docs/shot-city.png" alt="Downtown — Maison Kawa apartment block" width="49%">
+  <img src="docs/shot-city.png" alt="Kawamachi St. — the Nakatomi apartment block" width="49%">
 </p>
 
 ## What you do
-- **Fish** the shore, the deep bay (from a skiff), and a tropical island — a reel minigame, 8+ species, rarer the harder.
-- **Earn yen** every way the town allows: fishing, konbini shifts, the daily pawn stock, mining, and Jimmy's sketchy back-of-a-truck deals.
+- **Fish** the shore, the deep bay (from a skiff), and a tropical island — a catch-zone reel minigame, 8+ species, rarer the harder; the old fisherman Genji sells an upgraded rod.
+- **Earn yen** every way the town allows: fishing, **beach foraging** (washed-up finds you grab each morning), the **odd-jobs board** by home (a daily fetch errand), a **konbini shift minigame** ("Register Rush" — scan, bag, make change against the clock), the daily pawn stock, mining, and Jimmy's sketchy back-of-a-truck deals.
 - **Furnish the apartment** — buy furniture (or order it from **ZamaZonk** on your phone for next-morning delivery), then drag-and-drop it anywhere in the room from the phone's **Arrange** mode. A bed, fridge, AC and kotatsu only do anything once they're placed. Furnish all ten and you're home.
-- **Carry a smartphone** — bag, messages from the people and companies you meet, the ZamaZonk store, trophies, and settings, all in a pocket phone (press **P**).
-- **Explore 15 hand-built scenes** — downtown, Club Kaiju, the gachapon hall, Yoshi Shrine, Kiwami Island, and the backrooms-and-mines under the konbini freezer.
+- **Grow things** — do Granny Soto a favor (she loves a fresh fish) to unlock the **community greenhouse**, then plant, water, and harvest crops on the day/night cycle.
+- **Carry a smartphone** — bag, messages, a **Journal** of goals and next steps, the ZamaZonk store, trophies, and settings, all in a pocket phone (press **P**).
+- **Explore 18 hand-built scenes** — Kawamachi St., neon Downtown, Club Kaiju, the gachapon hall, the shrine, the greenhouse, the Kawamachi Museum, Kiwami Island, Paris, and the backrooms-and-mines under the konbini freezer.
+- **Donate to the museum** — Bingus Doofelsmurt's gallery has display cases waiting for objects of interest you find out in the world.
 - **Get around** — buy a kei car and an old skiff.
-- A living **day/night cycle**: energy, sleep, and a 2 AM collapse that carries you home anyway. **22 achievements**, a magical-girl wand for the crawlers in the mines, and per-scene music.
+- A living **day/night cycle**: energy, sleep, and a 2 AM collapse that carries you home anyway. **22 achievements**, dialogue portraits, a magical-girl wand for the crawlers in the mines, and per-scene music.
 
 ## Controls
 | | Move | Interact / reel | Phone | Cancel / close |

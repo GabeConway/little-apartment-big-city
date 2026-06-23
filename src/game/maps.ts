@@ -157,7 +157,7 @@ const city: SceneDef = {
     { x: 29, y: 2, to: 'gacha', tx: 6, ty: 6, dir: 'up' },
     { x: 6, y: 13, to: 'apartment', tx: 12, ty: 8, dir: 'up' },
     { x: 7, y: 13, to: 'apartment', tx: 13, ty: 8, dir: 'up' },
-    // Into Granny Soto's community greenhouse (glass house just east of home).
+    // Community greenhouse (walk in — gated by greenhouseUnlocked in the warp check).
     { x: 16, y: 13, to: 'greenhouse', tx: 7, ty: 8, dir: 'up' },
     { x: 17, y: 13, to: 'greenhouse', tx: 8, ty: 8, dir: 'up' },
     { x: 0, y: 15, to: 'shore', tx: 22, ty: 3, dir: 'left' },
@@ -196,7 +196,6 @@ export interface SceneSign {
 export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   city: [
     { text: 'NAKATOMI', x: 2, y: 12, color: '#ffd24a', bg: '#2a211c', border: '#c9a227', font: 7 },
-    { text: '温室 GREENHOUSE', x: 13, y: 10, color: '#aef0a0', bg: 'rgba(0,0,0,0.4)', font: 7 },
     { text: '♥ ドキドキ でんき ♥', x: 1, y: 0, color: '#16181d', bg: '#ffd24a', border: '#d05050', font: 8 },
     { text: 'DOKI DOKI DISCOUNT', x: 1, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: 'コンビニ 24時間・酒', x: 12, y: 0, color: '#7ce8a0', bg: '#0c2a1a', border: '#3da26b', blink: true, font: 8 },
@@ -240,13 +239,8 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'こじまモータース せいび', x: 2, y: 0, color: '#ffd24a', bg: '#33302a', border: '#c9a227', font: 8 },
     { text: 'オイル OIL', x: 14, y: 0, color: '#d05050', bg: '#e8e0d0', border: '#9e3a3a', font: 7 },
   ],
-  shrine: [
-    { text: 'よし神社 YOSHI SHRINE', x: 6, y: 1, color: '#fff', bg: '#8e2a1e', border: '#ffd24a', font: 8 },
-  ],
-  greenhouse: [
-    { text: 'コミュニティ温室', x: 3, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 8 },
-    { text: "GRANNY SOTO'S GREENHOUSE", x: 1, y: 1, color: '#aef0a0', bg: 'rgba(0,0,0,0.45)' },
-  ],
+  shrine: [],
+  greenhouse: [],
   island: [
     { text: 'きわみじま KIWAMI', x: 7, y: 3, color: '#16181d', bg: '#ffe9a0', border: '#b08a50', font: 8 },
   ],
@@ -626,7 +620,7 @@ const mines: SceneDef = {
 
 const shrine: SceneDef = {
   id: 'shrine',
-  name: 'Yoshi Shrine',
+  name: 'Shrine',
   legend: {
     'T': T('t-tree', true),
     'g': T('t-grass'),
@@ -681,11 +675,12 @@ const greenhouse: SceneDef = {
     '.': T('t-gh-floor'),
     'o': T('t-gh-soil', true),
     'v': T('t-gh-sprinkler', true),
+    'Y': T('t-gh-poster', true),
     'D': T('t-door'),
   },
   grid: [
     'GGGGGGGGGGGGGGGG',
-    'G..............G',
+    'G...........Y..G',
     'G..o..o..o.....G',
     'G..............G',
     'G......v.......G',
@@ -704,8 +699,9 @@ const greenhouse: SceneDef = {
     { id: 'gh-plot', x: 6, y: 2, label: 'Soil plot' },
     { id: 'gh-plot', x: 9, y: 2, label: 'Soil plot' },
     { id: 'gh-sprinkler', x: 7, y: 4, label: 'Sprinkler valve' },
+    { id: 'gh-poster', x: 12, y: 1, label: 'Notice' },
   ],
-  npcs: [{ id: 'granny-soto', x: 12, y: 2, sprite: 'npc-granny', dir: 'down' }],
+  npcs: [],
 };
 
 // ---- Kiwami Island (by skiff from the shore) --------------------------------------------

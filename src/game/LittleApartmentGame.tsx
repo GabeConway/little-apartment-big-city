@@ -88,6 +88,7 @@ const sfxCatch = () => blip([659, 880, 1175], 0.09);
 const sfxMiss = () => blip([330, 220], 0.12);
 const sfxBite = () => blip([1175, 1175], 0.06, 0.07);
 const sfxLetter = () => blip([784, 988], 0.12, 0.04);
+const sfxType = (i: number) => blip([i % 2 ? 2050 : 1650], 0.012, 0.012); // faint click-clack as dialogue types
 // Mining chime — brighter, fuller arpeggio for the rarer (more valuable) ore.
 const sfxMine = (value: number) =>
   value >= 900 ? blip([784, 1175, 1568], 0.09, 0.06)
@@ -162,7 +163,7 @@ const DJ_SETLIST: { scene: string; label: string }[] = [
   { scene: 'pawn', label: 'pawn shop pixels' },
   { scene: 'garage', label: 'Kojima Motors theme' },
   { scene: 'badtown', label: 'Downtown neon (badside)' },
-  { scene: 'shrine', label: 'Yoshi Shrine bells' },
+  { scene: 'shrine', label: 'shrine bells' },
   { scene: 'greenhouse', label: 'Greenhouse Drift' },
   { scene: 'museum', label: 'Museum After Hours' },
   { scene: 'island', label: 'Kiwami Island breeze' },
@@ -202,7 +203,7 @@ const HACK_LINES = [
 // ---- overlay model ----------------------------------------------------------
 
 type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji'
-  | 'casino' | 'blackjack' | 'slots' | 'roulette';
+  | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
 // bag for energy (Peepis can also be fed to The Manager / given to David).
@@ -388,6 +389,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   granny: {
     speaker: 'Granny Sato',
     sets: [
+      ['How is my greenhouse treating you? Keep those sprinklers on and something will always be growing.', 'A plot of soil and a little patience. That is most of happiness, I find.'],
       ['Nakatomi Apartments? I have lived there forty years. Thin walls, good light.', 'A home is not bought in a day, dear. It is bought one small thing at a time.'],
       ['The man at the pawn shop was a jazz pianist, you know. Ask him about it. Watch his face.'],
       ['Downtown used to be even louder, if you can believe it. The club is still there. So is everything else, in its way.'],
@@ -479,9 +481,9 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
     ],
   },
   miko: {
-    speaker: 'Aya (shrine maiden)',
+    speaker: 'Yoshi',
     sets: [
-      ['Welcome to Yoshi Shrine. Bow twice, clap twice, wish once. The order matters more than people think.'],
+      ['Welcome to the shrine. I am Yoshi — I keep it. Bow twice, clap twice, wish once. The order matters more than people think.'],
       ['The kami here is small but diligent. Fond of fishermen, crows, and exact change.'],
       ['I sweep the same leaves every morning. The tree drops them again every night. We have an understanding.'],
     ],
@@ -924,6 +926,8 @@ const LittleApartmentGame: React.FC = () => {
     const id = window.setInterval(() => {
       typedRef.current = Math.min(full.length, typedRef.current + 1);
       setTyped(typedRef.current);
+      const ch = full[typedRef.current - 1];
+      if (ch && ch !== ' ' && typedRef.current % 3 === 0) sfxType(typedRef.current); // faint patter, every ~3rd glyph
       if (typedRef.current >= full.length) window.clearInterval(id);
     }, 12);
     return () => window.clearInterval(id);
@@ -1528,23 +1532,19 @@ const LittleApartmentGame: React.FC = () => {
         showDialog(lines, 'Bingus Doofelsmurt');
         return;
       }
-      // Granny Soto, curator of the community greenhouse. Speaker EXACTLY
+      // Granny Soto (out in the city): she gatekeeps the community greenhouse
+      // behind a small fish errand — she adores a fresh fish. Speaker EXACTLY
       // 'Granny Sato' so her authored portrait shows.
-      if (npc.id === 'granny-soto') {
-        const gh = s.greenhouse;
-        const planted = gh.plots.filter(pl => pl.crop).length;
-        const blooming = gh.plots.filter(pl => plotReady(pl)).length;
-        const lines = [
-          'Oh! A new face in my greenhouse. Welcome, dear. I am Granny Soto — these plots are the neighborhood\'s, and mine to fuss over.',
-          'Find an empty bed and press a sunflower seed in. Then flip the SPRINKLERS on so it drinks through the night.',
-          'Every watered morning it stands a little taller. Four mornings and it blooms — a face like a little sun. Then it is yours to cut.',
-        ];
-        if (blooming > 0) lines.push('And LOOK — one\'s come into bloom. Go on, harvest it before the crows get ideas. There\'s good money in a fine sunflower.');
-        else if (planted > 0) lines.push(gh.sprinklerOn
-          ? 'Your seedlings are drinking nicely. Mind you leave the sprinklers running, or they\'ll sulk and sit still.'
-          : 'You\'ve planted, but the sprinklers are OFF — nothing will grow dry. Twist that valve, dear.');
-        lines.push('One day I\'ll have tomatoes, daikon, the lot. For now — sunflowers. Everyone should grow at least one thing they don\'t have to.');
-        showDialog(lines, 'Granny Sato');
+      if (npc.id === 'granny' && !s.greenhouseUnlocked) {
+        if (s.fishInv.length > 0) {
+          setOverlayBoth({ type: 'shop', shop: 'granny-fish' }); // ask before taking it
+        } else {
+          showDialog([
+            'That glass house east of the apartments? The community greenhouse — mine to mind, the neighborhood\'s really. Locked up tight these days.',
+            'I might just hand you the key... if you do an old woman a kindness first. I do love a fresh fish.',
+            'Bring me one from Sumikawa Shore and the greenhouse is yours to tend.',
+          ], 'Granny Sato');
+        }
         return;
       }
       const voice = NPC_VOICES[npc.id];
@@ -1606,17 +1606,19 @@ const LittleApartmentGame: React.FC = () => {
           : e.kind === 'soda' ? (s.sodas[e.want!] ?? 0) > 0
           : e.kind === 'fish' ? s.fishInv.length > 0
           : s.coconuts > 0;
-        if (!have) { showDialog([e.ask], e.giver); break; }
-        if (e.kind === 'peepis') s.peepis -= 1;
-        else if (e.kind === 'soda') s.sodas[e.want!] -= 1;
-        else if (e.kind === 'fish') s.fishInv.shift();
-        else s.coconuts -= 1;
-        s.money += e.reward;
-        s.errandDay = s.day;
-        mineTextRef.current = { x: target.x * TILE, y: target.y * TILE, text: `+¥${e.reward.toLocaleString()}`, color: '#ffd24a', t: 1.2 };
-        sfxCoin();
-        persistSave(s); refreshHud();
-        showDialog([e.thanks, `(+¥${e.reward.toLocaleString()})`], e.giver);
+        // Have the goods → ask before handing them over; else just read the ask.
+        if (have) setOverlayBoth({ type: 'shop', shop: 'errand' });
+        else showDialog([e.ask], e.giver);
+        break;
+      }
+      case 'gh-poster': {
+        showDialog([
+          '— COMMUNITY GREENHOUSE — a hand-lettered poster, Granny Soto\'s tidy hand —',
+          '1. Press a SEED into any empty soil plot.',
+          '2. Turn the SPRINKLERS on (the valve) so the beds drink overnight.',
+          '3. Every watered morning, the crop grows a little. ~4 mornings to bloom.',
+          '4. Harvest the grown crop for yen. Sunflowers for now — more to come!',
+        ]);
         break;
       }
       case 'vending-dead':
@@ -1650,8 +1652,8 @@ const LittleApartmentGame: React.FC = () => {
         if (stoppedRain) {
           showDialog([
             'You drop the coin, bow twice, clap twice — and above you the rain thins to nothing. The clouds peel back like a curtain.',
-            'The miko does not look the least bit surprised.',
-          ], 'Yoshi Shrine');
+            'Yoshi does not look the least bit surprised.',
+          ], 'the shrine');
           break;
         }
         if (tier > prevTier) {
@@ -2147,6 +2149,12 @@ const LittleApartmentGame: React.FC = () => {
         showDialog(['A yakuza enforcer steps into your path, gold watch glinting. "Private district."', 'Face one of them and press E to pay the ¥5,000 toll.'], 'Enforcer');
         return;
       }
+      if (warp && warp.to === 'greenhouse' && !s.greenhouseUnlocked) {
+        // Granny Soto holds the key until you do her fish errand.
+        warpCooldownRef.current = 0.4;
+        showDialog(['The greenhouse door is locked tight. Granny Soto keeps the key — do her a kindness first.', '(Word around the block is she loves a fresh fish.)']);
+        return;
+      }
       if (warp && warpCooldownRef.current <= 0) {
         // Can't drive indoors: the car auto-parks beside the door, never on it
         if (s.driving && !SCENES[warp.to].outdoor) {
@@ -2524,7 +2532,16 @@ const LittleApartmentGame: React.FC = () => {
       for (let i = 0; i < spots.length; i++) {
         if (taken.includes(i)) continue;
         const sp = spots[i];
-        ctx.drawImage(atlas[forageById(sp.kind).sprite], sp.x * TILE - cam.x, sp.y * TILE - cam.y);
+        const bx = sp.x * TILE - cam.x, by = sp.y * TILE - cam.y;
+        const bob = Math.round(Math.sin(t * 3 + i) * 1.5);               // gentle hop so it reads as "alive"
+        ctx.drawImage(atlas[forageById(sp.kind).sprite], bx, by + bob);
+        // blinking sparkle above the find — makes it obvious you can grab it
+        const a = 0.45 + 0.55 * Math.sin(t * 5 + i * 1.7);
+        if (a > 0) {
+          ctx.globalAlpha = a;
+          ctx.drawImage(atlas['m-sparkle'], bx + 6, by - 6 + bob, 8, 8);
+          ctx.globalAlpha = 1;
+        }
       }
     }
     if (mineTextRef.current) {
@@ -2777,6 +2794,29 @@ const LittleApartmentGame: React.FC = () => {
       }
       ctx.globalAlpha = 1;
       ctx.restore();
+    }
+
+    // Shrine: the stone (O) and paper (L) lanterns give off a soft warm glow —
+    // the only thing that lights up here, and only once night falls.
+    if (scene.id === 'shrine') {
+      const night = nightT(saveRef.current);
+      if (night > 0.05) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const lant = glow('255,206,120');
+        for (let ty = ty0; ty <= ty1; ty++) {
+          const row = scene.grid[ty];
+          for (let tx = tx0; tx <= tx1; tx++) {
+            const ch = row[tx];
+            if (ch !== 'L' && ch !== 'O') continue;
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 6;
+            ctx.globalAlpha = night * (0.22 + 0.04 * Math.sin(t * 1.6 + tx * 1.3)); // soft flicker, swells with night
+            ctx.drawImage(lant, gx - 20, gy - 20, 40, 40);
+          }
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
     }
 
     if (scene.id === 'nightclub') {
@@ -3697,6 +3737,42 @@ const LittleApartmentGame: React.FC = () => {
     }, 550, 1100);
   };
 
+  // Hand over the odd-jobs errand item — only on confirm (never auto-taken).
+  const deliverErrand = () => {
+    const s = saveRef.current;
+    if (errandDoneToday(s)) { setOverlayBoth(null); return; }
+    const e = errandFor(s);
+    const have = e.kind === 'peepis' ? s.peepis > 0
+      : e.kind === 'soda' ? (s.sodas[e.want!] ?? 0) > 0
+      : e.kind === 'fish' ? s.fishInv.length > 0
+      : s.coconuts > 0;
+    if (!have) { setOverlayBoth(null); return; }
+    if (e.kind === 'peepis') s.peepis -= 1;
+    else if (e.kind === 'soda') s.sodas[e.want!] -= 1;
+    else if (e.kind === 'fish') s.fishInv.shift();
+    else s.coconuts -= 1;
+    s.money += e.reward;
+    s.errandDay = s.day;
+    sfxCoin(); persistSave(s); refreshHud();
+    setOverlayBoth(null);
+    showDialog([e.thanks, `(+¥${e.reward.toLocaleString()})`], e.giver);
+  };
+
+  // Hand Granny Soto a fish (her greenhouse-key errand) — only on confirm.
+  const giveGrannyFish = () => {
+    const s = saveRef.current;
+    if (s.greenhouseUnlocked || s.fishInv.length === 0) { setOverlayBoth(null); return; }
+    s.fishInv.shift();
+    s.greenhouseUnlocked = true;
+    sfxCoin(); persistSave(s); refreshHud();
+    setOverlayBoth(null);
+    showDialog([
+      'Oh! For me? You sweet, sweet thing.',
+      'Then it is settled. The community greenhouse east of the apartments is yours to tend now — walk right in.',
+      'Plant something. Keep it alive. Go make something grow.',
+    ], 'Granny Sato');
+  };
+
   // Buy a konbini lottery ticket (one in play at a time); resolves next morning.
   const buyLottery = () => {
     const s = saveRef.current;
@@ -4241,6 +4317,7 @@ const LittleApartmentGame: React.FC = () => {
       const goals: { text: string; done: boolean }[] = [];
       goals.push({ text: `Furnish the apartment — ${placedBase}/${FURNITURE.length} placed`, done: placedBase >= FURNITURE.length });
       if (s.money < 5000) goals.push({ text: 'Short on cash? Comb the beach each morning — the bay washes up finds worth quick yen', done: false });
+      if (!s.greenhouseUnlocked) goals.push({ text: 'Bring Granny Soto (wandering the city) a fresh fish — she\'ll unlock the community greenhouse', done: false });
       goals.push(errandDoneToday(s)
         ? { text: "Odd-jobs board (by home): today's job done", done: true }
         : { text: 'Odd-jobs board by home has a job posted today — deliver the goods for a tidy fee', done: false });
@@ -4395,6 +4472,32 @@ const LittleApartmentGame: React.FC = () => {
               {s.money < 5000 ? "CAN'T AFFORD · ¥5,000" : 'PAY THE TOLL · ¥5,000'}
             </button>
             <button className={btnCls} onClick={close}>WALK AWAY</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'granny-fish') {
+      return (
+        <ShopFrame title="GRANNY SOTO" subtitle={'"Is that... a fresh fish?"'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">Granny Soto's eyes light up at the fish in your bag. "Hand an old woman a fresh fish, and the community greenhouse is yours to tend. Do we have a deal?"</p>
+          <div className="flex items-center gap-3 mt-3">
+            <button className={`${btnCls} flex-grow`} onClick={giveGrannyFish}>GIVE HER A FISH</button>
+            <button className={btnCls} onClick={close}>KEEP IT</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'errand') {
+      const e = errandFor(s);
+      return (
+        <ShopFrame title={e.giver.toUpperCase()} subtitle="Odd job" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">{e.ask}</p>
+          <p className="text-base opacity-60 py-1">Hand it over now for ¥{e.reward.toLocaleString()}?</p>
+          <div className="flex items-center gap-3 mt-3">
+            <button className={`${btnCls} flex-grow`} onClick={deliverErrand}>GIVE · +¥{e.reward.toLocaleString()}</button>
+            <button className={btnCls} onClick={close}>KEEP IT</button>
           </div>
         </ShopFrame>
       );

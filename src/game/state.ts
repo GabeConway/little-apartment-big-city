@@ -78,6 +78,7 @@ export interface GameSave {
   forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
   foragedSpots: number[];       // indices of today's shore finds already grabbed
   errandDay: number;            // last day the odd-jobs board errand was completed (0 = none); one per day
+  greenhouseUnlocked: boolean;  // Granny Soto handed over the greenhouse key (after the fish errand)
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
   messages: PhoneMessage[];     // smartphone texts delivered so far
@@ -173,6 +174,7 @@ export const newSave = (): GameSave => ({
   forageDay: 0,
   foragedSpots: [],
   errandDay: 0,
+  greenhouseUnlocked: false,
   ended: false,
   today: freshDayLog(3000),
   messages: [],
@@ -318,10 +320,25 @@ export const shoreForageFor = (s: GameSave): ForageSpot[] => {
   return spots;
 };
 
+// Whether the player can actually source an errand's item yet — never post a job
+// they can't fulfill (e.g. a coconut needs the skiff; a fish needs Genji's lesson).
+const errandReachable = (e: Errand, s: GameSave): boolean => {
+  switch (e.kind) {
+    case 'peepis':
+    case 'soda': return true;                          // vending machines are right in the city, day 1
+    case 'fish': return s.canFish;                     // must have learned to fish from Genji
+    case 'coconut': return s.vehicles.includes('boat'); // need the skiff to reach Kiwami Island
+    default: return true;
+  }
+};
 // The odd-jobs board posts ONE fetch errand per day, seeded so it's stable across
-// reloads but varies day to day. Completed once/day (save.errandDay).
-export const errandFor = (s: GameSave): Errand =>
-  ERRANDS[Math.floor(mulberry32(s.day * 374761393 + 31)() * ERRANDS.length)];
+// reloads but varies day to day, drawn only from jobs the player can currently do.
+// Completed once/day (save.errandDay).
+export const errandFor = (s: GameSave): Errand => {
+  const pool = ERRANDS.filter(e => errandReachable(e, s));
+  const list = pool.length ? pool : ERRANDS.filter(e => e.kind === 'peepis' || e.kind === 'soda');
+  return list[Math.floor(mulberry32(s.day * 374761393 + 31)() * list.length)];
+};
 export const errandDoneToday = (s: GameSave): boolean => s.errandDay === s.day;
 
 export const buyFurniture = (s: GameSave, itemId: string, price: number): boolean => {

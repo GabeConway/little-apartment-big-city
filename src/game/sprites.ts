@@ -1656,6 +1656,16 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#e8e0d0'; ctx.fillRect(8, 1, 1, 12);                             // center mullion
     ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 7, 2, 2);                              // handle
   });
+  // "How it works" notice poster, mounted against the greenhouse wall.
+  atlas['t-gh-poster'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');                                                             // floor/wall base
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 1, 12, 13);                            // wood frame
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(3, 2, 10, 11);                            // paper
+    ctx.fillStyle = '#3da26b'; ctx.fillRect(5, 3, 2, 3); ctx.fillRect(5, 3, 6, 1);    // plant sprig
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(10, 3, 2, 2);                             // little sun
+    ctx.fillStyle = '#9a9488';                                                        // text lines
+    ctx.fillRect(4, 7, 8, 1); ctx.fillRect(4, 9, 8, 1); ctx.fillRect(4, 11, 6, 1);
+  });
   // Sunflower growth stages (drawn over a soil plot — transparent background).
   atlas['t-crop-sun-0'] = tile(ctx => {                                              // just-planted seed
     ctx.fillStyle = '#3a2716'; ctx.fillRect(6, 11, 4, 2);
