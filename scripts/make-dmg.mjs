@@ -72,6 +72,22 @@ try {
   execFileSync('cp', ['-R', appPath, stage]);
   const stagedApp = join(stage, appName);
 
+  // CI runners are disk-constrained. Now that the .app is safely staged, the Rust
+  // compile intermediates under <triple>/release (deps/build/incremental — many GB)
+  // are dead weight, and they crowd out the scratch space hdiutil needs to build
+  // the compressed image → "hdiutil create failed - No space left on device".
+  // Prune them before creating the dmg. (CI only, so local rebuilds stay fast.)
+  if (process.env.CI) {
+    const releaseDir = resolve(dirname(appPath), '..', '..'); // .../<triple>/release
+    let freed = 0;
+    for (const d of ['deps', 'build', 'incremental', '.fingerprint']) {
+      const p = join(releaseDir, d);
+      try { if (existsSync(p)) { freed++; rmSync(p, { recursive: true, force: true }); } } catch { /* best effort */ }
+    }
+    try { execFileSync('df', ['-h', '/'], { stdio: 'inherit' }); } catch { /* informational */ }
+    console.log(`make-dmg: pruned ${freed} Rust build intermediate dir(s) to free disk for hdiutil.`);
+  }
+
   // The Rust linker only emits a weak "linker-signed" ad-hoc signature that
   // doesn't seal the bundle's resources or bind Info.plist (`Sealed
   // Resources=none`). Once the .dmg is downloaded through a browser the
