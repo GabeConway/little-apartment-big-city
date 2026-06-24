@@ -148,25 +148,40 @@ export const MUSEUM_SLOTS: MuseumSlot[] = [
 // then donate it at the matching museum pedestal. The remaining four are rare
 // DROPS from activities (see the drop hooks in LittleApartmentGame.tsx). The
 // collectible id === the MUSEUM_SLOTS id it fills.
+// Just TWO curios literally lie around to be stumbled on, in scenic out-of-the-way
+// spots (the rest are earned in unique ways — see below). Walk onto/face + E.
 export interface MuseumFind { slot: string; scene: string; x: number; y: number; }
 export const MUSEUM_FINDS: MuseumFind[] = [
-  { slot: 'arti-coin', scene: 'denden', x: 8, y: 7 },       // wedged under the electronics shelves
-  { slot: 'arti-token', scene: 'garage', x: 12, y: 6 },     // rolled under a workbench
-  { slot: 'arti-onigiri', scene: 'konbini', x: 11, y: 6 },  // behind the konbini coolers
-  { slot: 'art-bento', scene: 'pawn', x: 8, y: 5 },         // a canvas leaning in the pawn shop
-  { slot: 'art-madonna', scene: 'nightclub', x: 11, y: 8 }, // by the club's back wall
-  { slot: 'art-alley', scene: 'backrooms', x: 14, y: 4 },   // a painting that shouldn't be here
-  { slot: 'arti-rock', scene: 'island', x: 6, y: 4 },       // just lying in the island grass
-  { slot: 'art-cat', scene: 'paris', x: 8, y: 8 },          // propped on the Seine quay
+  { slot: 'arti-rock', scene: 'island', x: 6, y: 4 },  // a perfectly ordinary rock in the island grass
+  { slot: 'art-cat', scene: 'paris', x: 8, y: 8 },     // a stray's portrait propped on the Seine quay
 ];
-// The four rare activity drops (collectible id → where it can drop). Used for
-// journal flavor; the actual rolls live in the drop hooks.
-export const MUSEUM_DROP_SOURCE: Record<string, string> = {
-  'arti-lure': 'a rare snag while fishing',
-  'arti-shard': 'deep in the mines (floor 6+)',
-  'arti-meteor': 'the deepest mines (floor 10+)',
-  'arti-capsule': 'a one-in-a-hundred gachapon capsule',
-};
+
+// Bingus's fetch-quest chain: bring the curator a specific kind of thing and he
+// places the matching curio himself (donates it straight onto its display). He
+// accepts whichever pending fetch you happen to be carrying, so the order is up
+// to you / what you can reach. Item kinds map to existing pockets.
+export interface BingusFetch { slot: string; kind: 'peepis' | 'soda' | 'fish' | 'coconut' | 'mineral'; ask: string; thanks: string; }
+export const BINGUS_FETCHES: BingusFetch[] = [
+  { slot: 'art-bento', kind: 'peepis',
+    ask: 'Bring me a cold "Diet Doctor Peepis" from a vending machine. The most honest still life requires the most honest subject.',
+    thanks: 'A Peepis can, rendered in oils by morning. "Still Life with Konbini Bento." It goes on the wall this instant.' },
+  { slot: 'arti-token', kind: 'soda',
+    ask: 'Bring me any vending-machine soda. I am reliably informed one of them hides a TOKEN of unusual stubbornness.',
+    thanks: 'There — wedged in the can\'s shadow, a token that has outlived three machines. The Unbreakable Token. Ours now.' },
+  { slot: 'arti-onigiri', kind: 'fish',
+    ask: 'Bring me a fish, fresh from the bay. I intend to... preserve it. Please do not ask by what method.',
+    thanks: 'In a few decades this will be, geologically, a mineral. We shall label it the Fossilized Onigiri and never speak of the fish.' },
+  { slot: 'art-madonna', kind: 'coconut',
+    ask: 'A coconut from the island, if you can get out there. The Neon Madonna requires, ah... tropical financing.',
+    thanks: 'Sold to a collector for an indecent sum. With the proceeds: the Neon Madonna, painted in colors that only exist after midnight.' },
+  { slot: 'art-alley', kind: 'mineral',
+    ask: 'A mineral from the deep mines — any will do. The deep keeps things the surface has chosen to forget.',
+    thanks: 'In its facets, an alley that is no longer there, and possibly never was. "The Vanishing Alley." Hung at last.' },
+];
+
+// The rest are rare drops from activities (rolls live in the drop hooks):
+// arti-lure (fishing), arti-shard (mine floor 6+), arti-meteor (mine 10+),
+// arti-capsule (1% gachapon), arti-coin (cracking a geode).
 
 // In-game achievements — completely separate from the site-wide system in
 // utils/achievements.ts (which feeds the cake). These live in the game save.

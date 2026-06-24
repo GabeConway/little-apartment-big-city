@@ -33,8 +33,9 @@ import {
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
-  itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, CROPS, FORAGE, forageById,
+  itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, FORAGE, forageById,
 } from './data';
+import type { BingusFetch } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
   newSave, loadSave, persistSave, clearSave,
@@ -241,7 +242,7 @@ const HACK_LINES = [
 // ---- overlay model ----------------------------------------------------------
 
 type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji'
-  | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand';
+  | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
 // bag for energy (Peepis can also be fed to The Manager; a Conk goes to Max).
@@ -621,6 +622,7 @@ const PORTRAIT_IMAGES: Record<string, string> = {
   'Jean-Pierre': '/images/portraits/jean-pierre.jpeg',
   'Jean-Pierre (tourist)': '/images/portraits/jean-pierre.jpeg',
   'Yoshi': '/images/portraits/yoshi.jpeg',
+  'Charlie': '/images/portraits/charlie.jpeg',
   // The wise talking cat is named David (the shore vampire was renamed Max so the
   // cat can own the name). His dialogs use speaker 'David' → this portrait.
   'David': '/images/portraits/david.jpeg',
@@ -676,6 +678,20 @@ const WANDER_IDS = new Set(['granny', 'tex', 'charlie', 'old-man', 'miko', ...DA
 // NPCs (David the vampire + his campfire) that only appear on even-numbered nights.
 const NIGHT_EVEN_IDS = new Set(['david', 'campfire']);
 const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.45;
+
+// ---- Bingus museum fetch-quest helpers --------------------------------------
+const bingusHasKind = (s: GameSave, kind: BingusFetch['kind']): boolean =>
+  kind === 'peepis' ? s.peepis > 0 :
+  kind === 'soda' ? Object.values(s.sodas).some(n => n > 0) :
+  kind === 'fish' ? s.fishInv.length > 0 :
+  kind === 'coconut' ? s.coconuts > 0 :
+  Object.values(s.minerals).some(n => n > 0);
+const bingusPending = (s: GameSave, f: BingusFetch): boolean =>
+  !s.collectibles.includes(f.slot) && !s.museum.donated.includes(f.slot);
+const bingusHeldFetch = (s: GameSave): BingusFetch | null =>
+  BINGUS_FETCHES.find(f => bingusPending(s, f) && bingusHasKind(s, f.kind)) ?? null;
+const bingusNextAsk = (s: GameSave): BingusFetch | null =>
+  BINGUS_FETCHES.find(f => bingusPending(s, f)) ?? null;
 type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: number; homeY: number; dir: Dir; moving: boolean; stepT: number };
 const makeWanderers = (scene: SceneDef): Wanderer[] =>
   scene.npcs.filter(n => WANDER_IDS.has(n.id)).map(n => ({
@@ -884,7 +900,7 @@ const LittleApartmentGame: React.FC = () => {
   // Jean-Pierre rescue cutscene (after a mines KO): he's stood in your apartment
   // while he talks, then walks to the door and leaves before you can get up.
   const cutsceneRef = useRef<{ actor: { x: number; y: number; dir: Dir; sprite: string }; phase: 'talk' | 'walk'; path: { x: number; y: number }[] } | null>(null);
-  const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap } | null>(null);
+  const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap; rescuer?: 'jean' | 'yoshi' } | null>(null);
   const sparkleRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Floating "+N Mineral" pickup text that rises and fades over a mined node.
   const mineTextRef = useRef<{ x: number; y: number; text: string; color: string; t: number } | null>(null);
@@ -1145,27 +1161,37 @@ const LittleApartmentGame: React.FC = () => {
     pendingWakeRef.current = null;
     setOverlayBoth(null);
     playMusicFor(sceneRef.current.id); // back to the world's music
-    if (pending?.nursed) {
+    if (pending?.rescuer) {
       nursedRef.current = false;
-      // Stand Jean-Pierre in the apartment, talking over you. When you dismiss the
-      // dialog he walks to the door and out (handled in the update loop) — and you
-      // can't get up until he's gone.
+      // Stand the rescuer in the apartment, talking over you. When you dismiss the
+      // dialog they walk to the door and out (handled in the update loop) — and you
+      // can't get up until they're gone.
+      const sprite = pending.rescuer === 'yoshi' ? 'npc-miko' : 'npc-tourist';
       cutsceneRef.current = {
-        actor: { x: 4 * TILE, y: 2 * TILE - 4, dir: 'left', sprite: 'npc-tourist' },
+        actor: { x: 4 * TILE, y: 2 * TILE - 4, dir: 'left', sprite },
         phase: 'talk',
         path: [{ x: 12 * TILE, y: 2 * TILE - 4 }, { x: 12 * TILE, y: 10 * TILE }],
       };
-      showDialog([
-        'You come to on the floor of your own apartment. There is a damp towel on your forehead, folded with surprising precision.',
-        'Jean-Pierre is standing over you, beret slightly askew. "Bonjour. You were face-down in ze yellow place. Very dramatique."',
-        '"I carry you up ze ladder, through ze freezer, past ze nice monster. He says hello, by ze way."',
-        '"In France we have a saying: do not fight ze crawling things on an empty battery." He pats your head exactly once.',
-        '"I let myself out. Rest. Eat something." He turns for the door.',
-      ], 'Jean-Pierre');
+      if (pending.rescuer === 'yoshi') {
+        showDialog([
+          'You wake on your own futon. The air smells faintly of cedar and incense. You do not remember leaving the shrine.',
+          'Yoshi is kneeling neatly by the door, perfectly composed. "You fell asleep on the steps. Under the torii. In the rain, very nearly."',
+          '"The kami does not mind a tired visitor. But the night does. So I walked you home. You talk in your sleep, by the way. Mostly about money."',
+          '"Drink water. Bow to nothing in particular. And do not nap on sacred steps again — the komainu judge you." She rises to leave.',
+        ], 'Yoshi');
+      } else {
+        showDialog([
+          'You come to on the floor of your own apartment. There is a damp towel on your forehead, folded with surprising precision.',
+          'Jean-Pierre is standing over you, beret slightly askew. "Bonjour. You were face-down in ze yellow place. Very dramatique."',
+          '"I carry you up ze ladder, through ze freezer, past ze nice monster. He says hello, by ze way."',
+          '"In France we have a saying: do not fight ze crawling things on an empty battery." He pats your head exactly once.',
+          '"I let myself out. Rest. Eat something." He turns for the door.',
+        ], 'Jean-Pierre');
+      }
     }
   }, [setOverlayBoth, playMusicFor, showDialog]);
 
-  const doSleep = useCallback((collapsed = false, nursed = false) => {
+  const doSleep = useCallback((collapsed = false, nursed = false, rescuer?: 'jean' | 'yoshi') => {
     const s = saveRef.current;
     fishModeRef.current = null;
     projectilesRef.current = [];
@@ -1185,7 +1211,7 @@ const LittleApartmentGame: React.FC = () => {
       furniture: [...s.today.newFurniture],
       collapsed: collapsed || nursed,
     };
-    pendingWakeRef.current = { collapsed, nursed, recap };
+    pendingWakeRef.current = { collapsed, nursed, recap, rescuer: rescuer ?? (nursed ? 'jean' : undefined) };
     if (collapsed || nursed) {
       // Passed out — hold on the "out cold" screen until the player clicks.
       setOverlayBoth({ type: 'sleep', day: s.day + 1, collapsed: true, awaitClick: true });
@@ -1628,17 +1654,22 @@ const LittleApartmentGame: React.FC = () => {
       }
       // Bingus the curator: introduces the museum + reports donation progress.
       if (npc.id === 'bingus') {
+        // If you're carrying something Bingus is after, hand it over (GIVE/KEEP).
+        if (bingusHeldFetch(s)) { setOverlayBoth({ type: 'shop', shop: 'bingus-fetch' }); return; }
         const have = s.museum.donated.length;
         const total = MUSEUM_SLOTS.length;
         const intro = have === 0
           ? 'AH! A visitor! Welcome, welcome, to the Kawamachi Museum! I am Bingus Doofelsmurt, curator, founder, and — at present — sole staff.'
           : 'Welcome BACK! The collection grows, doesn\'t it? Squint and you can almost feel it becoming important.';
+        const ask = bingusNextAsk(s);
         const lines = [
           intro,
           have >= total
             ? 'And it is COMPLETE. Every plinth filled, every frame occupied. I may weep. I am weeping. Do not look at me.'
-            : `The displays are, ah, "between acquisitions." ${have} of ${total} filled. The rest await the RIGHT piece.`,
-          'Out there in the city — alleys, shores, the deep places — are objects of true significance. Find them, bring them to me, and I shall give them the pedestal they deserve.',
+            : `The displays are, ah, "between acquisitions." ${have} of ${total} filled.`,
+          ask
+            ? `Here is one thing you could do for me: ${ask.ask}`
+            : 'A few pieces are still out there in the world — alleys, shores, the deep places. You will know them when you see them.',
         ];
         showDialog(lines, 'Bingus Doofelsmurt');
         return;
@@ -2138,7 +2169,9 @@ const LittleApartmentGame: React.FC = () => {
         shrineHealRef.current = 0;
       }
       if (s2.timeMin >= COLLAPSE_MIN) {
-        doSleep(true); // 2 AM: you fade out, the city carries you home
+        // 2 AM: you fade out. Pass out on the shrine grounds and Yoshi walks you
+        // home; anywhere else, the city carries you back as usual.
+        doSleep(true, false, sceneRef.current.id === 'shrine' ? 'yoshi' : undefined);
         return;
       }
     }
@@ -3865,6 +3898,12 @@ const LittleApartmentGame: React.FC = () => {
     if (!res) return;
     award('geode-crack');
     sfxCatch();
+    // Rare: a geode is hollow around an ancient coin — a museum curio.
+    if (!s.collectibles.includes('arti-coin') && !s.museum.donated.includes('arti-coin') && Math.random() < 0.08) {
+      s.collectibles.push('arti-coin');
+      res.text = 'A COIN! (First Coin of the Realm)';
+      res.color = '#ffe9a0';
+    }
     setGeodePop(res);
     if (geodeTimerRef.current) window.clearTimeout(geodeTimerRef.current);
     geodeTimerRef.current = window.setTimeout(() => setGeodePop(null), 2600);
@@ -4056,6 +4095,30 @@ const LittleApartmentGame: React.FC = () => {
     sfxCoin(); persistSave(s); refreshHud();
     setOverlayBoth(null);
     showDialog([e.thanks, `(+¥${e.reward.toLocaleString()})`], e.giver);
+  };
+
+  // Hand Bingus the curio he's after — he donates it straight onto its display.
+  const giveBingusFetch = () => {
+    const s = saveRef.current;
+    const f = bingusHeldFetch(s);
+    if (!f) { setOverlayBoth(null); return; }
+    if (f.kind === 'peepis') s.peepis -= 1;
+    else if (f.kind === 'soda') { const k = Object.keys(s.sodas).find(k => (s.sodas[k] ?? 0) > 0); if (k) s.sodas[k] -= 1; }
+    else if (f.kind === 'fish') s.fishInv.shift();
+    else if (f.kind === 'coconut') s.coconuts -= 1;
+    else { const k = Object.keys(s.minerals).find(k => (s.minerals[k] ?? 0) > 0); if (k) s.minerals[k] -= 1; }
+    donateToMuseum(s, f.slot);
+    sfxCatch();
+    const done = museumComplete(s);
+    if (done) { s.money += 10000; award('curator'); }
+    persistSave(s); refreshHud();
+    setOverlayBoth(null);
+    showDialog([
+      f.thanks,
+      done
+        ? 'And — that is the LAST one. The Kawamachi Museum is COMPLETE. Bingus presses a thick envelope into your hands. (+¥10,000)'
+        : `(${s.museum.donated.length}/${MUSEUM_SLOTS.length} displays filled.)`,
+    ], 'Bingus Doofelsmurt');
   };
 
   // Hand Granny Soto a fish (her greenhouse-key errand) — only on confirm.
@@ -4633,7 +4696,7 @@ const LittleApartmentGame: React.FC = () => {
       if (!s.gangPaid) leads.push('The east alley out of the city is "spoken for." Coin might persuade them.');
       if (s.backroomsUnlocked && allRaresOwned(s) && !s.parisRevealed) leads.push('The Manager has the air of someone holding one last secret.');
       if (s.parisRevealed && !s.storySeen.includes('paris-intro')) leads.push('A seam waits at the very top of the yellow place. Press into it.');
-      if (museumDone > 0 && museumDone < museumTotal) leads.push('Bingus\'s empty pedestals nag at you. Curios hide where few think to look.');
+      if (museumDone > 0 && museumDone < museumTotal) leads.push('Bingus the curator is always asking for one odd thing or another — and some curios turn up fishing, mining, or in far-flung corners.');
       // RUMORS: at most TWO cryptic achievement whispers (was four — too much).
       const rumors = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id)).slice(0, 2);
       return (
@@ -4823,6 +4886,22 @@ const LittleApartmentGame: React.FC = () => {
           <p className="text-base opacity-60 py-1">Hand it over now for ¥{e.reward.toLocaleString()}?</p>
           <div className="flex items-center gap-3 mt-3">
             <button className={`${btnCls} flex-grow`} onClick={deliverErrand}>GIVE · +¥{e.reward.toLocaleString()}</button>
+            <button className={btnCls} onClick={close}>KEEP IT</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'bingus-fetch') {
+      const f = bingusHeldFetch(s);
+      if (!f) { close(); return null; }
+      const slot = MUSEUM_SLOTS.find(sl => sl.id === f.slot)!;
+      return (
+        <ShopFrame title="BINGUS DOOFELSMURT" subtitle="The curator's eyes go wide" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">"Is that— yes! YES! Exactly the thing I asked for. Hand it here and I shall make it ART."</p>
+          <p className="text-base opacity-60 py-1 leading-snug">He'll place it on display as <span className="text-[#ffd24a]">"{slot.label}"</span>.</p>
+          <div className="flex items-center gap-3 mt-3">
+            <button className={`${btnCls} flex-grow`} onClick={giveBingusFetch}>GIVE IT TO BINGUS</button>
             <button className={btnCls} onClick={close}>KEEP IT</button>
           </div>
         </ShopFrame>

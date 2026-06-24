@@ -316,9 +316,9 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#1d2430', k: '#10151e', s: '#f0c8a0', e: '#222', t: '#d05050', u: '#a83c3c', p: '#33508a', b: '#333' },
     acc: [ACC.cap('#33508a', '#24395f')],
   },
-  'npc-charlie': { // Charlie — artsy: dark brown hair swept back, full beard, big round glasses, grey tee
-    pal: { h: '#3a2a1a', k: '#241a10', s: '#e8b890', e: '#222', t: '#9a9aa0', u: '#74747c', p: '#2f3a4a', b: '#1a1a1a' },
-    acc: [ACC.beard('#2a1d10'), ACC.glasses('#2c2c2c', '#cfe2ee')],
+  'npc-charlie': { // Charlie — artsy latino: dark brown hair swept back, round glasses, grey tee, warm tan skin (full beard lives on his portrait, not the 16px sprite)
+    pal: { h: '#3a2a1a', k: '#241a10', s: '#c98a5e', e: '#222', t: '#9a9aa0', u: '#74747c', p: '#2f3a4a', b: '#1a1a1a' },
+    acc: [ACC.glasses('#2c2c2c', '#cfe2ee')],
   },
   'npc-oldman': { // shore fisherman — bucket hat, waders
     pal: { h: '#9a9a9a', k: '#7a7a7a', s: '#d8b088', e: '#222', t: '#5a6a4a', u: '#46543a', p: '#3a4250', b: '#2c3038' },
