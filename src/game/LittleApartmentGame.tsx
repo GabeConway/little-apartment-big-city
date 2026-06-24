@@ -56,6 +56,7 @@ import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
 import { startFishing, updateFishing, ZONE_H } from './fishing';
 import type { FishingState } from './fishing';
+import { useUiNav } from './useUiNav';
 
 // ---- tiny sfx -------------------------------------------------------------
 
@@ -703,6 +704,8 @@ const makeWanderers = (scene: SceneDef): Wanderer[] =>
   }));
 
 const LittleApartmentGame: React.FC = () => {
+  // Active input device (pointer/keyboard/gamepad) + controller/keyboard menu nav.
+  const inputSource = useUiNav();
   const [screen, setScreen] = useState<'title' | 'playing'>('title');
   const [vibePick, setVibePick] = useState(false);   // "what's your vibe?" new-game step
   const [pickedVibe, setPickedVibe] = useState<Vibe>('fem'); // highlighted model in the picker (applied on START)
@@ -5744,7 +5747,7 @@ const LittleApartmentGame: React.FC = () => {
             <span className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold ${done ? 'bg-[#3da26b] border-[#3da26b] text-black' : 'border-[#ffd24a]/60 text-[#ffd24a]'}`}>{done ? '✓' : '!'}</span>
           );
           return (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-50 flex flex-col items-center justify-center text-center p-4 overflow-y-auto`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-50 flex flex-col items-center justify-center text-center p-4 overflow-y-auto`}>
             {/* painted background + dark gradient so text stays legible */}
             <img
               src={TITLE_BG}
@@ -5872,7 +5875,7 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* new-game "what's your vibe?" character pick (not a gender — just a look) */}
         {screen === 'title' && vibePick && (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center text-center p-4`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center text-center p-4`}>
             <h2 className="font-retro text-[#ffd24a] text-lg sm:text-2xl mb-5 drop-shadow-[2px_2px_0_#000]">WHAT'S YOUR VIBE?</h2>
             <div className="flex flex-col items-center gap-1.5 mb-6">
               <label htmlFor="pc-name" className="font-pixel text-[#e8e0d0]/80 text-sm sm:text-base">YOUR NAME</label>
@@ -5926,7 +5929,7 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* fullscreen guide — Android can just tap fullscreen; iOS needs Add to Home Screen */}
         {screen === 'title' && fsGuideOpen && (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
             <div className={`${panelCls} w-full max-w-md max-h-full overflow-y-auto px-5 py-4`}>
               <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
                 <h3 className="font-retro text-[#ffd24a] text-base">GO FULLSCREEN</h3>
@@ -5962,7 +5965,7 @@ const LittleApartmentGame: React.FC = () => {
         {/* display / scaling */}
         {/* Settings menu — groups Display, Save management, and Credits */}
         {screen === 'title' && settingsOpen && (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
             <div className={`${panelCls} w-full max-w-xs px-5 py-4`}>
               <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
                 <h3 className="font-retro text-[#ffd24a] text-base">⚙ SETTINGS</h3>
@@ -5981,7 +5984,7 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* Credits */}
         {screen === 'title' && creditsOpen && (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
             <div className={`${panelCls} w-full max-w-xs px-5 py-4 text-center`}>
               <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3 text-left">
                 <h3 className="font-retro text-[#ffd24a] text-base">CREDITS</h3>
@@ -5999,7 +6002,7 @@ const LittleApartmentGame: React.FC = () => {
         )}
 
         {screen === 'title' && displayOpen && (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
             <div className={`${panelCls} w-full max-w-md max-h-full overflow-y-auto px-5 py-4`}>
               <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
                 <h3 className="font-retro text-[#ffd24a] text-base">DISPLAY</h3>
@@ -6036,7 +6039,7 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* how to play */}
         {screen === 'title' && howToOpen && (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/85 flex items-center justify-center p-3 sm:p-4`}>
             <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-5 py-4`}>
               <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
                 <h3 className="font-retro text-[#ffd24a] text-base">HOW TO PLAY</h3>
@@ -6060,7 +6063,7 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* save management — guarded so a save isn't wiped by a stray click */}
         {screen === 'title' && manageOpen && (
-          <div className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/80 flex items-center justify-center p-3 sm:p-4`}>
+          <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-[60] bg-black/80 flex items-center justify-center p-3 sm:p-4`}>
             <div className={`${panelCls} w-full max-w-md px-5 py-4`}>
               <div className="flex items-center justify-between border-b-2 border-[#ffd24a]/40 pb-1.5 mb-3">
                 <h3 className="font-retro text-[#ffd24a] text-base">SAVE MANAGEMENT</h3>
@@ -6131,7 +6134,7 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* shops */}
         {overlay?.type === 'shop' && (
-          <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4">
+          <div data-navroot className="absolute inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4">
             {renderShop(overlay)}
           </div>
         )}
@@ -6265,7 +6268,7 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* menu: inventory + achievements */}
         {overlay?.type === 'menu' && (
-          <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-2 p-2 sm:p-4">
+          <div data-navroot className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-2 p-2 sm:p-4">
             {renderMenu(overlay)}
             {/* menu-level control (not a phone app) — lets mouse users close the phone */}
             <button
@@ -6448,8 +6451,20 @@ const LittleApartmentGame: React.FC = () => {
         )}
       </div>
 
+      {/* Adaptive control hint: swaps to match the device the player last used.
+          Shown only on the menus a controller/keyboard navigates (title + shops
+          + phone); the pointer needs no prompt. */}
+      {inputSource !== 'pointer' &&
+        (screen === 'title' || overlay?.type === 'shop' || overlay?.type === 'menu') && (
+          <div className="pointer-events-none fixed bottom-2 left-1/2 -translate-x-1/2 z-[70] font-pixel text-sm sm:text-base text-[#e8e0d0] bg-black/70 border border-[#e8e0d0]/30 rounded px-3 py-1 shadow-[2px_2px_0_#000]">
+            {inputSource === 'gamepad'
+              ? 'Ⓐ Select · Ⓑ Back · ↕ Move'
+              : 'Enter Select · Esc Back · ↑↓ Move'}
+          </div>
+        )}
+
       {screen === 'playing' && !isCoarse && (
-        <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · P phone · Esc close</p>
+        <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · P phone · Esc close · 🎮 controller supported</p>
       )}
     </div>
   );

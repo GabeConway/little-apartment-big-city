@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default capability for the game window.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-close"]
+  "permissions": ["core:default", "core:window:allow-close", "core:event:default"]
 }

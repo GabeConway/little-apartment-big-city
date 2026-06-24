@@ -3,7 +3,13 @@
 ## Runtime
 - `react` / `react-dom` 19 — only runtime deps game use.
 - `@fontsource/press-start-2p`, `@fontsource/vt323` — self-hosted game fonts (offline-safe).
+- `@tauri-apps/api` 2 — used by `src/tauri-gamepad.ts` (outside `src/game/`) to
+  listen for the native gamepad bridge's `gamepad:state` event. Not imported by `src/game/`.
 - `src/game/` pull in **nothing** beyond React — keep so.
+
+## Native (Rust, `src-tauri/Cargo.toml`)
+- `gilrs` — native gamepad reader for the controller bridge (`src-tauri/src/gamepad.rs`).
+  Desktop-only `[target.'cfg(windows/macos/linux)']` dep. See [build-targets.md](build-targets.md).
 
 ## Tooling
 - `vite` 6 + `@vitejs/plugin-react`, `tailwindcss` 3 + `postcss`/`autoprefixer`, `typescript` 5.

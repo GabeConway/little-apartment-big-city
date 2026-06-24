@@ -18,3 +18,9 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Native gamepad bridge (desktop only). The webview Gamepad API is unreliable in
+# WebView2 (Windows) and WebKitGTK (Linux/Steam Deck); gilrs reads pads via
+# XInput / evdev / IOKit and we polyfill navigator.getGamepads() from it.
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+gilrs = "0.11"

@@ -52,3 +52,15 @@ body {
 /* Chip pop when you place a bet. */
 @keyframes chip-pop { from { transform: scale(0.7); } to { transform: scale(1); } }
 .chip-pop { animation: chip-pop 0.12s ease-out; }
+
+/* ---- Controller / keyboard menu navigation ---- */
+/* A roving focus ring on menu buttons, shown only when the player is driving the
+   UI with a gamepad or keyboard. Pointer users get no ring (mouse hover is the
+   affordance). Set by useUiNav() via document.body[data-input]. */
+body[data-input="pointer"] [data-navroot] :focus { outline: none; }
+body[data-input="gamepad"] [data-navroot] button:focus,
+body[data-input="keyboard"] [data-navroot] button:focus {
+  outline: 3px solid #ffd24a;
+  outline-offset: 2px;
+  border-radius: 4px;
+}

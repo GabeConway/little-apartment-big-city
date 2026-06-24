@@ -26,6 +26,7 @@
   "dependencies": {
     "@fontsource/press-start-2p": "^5.1.0",
     "@fontsource/vt323": "^5.1.0",
+    "@tauri-apps/api": "^2.11.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

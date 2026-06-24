@@ -52,6 +52,40 @@ Built by `.github/workflows/release.yml` on every merge to `main`, attached to d
 - `app.security.csp`: self-only + `style-src 'unsafe-inline'` (game injects scoped `<style>` keyframes). Webview serves `dist/` at app root, so game absolute asset paths (`/images`, `/music`, `/sfx`) resolve unchanged.
 - `Cargo.toml` lib name `little_apartment_lib`; `src/lib.rs` holds shared desktop+mobile `run()` entry (`#[cfg_attr(mobile, tauri::mobile_entry_point)]`).
 
+## Controllers / gamepad (first-class)
+- **Why a native bridge:** the webview Gamepad API is unreliable in our shells —
+  WebView2 (Windows) has a focus bug where pads only register with DevTools
+  focused ([WebView2Feedback #3025](https://github.com/MicrosoftEdge/WebView2Feedback/issues/3025)),
+  and WebKitGTK (Linux/Steam Deck) only exposes pads if built with libmanette.
+  So `navigator.getGamepads()` returns empty in a plain Tauri build → controllers
+  appeared dead even though the engine code was correct.
+- **Fix:** `src-tauri/src/gamepad.rs` reads pads natively with **`gilrs`** (XInput
+  on Windows, evdev on Linux incl. Steam Deck, IOKit on macOS), maps them to the
+  W3C standard layout, and emits `gamepad:state` ~120 Hz. `src/tauri-gamepad.ts`
+  (outside `src/game/`, so the game stays React-only) listens and **polyfills
+  `navigator.getGamepads()`**, so `engine.ts pollGamepad()` works unchanged.
+  Started in `lib.rs` setup under `#[cfg(desktop)]`. Needs `core:event:default`
+  capability (added). No-op in a plain browser (`npm run dev`/playtest keep the
+  native API). gilrs is a `[target.'cfg(...)']` dep — desktop only, not mobile.
+- **UI navigation:** `src/game/useUiNav.ts` (React-only) drives the DOM menus with
+  gamepad/keyboard: any container tagged `data-navroot` (title + its panels,
+  shops, phone) gets roving focus — dpad/stick/arrows move, A/Enter activates the
+  focused button. Single-action overlays (dialog/sleep/end-of-day) are NOT
+  navroots; the engine loop handles their A/B directly. Engine owns in-world
+  movement; A in shop/menu is a no-op there, so no double-fire.
+- **Adaptive prompts:** `useUiNav` sets `document.body[data-input]` to
+  `pointer`/`keyboard`/`gamepad` based on last-used device; CSS shows the focus
+  ring only for keyboard/gamepad, and a control-hint bar swaps glyphs to match.
+- **Steam Deck:** the Linux `.AppImage`/`.deb` + this bridge cover it (gilrs reads
+  the Deck's emulated XInput pad via evdev). For Steam Input to emit a gamepad,
+  add the app as a **Non-Steam Game**, set its controller layout to a **Gamepad
+  template** (not Desktop), and run in **Gaming Mode** (Desktop Mode often leaves
+  the shortcut on the keyboard/mouse layout → no pad seen). Steam/QAM/back paddles
+  are not exposed to the app.
+- **Mapping:** W3C standard — A=0,B=1,X=2,Y=3, LB=4,RB=5,LT=6,RT=7, Back=8,Start=9,
+  L3=10,R3=11, DPad U/D/L/R=12-15, Guide=16; axes 0/1=left stick, 2/3=right (gilrs
+  inverts Y to match web convention).
+
 ## CI / release pipeline (`.github/workflows/`)
 - **`ci.yml`** — every PR + push to `main`: `tsc --noEmit` → `npm test` → `npm run build` (Rust-free, fast).
 - **`release.yml`** — every push to `main`: `prepare` job resets `app-v<version>` draft release, then matrix builds macOS-aarch64 / Windows / Linux and uploads to clean draft. macOS `.dmg` (`make-dmg.mjs`) and Windows portable `.exe` uploaded by dedicated steps via GitHub uploads API (by `releaseId`). Bump `version` in `tauri.conf.json` to keep release permanently; same-version re-runs overwrite draft.
