@@ -701,7 +701,7 @@ const greenhouse: SceneDef = {
   },
   grid: [
     'RRRRRRRRRRRRRRRR',
-    'G.....HYH......G',
+    'G...HYH........G',
     'G..o...o...o...G',
     'G..............G',
     'G..o...o...o...G',
@@ -719,7 +719,7 @@ const greenhouse: SceneDef = {
     ...GREENHOUSE_PLOTS.map(p => ({ id: 'gh-plot', x: p.x, y: p.y, label: 'Soil plot' })),
     { id: 'gh-supply', x: 2, y: 8, label: 'Granny\'s supply counter' },
     { id: 'gh-shipbox', x: 11, y: 8, label: 'Shipping box' },
-    { id: 'gh-poster', x: 7, y: 1, label: 'Notice' },
+    { id: 'gh-poster', x: 5, y: 1, label: 'Notice' },
   ],
   npcs: [],
 };
