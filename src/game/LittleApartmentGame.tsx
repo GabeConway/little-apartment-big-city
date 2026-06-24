@@ -5212,8 +5212,10 @@ const LittleApartmentGame: React.FC = () => {
       const sellableTotal = MINERALS.reduce((sum, m) => sum + mineralCount(m.id) * m.value, 0);
       return (
         <ShopFrame title="THE MANAGER" subtitle={'"Ahh. Crisp. Legally distinct. You are my favorite customer in nine hundred years."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
-          <img src={PORTRAIT_IMAGES['The Manager']} alt="The Manager" className="w-20 h-20 float-right ml-2 mb-1" style={{ imageRendering: 'pixelated' }} />
-          <p className="text-base text-[#b06ad0]/80">TOOLS &amp; WEAPONS — "For the work, and for the things that object to the work."</p>
+          <div className="flex items-center gap-3 mb-2 pb-2 border-b border-[#b06ad0]/20">
+            <img src={PORTRAIT_IMAGES['The Manager']} alt="The Manager" className="w-16 h-16 shrink-0 rounded-sm" style={{ imageRendering: 'pixelated' }} />
+            <p className="text-base text-[#b06ad0]/80 leading-snug">TOOLS &amp; WEAPONS — "For the work, and for the things that object to the work."</p>
+          </div>
           {(() => {
             const cur = s.pickaxe;
             const next = PICKAXES[cur + 1];
