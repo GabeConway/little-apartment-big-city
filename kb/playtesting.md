@@ -41,7 +41,7 @@ scale), `money`, `day`, `energy`, `timeMin`, and full `save` object.
 | `--keys "ArrowDown ArrowDown e i Escape"` | discrete key presses (space-separated; single chars or named keys). |
 | `--hold "ArrowLeft:700"` | hold key N ms (walking). Repeatable. |
 | `--key-delay <ms>` | gap between `--keys` presses (default 140). |
-| `--click "TEXT"` | click first button whose label contains TEXT (menus, panels, shops). |
+| `--click "TEXT"` | click first button whose label contains TEXT (menus, panels, shops). Runs **after** `--keys`, so press E to open a menu then click its button; polls ~2s for the button to mount. **Comma = click SEQUENCE** (`"A,B"` clicks A then B) — a label containing a comma (e.g. `¥6,000`) breaks; match a comma-free substring (`¥6`). |
 | `--keep-overlay` | don't auto-dismiss arrival story letter (cleared by default so it can't eat input). |
 | `--scale <auto\|1..6>` | seed `lab-scale` (DISPLAY option). |
 | `--wait <ms>` | settle time before snapshot/screenshot. |
