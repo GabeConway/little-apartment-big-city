@@ -1329,6 +1329,12 @@ const buildTiles = (atlas: Atlas) => {
     grassBg(ctx);
     toriiBeam(ctx);
   });
+  atlas['t-torii-beam-path'] = tile(ctx => {    // crossbar where the stone path runs UNDER the gate
+    fill(ctx, '#9aa0a6');
+    ctx.fillStyle = '#878d93'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 10, 16, 1);
+    speckle(ctx, '#a8aeb4', 71, 4);
+    toriiBeam(ctx);
+  });
   atlas['t-rock'] = tile(ctx => {               // mossy boulder on grass, solid
     grassBg(ctx);
     ctx.fillStyle = '#6e7682'; ctx.fillRect(3, 7, 10, 7);  // boulder body

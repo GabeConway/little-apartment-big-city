@@ -3590,6 +3590,7 @@ const LittleApartmentGame: React.FC = () => {
     const stop = startLoop(update, render);
     return () => {
       stop();
+      engineStop(); // kill the driving motor oscillators on unmount
       window.removeEventListener('keydown', input.onKeyDown);
       window.removeEventListener('keyup', input.onKeyUp);
       input.clear();

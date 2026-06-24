@@ -643,6 +643,7 @@ const shrine: SceneDef = {
     'i': T('t-torii', true),       // torii leg (lower)
     'y': T('t-torii-top', true),   // torii leg-top + kasagi crossbar
     'x': T('t-torii-beam'),        // crossbar over the path — walkable, pass under it
+    'X': T('t-torii-beam-path'),   // crossbar where the stone path runs under the gate
     'C': T('t-sakura', true),      // cherry-blossom tree
     'M': T('t-maple', true),       // autumn maple
   },
@@ -654,11 +655,11 @@ const shrine: SceneDef = {
     'TgggggrRRGGRRegggggT',
     'TgggggrRRRRRRegggggT',
     'TgggggWWWDDWWWgggggT',
-    'TgggggvvvbvvvvgggggT',
+    'TgggggvvvbbvvvgggggT',
     'TggggOgkgppgkgOggggT',
     'TgggggggqppqgggggggT',
     'TgCgzOgggppgggOgMggT',
-    'TgggggLgyxxygLgggggT',
+    'TgggggLgyXXygLgggggT',
     'TgggggggippigggggggT',
     'TTTTTTTTTppTTTTTTTTT',
   ],
@@ -666,7 +667,7 @@ const shrine: SceneDef = {
     { x: 9, y: 10, to: 'city', tx: 24, ty: 13, dir: 'up' },
     { x: 10, y: 10, to: 'city', tx: 25, ty: 13, dir: 'up' },
   ],
-  interactables: [{ id: 'shrine', x: 9, y: 4, w: 1, h: 1, label: 'Offer ¥500 at the saisen-bako' }],
+  interactables: [{ id: 'shrine', x: 9, y: 4, w: 2, h: 1, label: 'Offer ¥500 at the saisen-bako' }],
   npcs: [{ id: 'miko', x: 13, y: 5, sprite: 'npc-miko', dir: 'down' }],
 };
 
