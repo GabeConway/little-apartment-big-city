@@ -46,7 +46,11 @@ export const RARE_FURNITURE: Furniture[] = [
     blurb: 'Says "HOME" in a color that does not exist outside.' },
   { id: 'coffin', name: 'Coffin', price: 0, sprite: 'f-coffin', pawnable: false,
     blurb: 'Solid oak, suspiciously comfortable. A gift from a new friend. Sleep tight.' },
+  { id: 'bloomlamp', name: 'Bloom Lamp', price: 0, sprite: 'f-bloomlamp', pawnable: false,
+    blurb: 'Its shade is a living moonflower that never quite goes dark. Grown, not bought.' },
 ];
+// Special furniture that isn't part of The Manager's stock (so it doesn't gate Paris).
+export const NON_MANAGER_RARES = new Set(['coffin', 'bloomlamp']);
 
 // ---- Greenhouse crops --------------------------------------------------------
 // Granny Soto's community greenhouse. Sprinkler-watered, day-cycle grown. Built
@@ -55,20 +59,57 @@ export const RARE_FURNITURE: Furniture[] = [
 export interface Crop {
   id: string;
   name: string;
-  stages: number;       // number of growth stages incl. seed + final bloom
-  sprites: string[];    // atlas keys, one per stage (length must === stages)
-  reward: number;       // yen paid out on harvest of a fully-grown crop
+  seedCost: number;     // yen per seed at Granny's seed counter (0 = not sold; special source)
+  growDays: number;     // watered mornings from seed to harvest
+  reward: number;       // base yen for a NORMAL-quality harvest (×1.4 silver, ×2 gold)
+  sprites: string[];    // exactly 4 growth-stage atlas keys (sprout→young→budding→ripe)
+  tier: number;         // seed-shop gate: sold once greenhouse tier ≥ this (moonflower = special)
+  regrow?: number;      // multi-harvest: after harvest, regrows to ripe in this many watered days
+  blurb: string;
 }
 
+// Visual stage 0..3 from grow progress (0..growDays). Lets grow time vary while
+// every crop still uses just 4 sprites.
+export const cropStage = (crop: Crop, progress: number): number =>
+  Math.max(0, Math.min(3, Math.round((progress / crop.growDays) * 3)));
+
 export const CROPS: Record<string, Crop> = {
-  sunflower: {
-    id: 'sunflower', name: 'Sunflower', stages: 4,
+  sunflower: { id: 'sunflower', name: 'Sunflower', seedCost: 80, growDays: 3, reward: 240, tier: 0,
     sprites: ['t-crop-sun-0', 't-crop-sun-1', 't-crop-sun-2', 't-crop-sun-3'],
-    reward: 600,
-  },
+    blurb: 'Cheap, cheerful, quick. The reliable starter bloom.' },
+  tomato: { id: 'tomato', name: 'Tomato', seedCost: 140, growDays: 3, reward: 380, tier: 0, regrow: 2,
+    sprites: ['t-crop-tomato-0', 't-crop-tomato-1', 't-crop-tomato-2', 't-crop-tomato-3'],
+    blurb: 'Keeps fruiting after the first harvest. Bread-and-butter income.' },
+  chili: { id: 'chili', name: 'Chili Pepper', seedCost: 160, growDays: 4, reward: 500, tier: 0, regrow: 2,
+    sprites: ['t-crop-chili-0', 't-crop-chili-1', 't-crop-chili-2', 't-crop-chili-3'],
+    blurb: 'Hot, hardy, and it keeps on giving. Worth the wait.' },
+  melon: { id: 'melon', name: 'Melon', seedCost: 400, growDays: 5, reward: 1400, tier: 1,
+    sprites: ['t-crop-melon-0', 't-crop-melon-1', 't-crop-melon-2', 't-crop-melon-3'],
+    blurb: 'Slow, thirsty, and the single biggest payout per plot.' },
+  tea: { id: 'tea', name: 'Tea Bush', seedCost: 650, growDays: 4, reward: 320, tier: 1, regrow: 2,
+    sprites: ['t-crop-tea-0', 't-crop-tea-1', 't-crop-tea-2', 't-crop-tea-3'],
+    blurb: 'Pricey to start, but it leafs out every couple of days forever. Pure passive income.' },
+  moonflower: { id: 'moonflower', name: 'Moonflower', seedCost: 0, growDays: 6, reward: 3000, tier: 2,
+    sprites: ['t-crop-moon-0', 't-crop-moon-1', 't-crop-moon-2', 't-crop-moon-3'],
+    blurb: 'Blooms in colors that only exist after midnight. The shrine keeps its seeds.' },
 };
 
 export const cropById = (id: string): Crop | undefined => CROPS[id];
+
+// Quality multipliers for a harvest: normal / silver / gold.
+export const CROP_QUALITY = ['', 'Silver ', 'Gold '];
+export const CROP_QUALITY_MULT = [1, 1.4, 2];
+
+// Granny's rotating community request: grow & ship N of a crop (any quality) for
+// a bonus on top of the sale. Seeded per period in state.ts → greenhouseRequest.
+export interface CropRequest { id: string; crop: string; count: number; reward: number; flavor: string; }
+export const CROP_REQUESTS: CropRequest[] = [
+  { id: 'sun-fair', crop: 'sunflower', count: 8, reward: 1500, flavor: 'The block association wants sunflowers for the summer fair. Lots of them.' },
+  { id: 'salsa-night', crop: 'tomato', count: 6, reward: 1800, flavor: 'Konbini\'s doing a "salsa night." They need tomatoes, and they need them fresh.' },
+  { id: 'spice-run', crop: 'chili', count: 6, reward: 2200, flavor: 'A ramen stand two wards over heard about your chilis. They will pay for heat.' },
+  { id: 'tea-house', crop: 'tea', count: 10, reward: 2600, flavor: 'The old tea house is reopening. Yoshi put in a word. They want a proper harvest.' },
+  { id: 'melon-gift', crop: 'melon', count: 3, reward: 3200, flavor: 'Someone important has a birthday. Someone important loves melon. Do the math.' },
+];
 
 export const allFurnitureById = (id: string): Furniture =>
   (FURNITURE.find(f => f.id === id) ?? RARE_FURNITURE.find(f => f.id === id))!;
@@ -215,6 +256,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'blessed', title: 'Five Thousand Yen Faith', desc: 'Earned the shrine\'s favor. The fish noticed.', hint: 'The little shrine in the park accepts offerings.' },
   { id: 'furnished', title: 'Welcome Home', desc: 'Furnished the whole apartment.', hint: 'The whole point.' },
   { id: 'curator', title: 'The Whole Collection', desc: 'Filled every display in the Kawamachi Museum.', hint: 'Twelve empty displays. Twelve curios, hidden across the city and beyond.' },
+  { id: 'greenthumb', title: 'Green Thumb', desc: 'Grew a Moonflower in the community greenhouse.', hint: 'Earn the shrine\'s deepest favor — its seeds bloom only after midnight.' },
   { id: 'broke', title: 'i dont have enough money for chicken nugget', desc: 'Dropped under ¥100. The nuggets remain a dream.', hint: 'Spend almost all of it.' },
 ];
 
