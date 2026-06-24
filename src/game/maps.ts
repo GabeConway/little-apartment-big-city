@@ -694,7 +694,8 @@ const greenhouse: SceneDef = {
     'P': T('t-gh-plant', true),
     '.': T('t-gh-floor'),
     'o': T('t-gh-soil', true),
-    'v': T('t-gh-sprinkler', true),  // Granny's supply counter (seeds / fertilizer / upgrades)
+    'v': T('t-gh-counter-l', true),  // Granny's supply counter — left half (seeds / fertilizer / upgrades)
+    'w': T('t-gh-counter-r', true),  // supply counter — right half
     'b': T('t-gh-shipbox', true),    // shipping box — harvest sells here at dawn
     'Y': T('t-gh-poster', true),
     'D': T('t-door'),
@@ -708,7 +709,7 @@ const greenhouse: SceneDef = {
     'G..............G',
     'G..o...o...o...G',
     'G..............G',
-    'G.v........b...G',
+    'G.vw.......b...G',
     'GGGGGGGDDGGGGGGG',
   ],
   warps: [
@@ -718,6 +719,7 @@ const greenhouse: SceneDef = {
   interactables: [
     ...GREENHOUSE_PLOTS.map(p => ({ id: 'gh-plot', x: p.x, y: p.y, label: 'Soil plot' })),
     { id: 'gh-supply', x: 2, y: 8, label: 'Granny\'s supply counter' },
+    { id: 'gh-supply', x: 3, y: 8, label: 'Granny\'s supply counter' },
     { id: 'gh-shipbox', x: 11, y: 8, label: 'Shipping box' },
     { id: 'gh-poster', x: 5, y: 1, label: 'Notice' },
   ],

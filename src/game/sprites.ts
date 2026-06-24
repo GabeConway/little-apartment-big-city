@@ -1771,6 +1771,46 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#e07840'; ctx.fillRect(5, 3, 1, 1); ctx.fillRect(10, 3, 1, 1);
     ctx.fillStyle = '#6e7682'; ctx.fillRect(5, 14, 6, 2);                             // base flange
   });
+  // Granny's supply counter — a two-tile wooden market stall (seeds / feed /
+  // upgrades). LEFT half: counter + seed packets on the shelf. The counter top,
+  // front face, seam and base align across both halves so they read as one stand.
+  atlas['t-gh-counter-l'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');                                                             // floor
+    ctx.fillStyle = '#a87c52'; ctx.fillRect(1, 6, 15, 2);                             // counter top lip (lit, runs to seam)
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(1, 8, 15, 1);                             // under-lip shadow
+    ctx.fillStyle = '#8a6440'; ctx.fillRect(1, 9, 15, 6);                             // front face (to right edge)
+    ctx.fillStyle = '#9a7350'; ctx.fillRect(1, 9, 15, 1);                             // lit top of front
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(1, 12, 15, 1);                            // plank seam
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(1, 9, 1, 6);                              // left corner post
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(1, 15, 15, 1);                            // base shadow
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(3, 1, 4, 6);                              // seed packet
+    ctx.fillStyle = '#a3801a'; ctx.fillRect(3, 1, 1, 6); ctx.fillRect(6, 1, 1, 6);    // packet edges
+    ctx.fillStyle = '#e8d48a'; ctx.fillRect(4, 2, 2, 2);                              // label window
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(4, 2, 1, 1); ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 2, 1, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(9, 2, 4, 5);                              // second packet
+    ctx.fillStyle = '#e8d48a'; ctx.fillRect(10, 3, 2, 2);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(10, 3, 1, 1);
+  });
+  // RIGHT half: counter continues, with a fertilizer sack + watering can on top.
+  atlas['t-gh-counter-r'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');                                                             // floor
+    ctx.fillStyle = '#a87c52'; ctx.fillRect(0, 6, 15, 2);                             // counter top lip (from seam)
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(0, 8, 15, 1);                             // under-lip shadow
+    ctx.fillStyle = '#8a6440'; ctx.fillRect(0, 9, 15, 6);                             // front face (from left edge)
+    ctx.fillStyle = '#9a7350'; ctx.fillRect(0, 9, 15, 1);                             // lit top of front
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(0, 12, 15, 1);                            // plank seam
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(14, 9, 1, 6);                             // right corner post
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(0, 15, 15, 1);                            // base shadow
+    ctx.fillStyle = '#8a6440'; ctx.fillRect(2, 2, 6, 5);                              // fertilizer sack
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(7, 2, 1, 5);                              // shaded side
+    ctx.fillStyle = '#9a7350'; ctx.fillRect(3, 3, 1, 4);                              // highlight
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(3, 1, 4, 1);                              // tied top
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(4, 3, 2, 2);                              // leaf label
+    ctx.fillStyle = '#3d8a9e'; ctx.fillRect(10, 3, 4, 4);                             // watering can body
+    ctx.fillStyle = '#56a8bc'; ctx.fillRect(10, 3, 4, 1);                             // lit rim
+    ctx.fillStyle = '#3d8a9e'; ctx.fillRect(13, 2, 2, 1);                             // spout
+    ctx.fillStyle = '#2c6477'; ctx.fillRect(10, 1, 3, 1); ctx.fillRect(10, 1, 1, 2);  // handle
+  });
   // Exterior facade (shrine-side entrance): a little glass house.
   atlas['t-gh-front'] = tile(ctx => {
     fill(ctx, '#a6d4c0');
