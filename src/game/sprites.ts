@@ -222,6 +222,12 @@ const ACC = {
     up: ['.....cccccc.....', '....cccccccc....', '....bbbbbbbb....', 'cccccccccccccccc', '.cc..........cc.'],
     left: ['.....cccccc.....', '....cccccccc....', '....bbbbbbbb....', 'cccccccccccccccc', '.cc..........cc.'],
   }),
+  // Full beard + mustache framing the lower face (mouth gap kept open).
+  beard: (c: string): Accessory => ({
+    dy: 5, pal: { b: c },
+    down: ['...b....b...', '...bb.bb.bb.', '...bbbbbbbb.', '....bbbbbb..', '.....bbbb...'],
+    left: ['...b....b...', '...bbb.bb...', '...bbbbbb...', '....bbbb....', '.....bb.....'],
+  }),
   // Shoulder-length hair framing the face + falling down the back. Reads as a
   // distinct (fem) silhouette over the shared 16px body. Hair-coloured overlay.
   longhair: (c: string, dark: string): Accessory => ({
@@ -310,9 +316,9 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#1d2430', k: '#10151e', s: '#f0c8a0', e: '#222', t: '#d05050', u: '#a83c3c', p: '#33508a', b: '#333' },
     acc: [ACC.cap('#33508a', '#24395f')],
   },
-  'npc-skater': { // Tony — skater bro: red beanie, grey hoodie, baggy jeans
-    pal: { h: '#3a2a1a', k: '#241a10', s: '#e8b890', e: '#222', t: '#6e7682', u: '#54595f', p: '#2f3a4a', b: '#1a1a1a' },
-    acc: [ACC.beanie('#d05050', '#9e3a3a')],
+  'npc-charlie': { // Charlie — artsy: dark brown hair swept back, full beard, big round glasses, grey tee
+    pal: { h: '#3a2a1a', k: '#241a10', s: '#e8b890', e: '#222', t: '#9a9aa0', u: '#74747c', p: '#2f3a4a', b: '#1a1a1a' },
+    acc: [ACC.beard('#2a1d10'), ACC.glasses('#2c2c2c', '#cfe2ee')],
   },
   'npc-oldman': { // shore fisherman — bucket hat, waders
     pal: { h: '#9a9a9a', k: '#7a7a7a', s: '#d8b088', e: '#222', t: '#5a6a4a', u: '#46543a', p: '#3a4250', b: '#2c3038' },

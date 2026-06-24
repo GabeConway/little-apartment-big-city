@@ -416,12 +416,13 @@ interface Hud {
 // Every named character has a voice: several line-sets, picked at random per
 // chat, plus state-aware lines layered in by getNpcTalk().
 const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
-  tony: {
-    speaker: 'Tony',
+  charlie: {
+    speaker: 'Charlie',
     sets: [
-      ['yooo. Tony. i basically live on this curb.', 'konbini\'s always hiring if you need cash, dude. tell em i sent you. or don\'t. whatever\'s chill.'],
-      ['ate it HARD on that rail yesterday. worth it though. the rail respects me now.', 'pawn shop flips fresh stuff every morning. early bird gets the discount fridge, my guy.'],
-      ['do NOT skate behind the konbini. my boy Kenta tried it. now he just draws yellow hallways. tragic.'],
+      ['Oh hey — Charlie. Don\'t mind the camera, I film basically everything. The city\'s got this golden-hour thing at like 4pm, it\'s unreal.', 'konbini\'s always hiring if you\'re short on cash. tell \'em I sent you. or don\'t, that\'s also a vibe.'],
+      ['I wrote a song about the vending machine outside your building. Three chords. Two of them are the same chord. It SLAPS though.', 'pawn shop flips fresh stuff every morning — I got a tambourine there once. Best ¥400 I ever spent.'],
+      ['So I\'m filming a documentary about the pigeons in this district. Working title: "Coo." ...That\'s it, that\'s the whole title. I think it\'s funny.'],
+      ['You ever notice the streetlights buzz in, like, B-flat? Drove me nuts till I tuned the guitar to it. Now we jam. Me and the streetlight.'],
     ],
   },
   granny: {
@@ -554,8 +555,8 @@ const npcDynamicLines = (id: string, s: GameSave): string[] => {
       return allFurnished(s) ? ['I saw your window from the street, dear. It finally looks lived-in. It looks loved.'] : [];
     case 'collector':
       return gachaComplete(s) ? ['You... completed the set? All ten? I must sit down. I AM sitting down. I must sit down further.'] : [];
-    case 'tony':
-      return s.hat ? ["whoa, the cowboy hat. that's actually kinda sick on you, not gonna lie."] : [];
+    case 'charlie':
+      return s.hat ? ['Whoa — the cowboy hat. Hold that pose, that\'s a SHOT. ...Okay I didn\'t actually film it, but spiritually I did.'] : [];
     default:
       return [];
   }
@@ -671,7 +672,7 @@ const DANCER_IDS = new Set(['dancer', 'dancer2', 'dancer3', 'dancer4']);
 // Outdoor folk all amble about (interaction follows their live position). A few
 // stay put on purpose: the yakuza block the alley, David tends his campfire, the
 // Paris baguette vendor mans a stall, the dealer works his corner, the cat sits.
-const WANDER_IDS = new Set(['granny', 'tex', 'tony', 'old-man', 'miko', ...DANCER_IDS]);
+const WANDER_IDS = new Set(['granny', 'tex', 'charlie', 'old-man', 'miko', ...DANCER_IDS]);
 // NPCs (David the vampire + his campfire) that only appear on even-numbered nights.
 const NIGHT_EVEN_IDS = new Set(['david', 'campfire']);
 const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.45;

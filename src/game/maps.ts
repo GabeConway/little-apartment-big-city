@@ -176,7 +176,7 @@ const city: SceneDef = {
     { id: 'errand-board', x: 11, y: 13, label: 'Odd-jobs board' },
   ],
   npcs: [
-    { id: 'tony', x: 17, y: 3, sprite: 'npc-skater', dir: 'down' },
+    { id: 'charlie', x: 17, y: 3, sprite: 'npc-charlie', dir: 'down' },
     { id: 'granny', x: 12, y: 16, sprite: 'npc-granny', dir: 'left' },
     // Yakuza enforcers blocking the alley to Downtown (removed once paid off).
     { id: 'yakuza', x: 30, y: 7, sprite: 'npc-yakuza', dir: 'left' },

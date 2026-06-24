@@ -583,7 +583,7 @@ export const MESSAGES: MessageDef[] = [
     body: [
       'Hey {name} — thanks for stopping by KONBINI 24H earlier.',
       'We\'re always short a pair of hands on shift. Want work? Come to the counter and pick up a SHIFT — one a day, paid same-day in cash.',
-      'Tony out front vouched for you. Sort of. He said "that one seems chill." Good enough for us. 🏪',
+      'Charlie out front vouched for you. Sort of. He said "that one\'s got main-character energy." Good enough for us. 🏪',
     ],
   },
   {
