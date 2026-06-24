@@ -198,22 +198,29 @@ async function main() {
       }
     }
 
+    // --keys run first (e.g. press E to open a menu), THEN --click its buttons.
+    await runInputs(page, opts);
+
     // --click "TEXT" (or "A,B,C" for a sequence): click the first button whose
     // label contains TEXT. Works on the title screen and in-game DOM menus.
     if (opts.click) {
       for (const t of String(opts.click).split(',')) {
-        const hit = await page.evaluate((label) => {
-          const b = [...document.querySelectorAll('button')].find((x) => x.textContent.toUpperCase().includes(label.toUpperCase()));
-          if (b) { b.click(); return b.textContent.trim(); }
-          return null;
-        }, t.trim());
+        // poll up to ~2s so a menu opened by a preceding --keys press has time to mount
+        let hit = null;
+        for (let tries = 0; tries < 20 && !hit; tries++) {
+          hit = await page.evaluate((label) => {
+            const b = [...document.querySelectorAll('button')].find((x) => x.textContent.toUpperCase().includes(label.toUpperCase()));
+            if (b) { b.click(); return b.textContent.trim(); }
+            return null;
+          }, t.trim());
+          if (!hit) await page.waitForTimeout(100);
+        }
         if (!hit) throw new Error(`no button matching "${t.trim()}"`);
         process.stderr.write(`• clicked "${hit}"\n`);
         await page.waitForTimeout(250);
       }
     }
 
-    await runInputs(page, opts);
     if (opts.wait) await page.waitForTimeout(Number(opts.wait));
 
     const snap = await snapshot(page);

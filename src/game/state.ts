@@ -7,8 +7,10 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, FORAGE, ERRANDS,
+  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, cropStage, CROP_QUALITY_MULT,
+  CROP_REQUESTS, NON_MANAGER_RARES, FORAGE, ERRANDS,
 } from './data';
+import type { CropRequest } from './data';
 import type { Errand } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
@@ -99,10 +101,36 @@ export interface ZamaOrder { itemId: string; dueDay: number }
 // A single soil plot. `crop` is a CROPS id (or null = empty). `stage` runs
 // 0..(crop.stages-1); the top stage is harvestable. `wateredDay` is the last day
 // the sprinklers watered it (flavor + room for "missed a day" rules later).
-export interface GreenhousePlot { crop: string | null; plantedDay: number; stage: number; wateredDay: number }
-export interface GreenhouseState { sprinklerOn: boolean; plots: GreenhousePlot[] }
+export interface GreenhousePlot {
+  crop: string | null;
+  plantedDay: number;
+  progress: number;     // watered mornings elapsed, 0..crop.growDays (visual stage derived)
+  wateredDay: number;   // last day you hand-watered (or sprinkler/rain did)
+  waterStreak: number;  // consecutive watered mornings → harvest quality
+  missed: number;       // mornings the plot went dry while growing → caps quality
+  fertilized: boolean;  // fertilizer applied → +quality, tolerates one missed watering
+}
+// A harvested crop waiting in the shipping box (paid next morning).
+export interface ShippedCrop { crop: string; quality: number; value: number }
+export interface GreenhouseState {
+  sprinkler: boolean;   // OWNED auto-watering upgrade (replaces the old manual toggle)
+  beds: number;         // tilled plots available: 3 → 6 → 9
+  tier: number;         // greenhouse upgrade tier (0..2): unlocks better seeds + a quality bonus
+  plots: GreenhousePlot[];
+  seeds: Record<string, number>;  // crop id → seeds on hand
+  fertilizer: number;             // fertilizer bags on hand
+  shipped: ShippedCrop[];         // produce in the shipping box, sold next morning
+  request: { id: string; progress: number } | null; // active community request + crops shipped toward it
+  requestDay: number;             // day the current request was posted (rotates)
+  moonSeed: boolean;              // got the Moonflower seed from the shrine yet
+}
 
-const freshPlot = (): GreenhousePlot => ({ crop: null, plantedDay: 0, stage: 0, wateredDay: 0 });
+const freshPlot = (): GreenhousePlot => ({ crop: null, plantedDay: 0, progress: 0, wateredDay: 0, waterStreak: 0, missed: 0, fertilized: false });
+const freshGreenhouse = (): GreenhouseState => ({
+  sprinkler: false, beds: 3, tier: 0,
+  plots: [freshPlot(), freshPlot(), freshPlot(), freshPlot(), freshPlot(), freshPlot(), freshPlot(), freshPlot(), freshPlot()],
+  seeds: {}, fertilizer: 0, shipped: [], request: null, requestDay: 0, moonSeed: false,
+});
 
 // Per-day tally, reset every morning; feeds the end-of-day recap screen.
 export interface DayLog {
@@ -185,7 +213,7 @@ export const newSave = (): GameSave => ({
   rainCleared: false,
   shrineDay: 0,
   museum: { donated: [] },
-  greenhouse: { sprinklerOn: false, plots: [freshPlot(), freshPlot(), freshPlot()] },
+  greenhouse: freshGreenhouse(),
   cat: { found: false, name: '' },
   collectibles: [],
 });
@@ -214,6 +242,22 @@ export const loadSave = (): GameSave | null => {
       s.canFish = true; // grandfather in anyone who already learned
     }
     if (!parsed.today) s.today = freshDayLog(s.money); // old saves: baseline today's tally
+    // Greenhouse 2.0 migration: old saves stored {sprinklerOn, plots:[{stage}]}.
+    // Rebuild into the new shape, carrying over any planted plots + the sprinkler.
+    const g = s.greenhouse as unknown as Record<string, unknown>;
+    if (g && g.beds === undefined) {
+      const old = g as { sprinklerOn?: boolean; plots?: { crop: string | null; plantedDay?: number; stage?: number; wateredDay?: number }[] };
+      const fresh = freshGreenhouse();
+      if (old.sprinklerOn) fresh.sprinkler = true;
+      (old.plots ?? []).forEach((p, i) => {
+        if (i < 3 && p && p.crop) {
+          const plot = fresh.plots[i];
+          plot.crop = p.crop; plot.plantedDay = p.plantedDay ?? 0;
+          plot.progress = p.stage ?? 0; plot.wateredDay = p.wateredDay ?? 0;
+        }
+      });
+      s.greenhouse = fresh;
+    }
     return s;
   } catch { return null; }
 };
@@ -361,7 +405,7 @@ export const allFurnished = (s: GameSave): boolean =>
 // (owned, boxed or placed). Drives the Manager's Paris reveal. The coffin is
 // David's gift, not the Manager's stock, so it doesn't count here.
 export const allRaresOwned = (s: GameSave): boolean =>
-  RARE_FURNITURE.filter(f => f.id !== 'coffin').every(f => s.rares.includes(f.id));
+  RARE_FURNITURE.filter(f => !NON_MANAGER_RARES.has(f.id)).every(f => s.rares.includes(f.id));
 
 // ---- placement -----------------------------------------------------------------
 
@@ -396,52 +440,175 @@ export const museumComplete = (s: GameSave): boolean =>
 export const shrineLuck = (s: GameSave): number =>
   s.donated >= 20000 ? 2 : s.donated >= 5000 ? 1 : 0;
 
-// ---- greenhouse --------------------------------------------------------------
-// Plant a crop in an empty plot. Returns false if the plot is taken or the crop
-// is unknown.
-export const plantCrop = (s: GameSave, plotIdx: number, cropId: string): boolean => {
-  const plot = s.greenhouse.plots[plotIdx];
-  if (!plot || plot.crop || !CROPS[cropId]) return false;
-  plot.crop = cropId;
-  plot.plantedDay = s.day;
-  plot.stage = 0;
-  plot.wateredDay = 0;
+// ---- greenhouse (Community Garden 2.0) ---------------------------------------
+// Costs for the upgrades.
+export const SPRINKLER_COST = 6000;
+export const FERTILIZER_COST = 250;
+export const BED_COSTS: Record<number, number> = { 6: 4000, 9: 12000 }; // pay to till to the next bed count
+export const TIER_COSTS: Record<number, number> = { 1: 8000, 2: 30000 }; // glass-repair tiers (quality bonus + better seeds)
+
+// How many beds are tilled & usable (drives which plots are interactive).
+export const greenhouseBeds = (s: GameSave): number => s.greenhouse.beds;
+// Visual growth stage (0..3) for a planted plot.
+export const plotStage = (plot: GreenhousePlot): number => {
+  const crop = plot.crop ? CROPS[plot.crop] : undefined;
+  return crop ? cropStage(crop, plot.progress) : 0;
+};
+// A plot is harvestable once its progress reaches the crop's grow time.
+export const plotReady = (plot: GreenhousePlot): boolean => {
+  const crop = plot.crop ? CROPS[plot.crop] : undefined;
+  return Boolean(crop) && plot.progress >= crop!.growDays;
+};
+// Seed-shop catalog: crops sold once the greenhouse tier is high enough.
+// (Moonflower is never sold — its seed comes from the shrine.)
+export const seedShopFor = (s: GameSave) =>
+  Object.values(CROPS).filter(c => c.seedCost > 0 && c.tier <= s.greenhouse.tier + 0 && c.id !== 'moonflower' && c.tier <= s.greenhouse.tier);
+
+export const buySeed = (s: GameSave, cropId: string, qty = 1): boolean => {
+  const c = CROPS[cropId];
+  if (!c || c.seedCost <= 0) return false;
+  const cost = c.seedCost * qty;
+  if (s.money < cost) return false;
+  s.money -= cost;
+  s.greenhouse.seeds[cropId] = (s.greenhouse.seeds[cropId] ?? 0) + qty;
   return true;
 };
 
-// A plot is harvestable once it has reached its crop's final stage.
-export const plotReady = (plot: GreenhousePlot): boolean => {
-  if (!plot.crop) return false;
-  const crop = CROPS[plot.crop];
-  return Boolean(crop) && plot.stage >= crop.stages - 1;
-};
-
-// Harvest a fully-grown plot: pay the reward, clear the plot. Returns the yen
-// paid out, or null if the plot wasn't ready.
-export const harvestCrop = (s: GameSave, plotIdx: number): number | null => {
+// Plant a seed you own in an empty, tilled plot.
+export const plantCrop = (s: GameSave, plotIdx: number, cropId: string): boolean => {
   const plot = s.greenhouse.plots[plotIdx];
-  if (!plot || !plotReady(plot)) return null;
-  const reward = CROPS[plot.crop!].reward;
-  s.money += reward;
-  plot.crop = null;
-  plot.plantedDay = 0;
-  plot.stage = 0;
-  plot.wateredDay = 0;
-  return reward;
+  if (!plot || plot.crop || !CROPS[cropId]) return false;
+  if (plotIdx >= s.greenhouse.beds) return false;          // bed not tilled yet
+  if ((s.greenhouse.seeds[cropId] ?? 0) <= 0) return false; // no seed
+  s.greenhouse.seeds[cropId] -= 1;
+  plot.crop = cropId;
+  plot.plantedDay = s.day;
+  plot.progress = 0; plot.wateredDay = 0; plot.waterStreak = 0; plot.missed = 0; plot.fertilized = false;
+  return true;
 };
 
-// Morning growth: if the sprinklers ran, every planted plot drinks for the day
-// and climbs one growth stage toward bloom (capped at its final stage). Call once
-// per new morning (after the day has advanced). No sprinklers → no growth.
-export const growGreenhouse = (s: GameSave): void => {
-  if (!s.greenhouse.sprinklerOn) return;
-  for (const plot of s.greenhouse.plots) {
-    if (!plot.crop) continue;
-    const crop = CROPS[plot.crop];
-    if (!crop) continue;
-    plot.wateredDay = s.day;
-    if (plot.stage < crop.stages - 1) plot.stage += 1;
+// Hand-water a growing plot (once per day). Sprinkler owners don't need this.
+export const waterPlot = (s: GameSave, plotIdx: number): boolean => {
+  const plot = s.greenhouse.plots[plotIdx];
+  if (!plot || !plot.crop || plotReady(plot)) return false;
+  if (plot.wateredDay === s.day) return false; // already watered today
+  plot.wateredDay = s.day;
+  return true;
+};
+
+export const applyFertilizer = (s: GameSave, plotIdx: number): boolean => {
+  const plot = s.greenhouse.plots[plotIdx];
+  if (!plot || !plot.crop || plot.fertilized || s.greenhouse.fertilizer <= 0) return false;
+  s.greenhouse.fertilizer -= 1;
+  plot.fertilized = true;
+  return true;
+};
+
+// Harvest quality (0 normal / 1 silver / 2 gold) from care + upgrades + shrine favor.
+const harvestQuality = (s: GameSave, plot: GreenhousePlot): number => {
+  let pts = 0;
+  if (plot.missed === 0) pts += 2; else if (plot.missed <= 1) pts += 1; // tended it well
+  if (plot.fertilized) pts += 1;
+  pts += s.greenhouse.tier;     // 0..2
+  pts += shrineLuck(s);         // 0..2 — the shrine's favor shows in the soil
+  return pts >= 5 ? 2 : pts >= 3 ? 1 : 0;
+};
+
+// Active community request (the one Granny has posted), or null.
+export const activeRequest = (s: GameSave): CropRequest | null =>
+  s.greenhouse.request ? (CROP_REQUESTS.find(r => r.id === s.greenhouse.request!.id) ?? null) : null;
+// Post a fresh request if none is active (seeded by day so it's stable).
+export const postRequest = (s: GameSave): void => {
+  if (s.greenhouse.request) return;
+  const r = CROP_REQUESTS[Math.floor(mulberry32(s.day * 911 + 7)() * CROP_REQUESTS.length)];
+  s.greenhouse.request = { id: r.id, progress: 0 };
+  s.greenhouse.requestDay = s.day;
+};
+// Credit a harvested crop toward the active request; returns the bonus paid (0 if none).
+const creditRequest = (s: GameSave, cropId: string): number => {
+  const req = s.greenhouse.request; if (!req) return 0;
+  const r = CROP_REQUESTS.find(x => x.id === req.id); if (!r || r.crop !== cropId) return 0;
+  if (req.progress >= r.count) return 0;
+  req.progress += 1;
+  if (req.progress >= r.count) { s.money += r.reward; s.greenhouse.request = null; return r.reward; }
+  return 0;
+};
+
+export interface HarvestResult { cropId: string; quality: number; value: number; requestBonus: number; capstone: boolean }
+// Harvest a ready plot: produce goes to the shipping box (paid next morning).
+// Regrowing crops re-ripen; others clear the plot. Returns the harvest details.
+export const harvestCrop = (s: GameSave, plotIdx: number): HarvestResult | null => {
+  const plot = s.greenhouse.plots[plotIdx];
+  if (!plot || !plot.crop || !plotReady(plot)) return null;
+  const crop = CROPS[plot.crop]; const cropId = plot.crop;
+  const quality = harvestQuality(s, plot);
+  const value = Math.round(crop.reward * CROP_QUALITY_MULT[quality]);
+  s.greenhouse.shipped.push({ crop: cropId, quality, value });
+  const requestBonus = creditRequest(s, cropId);
+  const capstone = cropId === 'moonflower' && !s.rares.includes('bloomlamp');
+  if (capstone) s.rares.push('bloomlamp'); // achievement toast fired by the caller (award)
+  if (crop.regrow) {
+    // Multi-harvest: re-ripens in `regrow` watered days; fertilizer is consumed.
+    plot.progress = Math.max(0, crop.growDays - crop.regrow);
+    plot.waterStreak = 0; plot.missed = 0; plot.fertilized = false; plot.wateredDay = 0;
+  } else {
+    plot.crop = null; plot.plantedDay = 0; plot.progress = 0; plot.wateredDay = 0;
+    plot.waterStreak = 0; plot.missed = 0; plot.fertilized = false;
   }
+  return { cropId, quality, value, requestBonus, capstone };
+};
+
+// Morning: each planted plot drinks if it was watered yesterday (or the sprinkler
+// runs) and climbs toward harvest; a dry morning stalls it + dents quality. Call
+// once per new morning (after the day has advanced). Also pays out the shipping box.
+export const growGreenhouse = (s: GameSave): void => {
+  const g = s.greenhouse;
+  for (let i = 0; i < g.beds; i++) {
+    const plot = g.plots[i];
+    if (!plot.crop || plotReady(plot)) continue;
+    const crop = CROPS[plot.crop]; if (!crop) continue;
+    const watered = g.sprinkler || plot.wateredDay === s.day - 1; // sprinkler auto-waters; else you watered yesterday
+    if (watered) { plot.progress = Math.min(crop.growDays, plot.progress + 1); plot.waterStreak += 1; }
+    else { plot.missed += 1; plot.waterStreak = 0; }
+  }
+  postRequest(s); // make sure a request is always on the board
+};
+
+// Sell everything in the shipping box (called at morning). Returns total yen.
+export const sellShipping = (s: GameSave): number => {
+  const total = s.greenhouse.shipped.reduce((a, sc) => a + sc.value, 0);
+  if (total > 0) s.money += total;
+  s.greenhouse.shipped = [];
+  return total;
+};
+
+export const buySprinkler = (s: GameSave): boolean => {
+  if (s.greenhouse.sprinkler || s.money < SPRINKLER_COST) return false;
+  s.money -= SPRINKLER_COST; s.greenhouse.sprinkler = true; return true;
+};
+export const buyFertilizer = (s: GameSave, qty = 1): boolean => {
+  const cost = FERTILIZER_COST * qty;
+  if (s.money < cost) return false;
+  s.money -= cost; s.greenhouse.fertilizer += qty; return true;
+};
+export const expandBeds = (s: GameSave): boolean => {
+  const next = s.greenhouse.beds + 3;
+  const cost = BED_COSTS[next];
+  if (!cost || s.money < cost) return false;
+  s.money -= cost; s.greenhouse.beds = next; return true;
+};
+export const upgradeGreenhouse = (s: GameSave): boolean => {
+  const next = s.greenhouse.tier + 1;
+  const cost = TIER_COSTS[next];
+  if (!cost || s.money < cost) return false;
+  s.money -= cost; s.greenhouse.tier = next; return true;
+};
+// The shrine gives you the Moonflower seed once you've earned its deepest favor.
+export const grantMoonSeed = (s: GameSave): boolean => {
+  if (s.greenhouse.moonSeed || shrineLuck(s) < 2) return false;
+  s.greenhouse.moonSeed = true;
+  s.greenhouse.seeds['moonflower'] = (s.greenhouse.seeds['moonflower'] ?? 0) + 1;
+  return true;
 };
 
 // ---- the mines ---------------------------------------------------------------------

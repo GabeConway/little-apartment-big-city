@@ -1827,6 +1827,203 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#8a5a2a'; ctx.fillRect(6, 3, 4, 4);                              // seed disc
     ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 4, 2, 2);
   });
+
+  // ---- Greenhouse crops (match t-crop-sun-* style: bottom-aligned over a soil
+  // plot, transparent bg, lower ~2/3 of the tile). Each crop has 4 growth
+  // stages keyed t-crop-<id>-<0..3>. Two shared helpers keep the early stages
+  // consistent; stages 2 (budding/fruit forming) and 3 (ripe) are hand-tuned.
+  // Generic seedling (stage 0): soil mound + a 2–3 leaf sprout tip.
+  const seedling = (ctx: CanvasRenderingContext2D, leaf: string, hi: string) => {
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(6, 12, 4, 2);                             // soil mound
+    ctx.fillStyle = '#2c1d10'; ctx.fillRect(7, 11, 2, 1);
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 9, 1, 3);                              // tiny stem
+    ctx.fillStyle = leaf; ctx.fillRect(6, 9, 1, 1); ctx.fillRect(8, 8, 1, 1); ctx.fillRect(7, 7, 1, 1);
+    ctx.fillStyle = hi; ctx.fillRect(7, 7, 1, 1);
+  };
+  // Generic young leafy plant (stage 1): upright stem with a few side leaves.
+  const youngLeafy = (ctx: CanvasRenderingContext2D, stem: string, leaf: string, hi: string) => {
+    ctx.fillStyle = stem; ctx.fillRect(7, 7, 2, 7);
+    ctx.fillStyle = leaf; ctx.fillRect(4, 8, 3, 2); ctx.fillRect(9, 9, 3, 2);
+    ctx.fillRect(5, 6, 2, 1); ctx.fillRect(9, 6, 2, 1);
+    ctx.fillStyle = hi; ctx.fillRect(4, 8, 1, 1); ctx.fillRect(11, 9, 1, 1);
+  };
+
+  // TOMATO — bushy green plant → round red tomatoes.
+  atlas['t-crop-tomato-0'] = tile(ctx => seedling(ctx, '#6e9e3a', '#8fc24f'));
+  atlas['t-crop-tomato-1'] = tile(ctx => youngLeafy(ctx, '#4d7a2e', '#6e9e3a', '#8fc24f'));
+  atlas['t-crop-tomato-2'] = tile(ctx => {                                           // bushy, flowering / small green fruit
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 6, 2, 8);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(3, 7, 4, 3); ctx.fillRect(9, 8, 4, 3); ctx.fillRect(5, 4, 6, 3);
+    ctx.fillStyle = '#8fc24f'; ctx.fillRect(3, 7, 1, 1); ctx.fillRect(12, 8, 1, 1); ctx.fillRect(6, 4, 1, 1);
+    ctx.fillStyle = '#ffe87a'; ctx.fillRect(5, 6, 1, 1); ctx.fillRect(10, 6, 1, 1);   // tiny yellow flowers
+    ctx.fillStyle = '#7cb84f'; ctx.fillRect(6, 9, 2, 2); ctx.fillRect(9, 10, 2, 2);   // unripe green fruit
+  });
+  atlas['t-crop-tomato-3'] = tile(ctx => {                                           // ripe — round red tomatoes
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 5, 2, 9);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(3, 5, 4, 3); ctx.fillRect(9, 5, 4, 3); ctx.fillRect(5, 3, 6, 2);
+    ctx.fillStyle = '#8fc24f'; ctx.fillRect(3, 5, 1, 1); ctx.fillRect(12, 5, 1, 1);
+    ctx.fillStyle = '#d83a2e';                                                        // tomatoes (rounded blocks)
+    ctx.fillRect(3, 9, 3, 3); ctx.fillRect(8, 10, 4, 4); ctx.fillRect(8, 11, 4, 2); ctx.fillRect(6, 7, 3, 3);
+    ctx.fillStyle = '#f2604a'; ctx.fillRect(3, 9, 1, 1); ctx.fillRect(9, 10, 1, 1); ctx.fillRect(6, 7, 1, 1); // sheen
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(4, 8, 1, 1); ctx.fillRect(9, 9, 1, 1);    // calyx
+  });
+
+  // CHILI — green plant → pointed red peppers hanging down.
+  atlas['t-crop-chili-0'] = tile(ctx => seedling(ctx, '#6e9e3a', '#9ad05a'));
+  atlas['t-crop-chili-1'] = tile(ctx => youngLeafy(ctx, '#4a7a30', '#6e9e3a', '#9ad05a'));
+  atlas['t-crop-chili-2'] = tile(ctx => {                                            // white blossoms + small green peppers
+    ctx.fillStyle = '#4a7a30'; ctx.fillRect(7, 5, 2, 9);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(3, 6, 4, 2); ctx.fillRect(9, 7, 4, 2); ctx.fillRect(5, 4, 6, 2);
+    ctx.fillStyle = '#9ad05a'; ctx.fillRect(3, 6, 1, 1); ctx.fillRect(12, 7, 1, 1);
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(5, 8, 1, 1); ctx.fillRect(10, 6, 1, 1);   // white blossoms
+    ctx.fillStyle = '#5e9a3a'; ctx.fillRect(6, 10, 1, 3); ctx.fillRect(9, 10, 1, 2);  // green peppers forming
+  });
+  atlas['t-crop-chili-3'] = tile(ctx => {                                            // ripe — red pointed chilies
+    ctx.fillStyle = '#4a7a30'; ctx.fillRect(7, 4, 2, 10);
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(3, 5, 4, 2); ctx.fillRect(9, 5, 4, 2); ctx.fillRect(5, 3, 6, 2);
+    ctx.fillStyle = '#9ad05a'; ctx.fillRect(3, 5, 1, 1); ctx.fillRect(12, 5, 1, 1);
+    // hanging chilies: 2px body tapering to a 1px point at the bottom
+    ctx.fillStyle = '#cc2a22';
+    ctx.fillRect(4, 8, 2, 3); ctx.fillRect(4, 11, 1, 2);                              // left chili
+    ctx.fillRect(10, 9, 2, 3); ctx.fillRect(11, 12, 1, 2);                            // right chili
+    ctx.fillRect(7, 10, 2, 2); ctx.fillRect(7, 12, 1, 2);                             // center chili
+    ctx.fillStyle = '#ef5a4a'; ctx.fillRect(4, 8, 1, 1); ctx.fillRect(10, 9, 1, 1); ctx.fillRect(7, 10, 1, 1); // sheen
+    ctx.fillStyle = '#3e6020'; ctx.fillRect(4, 7, 1, 1); ctx.fillRect(11, 8, 1, 1);   // green caps
+  });
+
+  // MELON — low sprawling vine → one big round striped green melon.
+  atlas['t-crop-melon-0'] = tile(ctx => {                                            // low seedling
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(6, 12, 4, 2);
+    ctx.fillStyle = '#5e8a3a'; ctx.fillRect(7, 11, 1, 1); ctx.fillRect(6, 10, 1, 1); ctx.fillRect(8, 10, 1, 1);
+    ctx.fillStyle = '#7cb84f'; ctx.fillRect(7, 9, 1, 1);
+  });
+  atlas['t-crop-melon-1'] = tile(ctx => {                                            // sprawling vine, broad leaves
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(3, 12, 10, 1);                            // vine runner
+    ctx.fillStyle = '#5e8a3a'; ctx.fillRect(2, 9, 4, 3); ctx.fillRect(10, 9, 4, 3); ctx.fillRect(6, 8, 4, 3);
+    ctx.fillStyle = '#7cb84f'; ctx.fillRect(2, 9, 1, 1); ctx.fillRect(13, 9, 1, 1); ctx.fillRect(7, 8, 1, 1);
+  });
+  atlas['t-crop-melon-2'] = tile(ctx => {                                            // flower + small green melon forming
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(2, 12, 12, 1);
+    ctx.fillStyle = '#5e8a3a'; ctx.fillRect(2, 9, 3, 3); ctx.fillRect(11, 9, 3, 3);
+    ctx.fillStyle = '#7cb84f'; ctx.fillRect(2, 9, 1, 1); ctx.fillRect(13, 9, 1, 1);
+    ctx.fillStyle = '#ffe87a'; ctx.fillRect(11, 7, 2, 2); ctx.fillStyle = '#ffd24a'; ctx.fillRect(12, 8, 1, 1); // flower
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(6, 10, 4, 3); ctx.fillRect(7, 9, 2, 1);   // small green melon
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 10, 1, 3);
+  });
+  atlas['t-crop-melon-3'] = tile(ctx => {                                            // ripe — big round striped melon
+    ctx.fillStyle = '#5e8a3a'; ctx.fillRect(5, 6, 6, 9); ctx.fillRect(4, 7, 8, 7);    // rounded body
+    ctx.fillStyle = '#3e6020'; ctx.fillRect(7, 6, 1, 8); ctx.fillRect(5, 8, 1, 5); ctx.fillRect(10, 8, 1, 5); // dark stripes
+    ctx.fillStyle = '#7cb84f'; ctx.fillRect(5, 7, 2, 1); ctx.fillRect(6, 8, 1, 1);    // highlight
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(8, 5, 1, 1);                              // stem nub
+    ctx.fillStyle = '#5e8a3a'; ctx.fillRect(10, 4, 3, 2); ctx.fillStyle = '#7cb84f'; ctx.fillRect(12, 4, 1, 1); // side leaf
+  });
+
+  // TEA — rounded green shrub → glossy leaves with tiny white blossoms.
+  atlas['t-crop-tea-0'] = tile(ctx => seedling(ctx, '#4d8a3e', '#6eae4e'));
+  atlas['t-crop-tea-1'] = tile(ctx => {                                              // small rounded bush
+    ctx.fillStyle = '#3e7a36'; ctx.fillRect(5, 9, 6, 5); ctx.fillRect(6, 8, 4, 1);
+    ctx.fillStyle = '#4d8a3e'; ctx.fillRect(6, 9, 4, 3);
+    ctx.fillStyle = '#6eae4e'; ctx.fillRect(6, 8, 2, 1); ctx.fillRect(6, 9, 1, 1);
+  });
+  atlas['t-crop-tea-2'] = tile(ctx => {                                              // fuller shrub
+    ctx.fillStyle = '#2f5a2a'; ctx.fillRect(3, 8, 10, 6); ctx.fillRect(4, 7, 8, 1);
+    ctx.fillStyle = '#3e7a36'; ctx.fillRect(4, 8, 8, 4); ctx.fillRect(5, 6, 6, 2);
+    ctx.fillStyle = '#4d8a3e'; ctx.fillRect(5, 7, 3, 2); ctx.fillRect(9, 8, 2, 2);
+    ctx.fillStyle = '#6eae4e'; ctx.fillRect(5, 6, 1, 1); ctx.fillRect(8, 6, 1, 1);
+  });
+  atlas['t-crop-tea-3'] = tile(ctx => {                                              // ripe — glossy dense shrub + blossoms
+    ctx.fillStyle = '#2f5a2a'; ctx.fillRect(3, 7, 10, 7); ctx.fillRect(4, 6, 8, 1); ctx.fillRect(5, 5, 6, 1);
+    ctx.fillStyle = '#3e7a36'; ctx.fillRect(4, 7, 8, 5); ctx.fillRect(5, 6, 6, 1);
+    ctx.fillStyle = '#4d8a3e'; ctx.fillRect(5, 6, 3, 2); ctx.fillRect(9, 7, 2, 2); ctx.fillRect(6, 9, 2, 2);
+    ctx.fillStyle = '#6eae4e'; ctx.fillRect(5, 6, 1, 1); ctx.fillRect(9, 7, 1, 1);    // glossy highlights
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(6, 7, 1, 1); ctx.fillRect(10, 9, 1, 1); ctx.fillRect(8, 11, 1, 1); // white blossoms
+    ctx.fillStyle = '#ffe87a'; ctx.fillRect(6, 7, 1, 1);                              // one blossom heart
+  });
+
+  // MOON — dark slender stalk → ethereal pale glowing moonflower (rare capstone).
+  atlas['t-crop-moon-0'] = tile(ctx => {                                             // dark sprout, pale tip
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(6, 12, 4, 2);
+    ctx.fillStyle = '#2e3a4a'; ctx.fillRect(7, 9, 1, 3);
+    ctx.fillStyle = '#5a7a6a'; ctx.fillRect(6, 9, 1, 1); ctx.fillRect(8, 8, 1, 1);
+    ctx.fillStyle = '#cfe4ff'; ctx.fillRect(7, 7, 1, 1);
+  });
+  atlas['t-crop-moon-1'] = tile(ctx => {                                             // slender dark stalk
+    ctx.fillStyle = '#2e3a4a'; ctx.fillRect(7, 6, 2, 8);
+    ctx.fillStyle = '#3a4a5e'; ctx.fillRect(4, 9, 3, 1); ctx.fillRect(9, 10, 3, 1);
+    ctx.fillStyle = '#4a6a5a'; ctx.fillRect(4, 9, 1, 1); ctx.fillRect(11, 10, 1, 1);
+  });
+  atlas['t-crop-moon-2'] = tile(ctx => {                                             // pale closed bud
+    ctx.fillStyle = '#2e3a4a'; ctx.fillRect(7, 6, 2, 8);
+    ctx.fillStyle = '#3a4a5e'; ctx.fillRect(4, 10, 3, 1); ctx.fillRect(9, 11, 3, 1);
+    ctx.fillStyle = 'rgba(180,210,255,0.18)'; ctx.fillRect(5, 2, 6, 5);              // faint glow
+    ctx.fillStyle = '#8aa6c8'; ctx.fillRect(6, 3, 4, 4); ctx.fillRect(7, 2, 2, 1);   // teardrop bud
+    ctx.fillStyle = '#cfe4ff'; ctx.fillRect(7, 3, 1, 2);
+  });
+  atlas['t-crop-moon-3'] = tile(ctx => {                                             // ripe — glowing moonflower bloom
+    ctx.fillStyle = '#2e3a4a'; ctx.fillRect(7, 8, 2, 6);                              // dark stalk
+    ctx.fillStyle = '#3a4a5e'; ctx.fillRect(4, 10, 3, 1); ctx.fillRect(9, 11, 3, 1);  // dark leaves
+    ctx.fillStyle = 'rgba(170,205,255,0.22)'; ctx.fillRect(2, 0, 12, 9);              // soft outer glow
+    ctx.fillStyle = 'rgba(205,228,255,0.30)'; ctx.fillRect(4, 1, 8, 7);              // inner glow
+    ctx.fillStyle = '#cfe4ff'; ctx.fillRect(5, 2, 6, 6); ctx.fillRect(4, 3, 8, 4);    // pale petals
+    ctx.fillStyle = '#eaf4ff'; ctx.fillRect(6, 2, 1, 1); ctx.fillRect(9, 2, 1, 1); ctx.fillRect(4, 4, 1, 2); ctx.fillRect(11, 4, 1, 2); // petal tips
+    ctx.fillStyle = '#9fd0ff'; ctx.fillRect(7, 4, 2, 2);                              // glowing center
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(7, 4, 1, 1);
+  });
+
+  // ---- Greenhouse props & menu icons ------------------------------------
+  // Floor lamp whose shade is a glowing bloom (warm petals + a moonflower-cool core).
+  atlas['f-bloomlamp'] = tile(ctx => {
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(5, 14, 6, 2);                             // base
+    ctx.fillStyle = '#5a4d42'; ctx.fillRect(6, 15, 4, 1);
+    ctx.fillStyle = '#6e5a48'; ctx.fillRect(7, 6, 2, 9);                              // pole
+    ctx.fillStyle = '#5a4738'; ctx.fillRect(9, 6, 1, 9);
+    ctx.fillStyle = 'rgba(255,210,150,0.22)'; ctx.fillRect(2, 0, 12, 8);              // warm glow halo
+    ctx.fillStyle = 'rgba(255,228,180,0.30)'; ctx.fillRect(3, 1, 10, 6);
+    ctx.fillStyle = '#ffcf6a'; ctx.fillRect(4, 1, 8, 5); ctx.fillRect(3, 2, 10, 3);   // warm flower-shade petals
+    ctx.fillStyle = '#ffe6a8'; ctx.fillRect(5, 1, 2, 1); ctx.fillRect(9, 1, 2, 1); ctx.fillRect(3, 3, 1, 1); ctx.fillRect(12, 3, 1, 1);
+    ctx.fillStyle = '#cfe4ff'; ctx.fillRect(6, 4, 4, 2);                              // cool moonflower-glow core
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(7, 4, 2, 1);
+  });
+  // Open-top wooden produce crate — drop harvested crops in.
+  atlas['t-gh-shipbox'] = tile(ctx => {
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(2, 4, 12, 11);                            // box body
+    ctx.fillStyle = '#2c1d10'; ctx.fillRect(3, 4, 10, 4);                             // open dark interior
+    ctx.fillStyle = '#d83a2e'; ctx.fillRect(5, 6, 2, 2);                              // tomato peeking inside
+    ctx.fillStyle = '#5e8a3a'; ctx.fillRect(9, 6, 2, 2);                              // greens peeking inside
+    ctx.fillStyle = '#8a6440'; ctx.fillRect(2, 8, 12, 6);                             // front face
+    ctx.fillStyle = '#a87c52'; ctx.fillRect(2, 8, 12, 1);                             // lit front rim
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(2, 11, 12, 1); ctx.fillRect(7, 8, 1, 6);  // plank seams
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(2, 4, 1, 11); ctx.fillRect(13, 4, 1, 11); // corner posts
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(2, 14, 12, 1);                            // base shadow
+  });
+  // Seed packet menu icon.
+  atlas['i-seeds'] = tile(ctx => {
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(4, 2, 8, 12);                             // packet paper
+    ctx.fillStyle = '#a3801a'; ctx.fillRect(4, 2, 8, 1); ctx.fillRect(4, 2, 1, 12); ctx.fillRect(11, 2, 1, 12); // edges
+    ctx.fillStyle = '#e8d48a'; ctx.fillRect(5, 3, 6, 4);                              // label window
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(6, 4, 2, 2); ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 4, 1, 1); // plant pic
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(6, 9, 4, 1); ctx.fillRect(6, 11, 3, 1);   // text lines
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(5, 14, 1, 1); ctx.fillRect(8, 15, 1, 1); ctx.fillRect(10, 14, 1, 1); // spilled seeds
+  });
+  // Watering can menu icon.
+  atlas['i-wateringcan'] = tile(ctx => {
+    ctx.fillStyle = '#3d8a9e'; ctx.fillRect(4, 6, 7, 7);                              // body
+    ctx.fillStyle = '#56a8bc'; ctx.fillRect(4, 6, 7, 1); ctx.fillRect(4, 6, 1, 7);    // lit edges
+    ctx.fillStyle = '#2c6477'; ctx.fillRect(10, 6, 1, 7);                             // shadow side
+    ctx.fillStyle = '#3d8a9e'; ctx.fillRect(11, 4, 3, 2); ctx.fillRect(13, 3, 2, 2);  // spout
+    ctx.fillStyle = '#2c6477'; ctx.fillRect(5, 3, 5, 1); ctx.fillRect(5, 3, 1, 3); ctx.fillRect(9, 3, 1, 3); // handle
+    ctx.fillStyle = '#9fe0ef'; ctx.fillRect(15, 5, 1, 1); ctx.fillRect(14, 7, 1, 1);  // water drops
+  });
+  // Fertilizer / compost sack menu icon.
+  atlas['i-fertilizer'] = tile(ctx => {
+    ctx.fillStyle = '#8a6440'; ctx.fillRect(4, 3, 8, 11);                             // burlap sack
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(11, 3, 1, 11);                            // shaded side
+    ctx.fillStyle = '#9a7350'; ctx.fillRect(5, 4, 2, 9);                              // highlight
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(5, 2, 6, 2); ctx.fillRect(6, 1, 4, 1);    // tied top
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(7, 7, 2, 3); ctx.fillStyle = '#6e9e3a'; ctx.fillRect(6, 8, 1, 1); ctx.fillRect(9, 8, 1, 1); // leaf label
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(3, 14, 3, 1); ctx.fillRect(10, 14, 3, 1); // spilled compost
+    ctx.fillStyle = '#3e6020'; ctx.fillRect(4, 15, 1, 1); ctx.fillRect(11, 15, 1, 1);
+  });
 };
 
 // ---- Furniture (procedural; bed/sofa/futon are 32x16) -------------------
