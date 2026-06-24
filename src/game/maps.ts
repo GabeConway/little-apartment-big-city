@@ -677,8 +677,11 @@ const shrine: SceneDef = {
 // Built to extend toward a small farming sim (see CROPS in data.ts + GREENHOUSE_PLOTS).
 
 // Plot tile coords inside the greenhouse, indexed to save.greenhouse.plots[i].
+// Three rows of three; save.greenhouse.beds (3/6/9) decides how many are tilled.
 export const GREENHOUSE_PLOTS: { x: number; y: number }[] = [
-  { x: 3, y: 2 }, { x: 6, y: 2 }, { x: 9, y: 2 },
+  { x: 3, y: 2 }, { x: 7, y: 2 }, { x: 11, y: 2 },
+  { x: 3, y: 4 }, { x: 7, y: 4 }, { x: 11, y: 4 },
+  { x: 3, y: 6 }, { x: 7, y: 6 }, { x: 11, y: 6 },
 ];
 
 const greenhouse: SceneDef = {
@@ -691,20 +694,21 @@ const greenhouse: SceneDef = {
     'P': T('t-gh-plant', true),
     '.': T('t-gh-floor'),
     'o': T('t-gh-soil', true),
-    'v': T('t-gh-sprinkler', true),
+    'v': T('t-gh-sprinkler', true),  // Granny's supply counter (seeds / fertilizer / upgrades)
+    'b': T('t-gh-shipbox', true),    // shipping box — harvest sells here at dawn
     'Y': T('t-gh-poster', true),
     'D': T('t-door'),
   },
   grid: [
     'RRRRRRRRRRRRRRRR',
-    'G...H...H...Y..G',
-    'G..o..o..o.....G',
+    'G.....HYH......G',
+    'G..o...o...o...G',
     'G..............G',
-    'G......v.......G',
+    'G..o...o...o...G',
     'G..............G',
-    'GP............PG',
+    'G..o...o...o...G',
     'G..............G',
-    'GP............PG',
+    'G.v........b...G',
     'GGGGGGGDDGGGGGGG',
   ],
   warps: [
@@ -712,11 +716,10 @@ const greenhouse: SceneDef = {
     { x: 8, y: 9, to: 'city', tx: 17, ty: 14, dir: 'down' },
   ],
   interactables: [
-    { id: 'gh-plot', x: 3, y: 2, label: 'Soil plot' },
-    { id: 'gh-plot', x: 6, y: 2, label: 'Soil plot' },
-    { id: 'gh-plot', x: 9, y: 2, label: 'Soil plot' },
-    { id: 'gh-sprinkler', x: 7, y: 4, label: 'Sprinkler valve' },
-    { id: 'gh-poster', x: 12, y: 1, label: 'Notice' },
+    ...GREENHOUSE_PLOTS.map(p => ({ id: 'gh-plot', x: p.x, y: p.y, label: 'Soil plot' })),
+    { id: 'gh-supply', x: 2, y: 8, label: 'Granny\'s supply counter' },
+    { id: 'gh-shipbox', x: 11, y: 8, label: 'Shipping box' },
+    { id: 'gh-poster', x: 7, y: 1, label: 'Notice' },
   ],
   npcs: [],
 };

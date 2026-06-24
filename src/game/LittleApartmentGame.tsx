@@ -33,7 +33,7 @@ import {
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
-  itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, FORAGE, forageById,
+  itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, CROP_QUALITY, FORAGE, forageById,
 } from './data';
 import type { BingusFetch } from './data';
 import type { StoryBeat, Fish } from './data';
@@ -47,6 +47,9 @@ import {
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
+  plotStage, waterPlot, applyFertilizer, sellShipping, buySeed, buySprinkler,
+  buyFertilizer, expandBeds, upgradeGreenhouse, grantMoonSeed, seedShopFor, activeRequest,
+  SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
@@ -242,7 +245,8 @@ const HACK_LINES = [
 // ---- overlay model ----------------------------------------------------------
 
 type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji'
-  | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch';
+  | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch'
+  | 'greenhouse-plot' | 'greenhouse-supply';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
 // bag for energy (Peepis can also be fed to The Manager; a Conk goes to Max).
@@ -883,6 +887,7 @@ const LittleApartmentGame: React.FC = () => {
   // David the cat, once adopted: roams the apartment, sits, naps. Lives only in the
   // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
   const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; timer: number } | null>(null);
+  const ghPlotRef = useRef(0); // which greenhouse plot index the open plot menu is acting on
   const inputRef = useRef(new Input());
   const solidsRef = useRef(new Set<string>());
   const overlayRef = useRef<Overlay | null>(null);
@@ -1132,7 +1137,10 @@ const LittleApartmentGame: React.FC = () => {
       if (!pending.nursed) award('night-owl');
     }
     fulfillDeliveries(s); // ZamaZonk orders land in the boxes this morning
-    growGreenhouse(s);    // greenhouse crops drink + climb a stage if the sprinklers ran overnight
+    growGreenhouse(s);    // greenhouse crops advance on watered mornings + a fresh request is posted
+    const shipPay = sellShipping(s); // the produce buyer pays out the shipping box overnight
+    if (shipPay > 0) pushMessage(s, { id: `ship-${s.day}`, from: 'Produce Buyer 🧺', avatar: '🧺', company: true,
+      body: [`Your greenhouse harvest sold for ¥${shipPay.toLocaleString()}. Fresh stuff. The neighborhood thanks you. 🌱`] });
     // Konbini lottery resolves the morning after you buy a ticket. SECRET: shrine
     // donations quietly raise your odds (more offered = luckier draw).
     if (s.lotteryDay > 0 && s.lotteryDay < s.day) {
@@ -1756,10 +1764,11 @@ const LittleApartmentGame: React.FC = () => {
       case 'gh-poster': {
         showDialog([
           '— COMMUNITY GREENHOUSE — a hand-lettered poster, Granny Soto\'s tidy hand —',
-          '1. Press a SEED into any empty soil plot.',
-          '2. Turn the SPRINKLERS on (the valve) so the beds drink overnight.',
-          '3. Every watered morning, the crop grows a little. ~4 mornings to bloom.',
-          '4. Harvest the grown crop for yen. Sunflowers for now — more to come!',
+          '1. Buy SEEDS at the supply counter, then press one into an empty soil bed.',
+          '2. WATER each bed once a day (or buy a SPRINKLER to do it for you). Miss a day and it sulks.',
+          '3. Tend it well — and earn the shrine\'s favor — for SILVER and GOLD harvests worth far more.',
+          '4. Drop the harvest in the SHIPPING BOX; a buyer pays at dawn. Fill Granny\'s community REQUESTS for big bonuses.',
+          '5. Reinvest: fertilizer, more beds, a bigger glasshouse. Rumor says the shrine keeps a seed that blooms at midnight.',
         ]);
         break;
       }
@@ -1812,6 +1821,16 @@ const LittleApartmentGame: React.FC = () => {
             'You drop the coin, bow twice, clap twice — and above you the rain thins to nothing. The clouds peel back like a curtain.',
             'Yoshi does not look the least bit surprised.',
           ], 'the shrine');
+          break;
+        }
+        // Earning the shrine's deepest favor (¥20k offered) → Yoshi gifts the Moonflower seed, once.
+        if (grantMoonSeed(s)) {
+          sfxCatch(); persistSave(s); refreshHud();
+          showDialog([
+            'The shrine seems to lean toward you. Then Yoshi steps close, something cupped in her hands.',
+            'She presses a single dark seed into your palm. "A Moonflower. It blooms only in the greenhouse, and only after midnight — for someone the kami has come to trust."',
+            '"Plant it. See what the favor you have earned can grow." (Got a MOONFLOWER SEED — plant it in the greenhouse.)',
+          ], 'Yoshi');
           break;
         }
         if (tier > prevTier) {
@@ -2015,55 +2034,29 @@ const LittleApartmentGame: React.FC = () => {
         }
         break;
       }
-      // Greenhouse: toggle the sprinklers (the only "watering" needed).
-      case 'gh-sprinkler': {
-        s.greenhouse.sprinklerOn = !s.greenhouse.sprinklerOn;
-        sfxCoin();
-        persistSave(s); refreshHud();
-        showDialog(s.greenhouse.sprinklerOn
-          ? ['You twist the valve. The sprinklers hiss to life, fine mist drifting down over every plot.', 'Anything planted will drink overnight and grow by morning.']
-          : ['You twist the valve shut. The hiss fades; the last drops tick off the glass.', 'Nothing will grow while the soil is dry.']);
+      // Granny's supply counter: seeds, fertilizer, sprinkler, expansions, tiers.
+      case 'gh-supply': setOverlayBoth({ type: 'shop', shop: 'greenhouse-supply' }); break;
+      // The shipping box: report what's waiting to sell at dawn.
+      case 'gh-shipbox': {
+        const box = s.greenhouse.shipped;
+        if (box.length === 0) { showDialog(['The shipping box is empty.', 'Harvest a crop and drop it in — a buyer collects at dawn and leaves the yen by morning.']); break; }
+        const total = box.reduce((a, b) => a + b.value, 0);
+        showDialog([
+          `${box.length} item${box.length > 1 ? 's' : ''} in the box, worth ¥${total.toLocaleString()} all together.`,
+          'The buyer comes at dawn. The money will be in your account by morning.',
+        ]);
         break;
       }
-      // Greenhouse soil plot: plant → check progress → harvest at bloom.
+      // Greenhouse soil plot: open the plot menu (plant / water / fertilize / harvest).
       case 'gh-plot': {
         const idx = GREENHOUSE_PLOTS.findIndex(pl => pl.x === target!.x && pl.y === target!.y);
         if (idx < 0) break;
-        const plot = s.greenhouse.plots[idx];
-        if (!plot.crop) {
-          plantCrop(s, idx, 'sunflower');
-          sfxBuy();
-          persistSave(s); refreshHud();
-          showDialog([
-            'You work a sunflower seed into the dark soil and pat it level.',
-            s.greenhouse.sprinklerOn
-              ? 'The sprinklers are already running — it\'ll drink tonight and sprout by morning.'
-              : 'Now flip the SPRINKLERS on so it can drink overnight. Come back each morning to watch it climb.',
-          ]);
+        if (idx >= s.greenhouse.beds) {
+          showDialog(['This bed isn\'t tilled yet.', 'Granny can break new ground for you at the supply counter.']);
           break;
         }
-        if (plotReady(plot)) {
-          const reward = harvestCrop(s, idx);
-          sfxCatch();
-          persistSave(s); refreshHud();
-          showDialog([
-            `You cut the sunflower — taller than you are, its face a small sun. (+¥${reward?.toLocaleString()})`,
-            'Granny Soto says the seeds make fine eating, but she keeps the best for next season.',
-          ]);
-          break;
-        }
-        const crop = CROPS[plot.crop];
-        const stageBlurb = [
-          'A seed, tucked in and waiting.',
-          'A green sprout, no taller than your thumb.',
-          'A thick stalk with a fat bud, about to break open.',
-        ][Math.min(plot.stage, 2)];
-        showDialog([
-          `${crop?.name ?? 'Something'} growing here. ${stageBlurb}`,
-          s.greenhouse.sprinklerOn
-            ? 'The soil is damp. It should grow again by morning.'
-            : 'The soil is bone dry — turn the sprinklers on so it can drink overnight.',
-        ]);
+        ghPlotRef.current = idx;
+        setOverlayBoth({ type: 'shop', shop: 'greenhouse-plot' });
         break;
       }
     }
@@ -2722,19 +2715,36 @@ const LittleApartmentGame: React.FC = () => {
     // the greenhouse: growing crops on each plot + a sprinkler mist when on
     if (scene.id === 'greenhouse') {
       const gh = saveRef.current.greenhouse;
-      gh.plots.forEach((plot, i) => {
-        if (!plot.crop) return;
+      const today = saveRef.current.day;
+      GREENHOUSE_PLOTS.forEach((cell, i) => {
+        const bx = cell.x * TILE - cam.x, by = cell.y * TILE - cam.y;
+        if (i >= gh.beds) { // untilled bed — dim so it reads as "expandable later"
+          ctx.fillStyle = 'rgba(18,14,8,0.5)';
+          ctx.fillRect(bx, by, TILE, TILE);
+          return;
+        }
+        const plot = gh.plots[i];
+        if (!plot || !plot.crop) return;
         const crop = CROPS[plot.crop];
         if (!crop) return;
-        const cell = GREENHOUSE_PLOTS[i];
-        const key = crop.sprites[Math.min(plot.stage, crop.sprites.length - 1)];
-        if (atlas[key]) ctx.drawImage(atlas[key], cell.x * TILE - cam.x, cell.y * TILE - cam.y);
+        const ready = plotReady(plot);
+        const bob = ready ? Math.round(Math.sin(t * 4 + cell.x) * 1) : 0;
+        const key = crop.sprites[plotStage(plot)];
+        if (atlas[key]) ctx.drawImage(atlas[key], bx, by - bob);
+        if (ready) { // harvest-ready sparkle
+          ctx.fillStyle = `rgba(255,233,160,${0.55 + Math.sin(t * 6 + cell.x) * 0.35})`;
+          ctx.fillRect(bx + 7, by - 4, 2, 2);
+        } else if (!gh.sprinkler && plot.wateredDay !== today) { // dry — needs water today
+          ctx.fillStyle = 'rgba(214,120,60,0.85)';
+          ctx.fillRect(bx + 6, by - 2, 4, 1);
+        }
       });
-      if (gh.sprinklerOn) {
-        // a light falling-mist over the plots while the sprinklers run
+      if (gh.sprinkler) {
+        // a light falling-mist over the tilled beds while the sprinkler runs
         ctx.save();
         ctx.fillStyle = 'rgba(180,230,240,0.7)';
-        for (const cell of GREENHOUSE_PLOTS) {
+        for (let i = 0; i < gh.beds; i++) {
+          const cell = GREENHOUSE_PLOTS[i];
           const bx = cell.x * TILE - cam.x, by = cell.y * TILE - cam.y;
           for (let d = 0; d < 4; d++) {
             const dx = (d * 5 + Math.floor(t * 22 + cell.x * 3)) % 14;
@@ -3214,11 +3224,13 @@ const LittleApartmentGame: React.FC = () => {
         if (onCar(faced) || onCar(feet)) label = 'Drive';
       }
       if (it?.id === 'boat' && !sv.vehicles.includes('boat')) label = 'Fish';
-      if (it?.id === 'gh-sprinkler') label = sv.greenhouse.sprinklerOn ? 'Sprinklers: ON' : 'Sprinklers: OFF';
+      if (it?.id === 'gh-supply') label = 'Supplies';
+      if (it?.id === 'gh-shipbox') label = sv.greenhouse.shipped.length > 0 ? `Shipping (${sv.greenhouse.shipped.length})` : 'Shipping box';
       if (it?.id === 'gh-plot') {
         const gi = GREENHOUSE_PLOTS.findIndex(pl => pl.x === it!.x && pl.y === it!.y);
         const gp = sv.greenhouse.plots[gi];
-        if (gp) label = !gp.crop ? 'Plant sunflower' : plotReady(gp) ? 'Harvest' : 'Check on it';
+        if (gi >= sv.greenhouse.beds) label = 'Untilled';
+        else if (gp) label = !gp.crop ? 'Plant' : plotReady(gp) ? 'Harvest' : (sv.greenhouse.sprinkler || gp.wateredDay === sv.day) ? 'Check on it' : 'Water';
       }
       if (scene.id === 'mines' && !label) label = sv.gun ? 'Fire (hold)' : sv.wand ? 'Sparkle!' : undefined;
       if (!sv.canFish && (label === 'Fish' || label === 'Drop a line')) label = 'Fish? (ask Genji)';
@@ -4121,6 +4133,30 @@ const LittleApartmentGame: React.FC = () => {
     ], 'Bingus Doofelsmurt');
   };
 
+  // ---- Greenhouse actions (plot menu + supply counter) -----------------------
+  const ghTick = () => { persistSave(saveRef.current); refreshHud(); setShopTick(v => v + 1); };
+  const doPlantCrop = (cropId: string) => { if (plantCrop(saveRef.current, ghPlotRef.current, cropId)) { sfxBuy(); ghTick(); } };
+  const doWaterPlot = () => { if (waterPlot(saveRef.current, ghPlotRef.current)) { sfxCoin(); ghTick(); } };
+  const doFertilizePlot = () => { if (applyFertilizer(saveRef.current, ghPlotRef.current)) { sfxBuy(); ghTick(); } };
+  const doHarvestPlot = () => {
+    const s = saveRef.current;
+    const res = harvestCrop(s, ghPlotRef.current);
+    if (!res) return;
+    sfxCatch(); persistSave(s); refreshHud();
+    if (res.capstone) award('greenthumb');
+    setOverlayBoth(null);
+    const q = CROP_QUALITY[res.quality];
+    const lines = [`You harvest a ${q}${CROPS[res.cropId].name} and lay it in the shipping box. (worth ¥${res.value.toLocaleString()})`];
+    if (res.requestBonus > 0) lines.push(`That completes Granny's request! She presses a bonus into your hand. (+¥${res.requestBonus.toLocaleString()})`);
+    if (res.capstone) lines.push('The Moonflower keeps glowing faintly in your arms. Granny gasps — then gives you a Bloom Lamp grown from its light.');
+    showDialog(lines, 'Greenhouse');
+  };
+  const buyGhSeed = (cropId: string) => { if (buySeed(saveRef.current, cropId)) { sfxCoin(); ghTick(); } };
+  const buyGhFertilizer = () => { if (buyFertilizer(saveRef.current)) { sfxCoin(); ghTick(); } };
+  const buyGhSprinkler = () => { if (buySprinkler(saveRef.current)) { sfxBuy(); ghTick(); } };
+  const buyGhBeds = () => { if (expandBeds(saveRef.current)) { sfxBuy(); ghTick(); } };
+  const buyGhTier = () => { if (upgradeGreenhouse(saveRef.current)) { sfxBuy(); ghTick(); } };
+
   // Hand Granny Soto a fish (her greenhouse-key errand) — only on confirm.
   const giveGrannyFish = () => {
     const s = saveRef.current;
@@ -4908,6 +4944,104 @@ const LittleApartmentGame: React.FC = () => {
       );
     }
 
+    if (ov.shop === 'greenhouse-plot') {
+      const plot = s.greenhouse.plots[ghPlotRef.current];
+      const crop = plot && plot.crop ? CROPS[plot.crop] : null;
+      const ready = plot ? plotReady(plot) : false;
+      const wateredToday = plot ? plot.wateredDay === s.day : false;
+      const seedIds = Object.keys(s.greenhouse.seeds).filter(id => (s.greenhouse.seeds[id] ?? 0) > 0 && CROPS[id]);
+      return (
+        <ShopFrame title="SOIL BED" subtitle={crop ? crop.name : 'Empty — ready to plant'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {!crop ? (
+            <div className="py-1">
+              <p className="text-base opacity-70 mb-2">Press a seed into the soil:</p>
+              {seedIds.length === 0
+                ? <p className="text-base opacity-50 py-2">No seeds on hand. Buy some at Granny's supply counter.</p>
+                : seedIds.map(id => {
+                    const c = CROPS[id];
+                    return (
+                      <div key={id} className="flex items-center gap-3 py-1.5 border-b border-white/10">
+                        <SpriteIcon atlas={atlasRef.current} sprite={c.sprites[3]} size={26} />
+                        <div className="flex-grow min-w-0">
+                          <p className="text-base leading-tight">{c.name} <span className="text-xs opacity-50">×{s.greenhouse.seeds[id]}</span></p>
+                          <p className="text-xs opacity-50 leading-tight">{c.growDays}d · sells ¥{c.reward.toLocaleString()}{c.regrow ? ' · regrows' : ''}</p>
+                        </div>
+                        <button className={btnCls} onClick={() => doPlantCrop(id)}>PLANT</button>
+                      </div>
+                    );
+                  })}
+            </div>
+          ) : ready ? (
+            <div className="py-2">
+              <div className="flex items-center gap-3 mb-3"><SpriteIcon atlas={atlasRef.current} sprite={crop.sprites[3]} size={40} /><p className="text-lg">{crop.name} — ripe and ready!</p></div>
+              <button className={`${btnCls} w-full`} onClick={doHarvestPlot}>HARVEST → shipping box</button>
+            </div>
+          ) : (
+            <div className="py-2">
+              <div className="flex items-center gap-3 mb-2">
+                <SpriteIcon atlas={atlasRef.current} sprite={crop.sprites[plotStage(plot)]} size={40} />
+                <div>
+                  <p className="text-base">{crop.name}</p>
+                  <p className="text-xs opacity-60">Day {plot.progress}/{crop.growDays} · {plot.fertilized ? 'fertilized · ' : ''}{plot.missed > 0 ? `${plot.missed} dry morning${plot.missed > 1 ? 's' : ''}` : 'well-tended'}</p>
+                </div>
+              </div>
+              <p className="text-sm opacity-70 mb-2">{s.greenhouse.sprinkler ? 'The sprinkler keeps this bed watered for you.' : wateredToday ? 'Watered for today — come back tomorrow.' : 'The soil is dry. Give it a drink.'}</p>
+              <div className="flex gap-2">
+                {!s.greenhouse.sprinkler && <button className={`${btnCls} flex-grow`} disabled={wateredToday} onClick={doWaterPlot}>{wateredToday ? 'WATERED ✓' : '💧 WATER'}</button>}
+                <button className={`${btnCls} flex-grow`} disabled={plot.fertilized || s.greenhouse.fertilizer <= 0} onClick={doFertilizePlot}>{plot.fertilized ? 'FERTILIZED ✓' : `FERTILIZE (×${s.greenhouse.fertilizer})`}</button>
+              </div>
+            </div>
+          )}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'greenhouse-supply') {
+      const g = s.greenhouse;
+      const seeds = seedShopFor(s);
+      const req = activeRequest(s);
+      const bedCost = BED_COSTS[g.beds + 3];
+      const tierCost = TIER_COSTS[g.tier + 1];
+      return (
+        <ShopFrame title="GRANNY'S SUPPLY COUNTER" subtitle="Seeds, supplies, and room to grow" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {req && (
+            <div className="mb-2 rounded-lg bg-[#3da26b]/15 border border-[#3da26b]/40 px-2.5 py-1.5">
+              <p className="text-sm text-[#7ce8a0]">📋 COMMUNITY REQUEST</p>
+              <p className="text-sm opacity-80 leading-snug">{req.flavor}</p>
+              <p className="text-xs opacity-70 mt-0.5">Ship {req.count} {CROPS[req.crop].name} — {g.request?.progress ?? 0}/{req.count} done · bonus ¥{req.reward.toLocaleString()}</p>
+            </div>
+          )}
+          <p className="text-sm text-[#7ce8a0]/80">SEEDS</p>
+          {seeds.map(c => (
+            <div key={c.id} className="flex items-center gap-2 py-1 border-b border-white/10">
+              <SpriteIcon atlas={atlasRef.current} sprite={c.sprites[3]} size={24} />
+              <div className="flex-grow min-w-0"><p className="text-sm leading-tight">{c.name} <span className="text-xs opacity-50">have ×{g.seeds[c.id] ?? 0}</span></p><p className="text-xs opacity-50 leading-tight">{c.growDays}d · ¥{c.reward.toLocaleString()}{c.regrow ? ' · regrows' : ''}</p></div>
+              <button className={`${btnCls} text-sm`} disabled={s.money < c.seedCost} onClick={() => buyGhSeed(c.id)}>¥{c.seedCost}</button>
+            </div>
+          ))}
+          {g.moonSeed && <p className="text-xs opacity-60 py-1">🌙 Moonflower seed — a gift of the shrine (have ×{g.seeds.moonflower ?? 0})</p>}
+          <p className="text-sm text-[#7ce8a0]/80 mt-2">SUPPLIES</p>
+          <div className="flex items-center gap-2 py-1 border-b border-white/10">
+            <div className="flex-grow"><p className="text-sm">Fertilizer <span className="text-xs opacity-50">have ×{g.fertilizer}</span></p><p className="text-xs opacity-50">apply to a bed for a quality boost</p></div>
+            <button className={`${btnCls} text-sm`} disabled={s.money < FERTILIZER_COST} onClick={buyGhFertilizer}>¥{FERTILIZER_COST}</button>
+          </div>
+          <div className="flex items-center gap-2 py-1 border-b border-white/10">
+            <div className="flex-grow"><p className="text-sm">Sprinkler System</p><p className="text-xs opacity-50">auto-waters every bed, every morning</p></div>
+            {g.sprinkler ? <span className="text-[#3da26b] text-sm">INSTALLED</span> : <button className={`${btnCls} text-sm`} disabled={s.money < SPRINKLER_COST} onClick={buyGhSprinkler}>¥{SPRINKLER_COST.toLocaleString()}</button>}
+          </div>
+          <p className="text-sm text-[#7ce8a0]/80 mt-2">EXPANSION</p>
+          <div className="flex items-center gap-2 py-1 border-b border-white/10">
+            <div className="flex-grow"><p className="text-sm">Till new beds <span className="text-xs opacity-50">{g.beds}/9</span></p><p className="text-xs opacity-50">break ground for 3 more soil beds</p></div>
+            {bedCost ? <button className={`${btnCls} text-sm`} disabled={s.money < bedCost} onClick={buyGhBeds}>¥{bedCost.toLocaleString()}</button> : <span className="text-[#3da26b] text-sm">MAX</span>}
+          </div>
+          <div className="flex items-center gap-2 py-1">
+            <div className="flex-grow"><p className="text-sm">Glasshouse upgrade <span className="text-xs opacity-50">tier {g.tier}/2</span></p><p className="text-xs opacity-50">unlocks better seeds + a standing quality bonus</p></div>
+            {tierCost ? <button className={`${btnCls} text-sm`} disabled={s.money < tierCost} onClick={buyGhTier}>¥{tierCost.toLocaleString()}</button> : <span className="text-[#3da26b] text-sm">MAX</span>}
+          </div>
+        </ShopFrame>
+      );
+    }
+
     if (ov.shop === 'casino') {
       return (
         <ShopFrame title="KINRYŪ LOUNGE" subtitle={'"The house likes company. And the house always wins."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
@@ -5270,7 +5404,7 @@ const LittleApartmentGame: React.FC = () => {
             </div>
           )}
           <p className="text-base text-[#b06ad0]/80 mt-1">FURNITURE — "Money? Quaint. Down here we work in minerals."</p>
-          {RARE_FURNITURE.filter(f => f.id !== 'coffin').map(f => {
+          {RARE_FURNITURE.filter(f => f.id !== 'coffin' && f.id !== 'bloomlamp').map(f => {
             const owned = s.rares.includes(f.id);
             return (
               <div key={f.id} className="py-1.5 border-b border-white/10">
