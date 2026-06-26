@@ -83,6 +83,11 @@ export const RARE_SLOTS: FurnitureSlot[] = [
 // Completing the gachapon set materializes a golden maneki-neko by the desk.
 export const MANEKI_SLOT = { x: 3, y: 4 };
 
+// Wall-mounted display shelf (3 tiles) for your gachapon figures. Appears once
+// you own at least one figure; drawn + populated by the apartment draw loop. The
+// x range (6..8 on the top wall row) is a wall in both the small and big grids.
+export const SHELF_SLOT = { x: 6, y: 0, w: 3 };
+
 const apartment: SceneDef = {
   id: 'apartment',
   name: 'Apt. 203',
@@ -106,6 +111,7 @@ const apartment: SceneDef = {
   // Sleep is dynamic — wherever the bed (or default futon) is placed.
   interactables: [
     { id: 'window', x: 3, y: 0, w: 2, h: 1, label: 'Look outside' },
+    { id: 'trophy-shelf', x: 6, y: 0, w: 3, h: 1, label: 'Trophy shelf' },
   ],
   npcs: [],
 };

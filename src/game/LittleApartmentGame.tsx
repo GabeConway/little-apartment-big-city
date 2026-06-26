@@ -25,7 +25,7 @@ const drawVibeThumb = (el: HTMLCanvasElement | null, vibe: 'fem' | 'masc') => {
   cx.clearRect(0, 0, el.width, el.height);
   cx.drawImage(spr, 0, 0, el.width, el.height);
 };
-import { SCENES, SCENE_SIGNS, MANEKI_SLOT, GREENHOUSE_PLOTS, APARTMENT_BIG_GRID } from './maps';
+import { SCENES, SCENE_SIGNS, MANEKI_SLOT, SHELF_SLOT, GREENHOUSE_PLOTS, APARTMENT_BIG_GRID } from './maps';
 // The original (small) apartment grid, captured once before any room-expansion
 // swap so we can switch back on a fresh game.
 const APARTMENT_SMALL_GRID = SCENES.apartment.grid;
@@ -152,6 +152,110 @@ const engineSet = (target: number, dt: number) => {
     engine.sub.frequency.setTargetAtTime(f * 0.5, ctx.currentTime, 0.05);
     engine.filt.frequency.setTargetAtTime(380 + engineLevel * 820, ctx.currentTime, 0.05);
     engine.gain.gain.setTargetAtTime(0.011 + engineLevel * 0.018, ctx.currentTime, 0.05);
+  } catch { /* no audio */ }
+};
+
+// ---- Ambient soundscape (WebAudio, asset-free) -----------------------------
+// A looping filtered-noise bed + scheduled one-shot accents, swapped by scene +
+// weather (shore waves & gulls / mine drips / rain-on-glass at home). Driven each
+// frame from the draw loop via `ambientSet`, like the rain loop. Honors mute.
+type AmbientKind = 'shore' | 'mine' | 'rainhome';
+let ambient:
+  | { kind: AmbientKind; src: AudioBufferSourceNode; filt: BiquadFilterNode; gain: GainNode; swell: number; accent: number }
+  | null = null;
+let noiseBuf: AudioBuffer | null = null;
+const ambientNoise = (ctx: AudioContext): AudioBuffer => {
+  if (noiseBuf) return noiseBuf;
+  const len = ctx.sampleRate * 2;
+  noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) { // brown-ish noise — smoother/warmer than white
+    const w = Math.random() * 2 - 1;
+    last = (last + 0.02 * w) / 1.02;
+    d[i] = last * 3.2;
+  }
+  return noiseBuf;
+};
+const AMBIENT_CFG: Record<AmbientKind, { freq: number; q: number; vol: number }> = {
+  shore: { freq: 520, q: 0.7, vol: 0.05 },     // low surf wash, swells in `ambientSet`
+  mine: { freq: 300, q: 0.4, vol: 0.016 },     // faint cave air + occasional drip
+  rainhome: { freq: 1500, q: 0.4, vol: 0.045 }, // rain pattering on the window glass
+};
+// distant gull — two quick downward caws
+const sfxGull = () => {
+  if (readMuted() || !audioCtx) return;
+  try {
+    const ctx = audioCtx, t = ctx.currentTime;
+    for (const o of [0, 0.17]) {
+      const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+      const g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.frequency.setValueAtTime(1300, t + o);
+      osc.frequency.exponentialRampToValueAtTime(820, t + o + 0.12);
+      g.gain.setValueAtTime(0.0001, t + o);
+      g.gain.linearRampToValueAtTime(0.02, t + o + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.13);
+      osc.start(t + o); osc.stop(t + o + 0.15);
+    }
+  } catch { /* no audio */ }
+};
+// water drip — a short high plip with a quick pitch drop
+const sfxDrip = () => {
+  if (readMuted() || !audioCtx) return;
+  try {
+    const ctx = audioCtx, t = ctx.currentTime;
+    const osc = ctx.createOscillator(); osc.type = 'sine';
+    const g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.frequency.setValueAtTime(1450, t);
+    osc.frequency.exponentialRampToValueAtTime(660, t + 0.07);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.028, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    osc.start(t); osc.stop(t + 0.18);
+  } catch { /* no audio */ }
+};
+const ambientStop = () => {
+  if (!ambient || !audioCtx) { ambient = null; return; }
+  const a = ambient; ambient = null;
+  try {
+    a.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.3);
+    a.src.stop(audioCtx.currentTime + 0.7);
+  } catch { /* already stopped */ }
+};
+// Set the active ambient bed (or null = silence). No-ops while the kind is
+// unchanged except to advance the swell/accent timers. `dt` = seconds since the
+// last call (clamped by the caller).
+const ambientSet = (kind: AmbientKind | null, dt: number) => {
+  if (readMuted() || !kind) { ambientStop(); return; }
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    const ctx = audioCtx;
+    if (ambient && ambient.kind !== kind) ambientStop();
+    const cfg = AMBIENT_CFG[kind];
+    if (!ambient) {
+      const src = ctx.createBufferSource(); src.buffer = ambientNoise(ctx); src.loop = true;
+      const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = cfg.freq; filt.Q.value = cfg.q;
+      const gain = ctx.createGain(); gain.gain.value = 0;
+      src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+      src.start();
+      gain.gain.setTargetAtTime(cfg.vol, ctx.currentTime, 0.8);
+      ambient = { kind, src, filt, gain, swell: 0, accent: 1.5 + Math.random() * 3 };
+    }
+    const a = ambient;
+    if (kind === 'shore') { // slow surf swell — volume + brightness breathe together
+      a.swell += dt * 0.45;
+      const s = Math.sin(a.swell) * 0.5 + 0.5;
+      a.gain.gain.setTargetAtTime(cfg.vol * (0.5 + 0.5 * s), ctx.currentTime, 0.2);
+      a.filt.frequency.setTargetAtTime(cfg.freq * (0.8 + 0.45 * s), ctx.currentTime, 0.2);
+    }
+    a.accent -= dt;
+    if (a.accent <= 0) {
+      if (kind === 'shore') { a.accent = 5 + Math.random() * 8; sfxGull(); }
+      else if (kind === 'mine') { a.accent = 3 + Math.random() * 7; sfxDrip(); }
+      else a.accent = 1e9; // rainhome: bed only, no accents
+    }
   } catch { /* no audio */ }
 };
 
@@ -961,6 +1065,7 @@ const LittleApartmentGame: React.FC = () => {
   const mineTextRef = useRef<{ x: number; y: number; text: string; color: string; t: number } | null>(null);
   // Brief "Floor N" banner shown when you descend a level.
   const depthToastRef = useRef<{ floor: number; t: number } | null>(null);
+  const ambLastTRef = useRef(0); // last render `t` (s) — for ambient-loop dt
   const hurtCooldownRef = useRef(0);
   const lastSafeTileRef = useRef<Vec | null>(null);
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
@@ -1931,6 +2036,25 @@ const LittleApartmentGame: React.FC = () => {
               ? `Trains, neon, ten million strangers. Behind you: ${n} ${n === 1 ? 'thing' : 'things'} that are yours.`
               : 'The city glitters. You turn around, and home glitters back.',
         ]);
+        break;
+      }
+      case 'trophy-shelf': {
+        const owned = GACHA_FIGURES.filter(n => (s.gacha[n] ?? 0) > 0);
+        const dupes = owned.filter(n => (s.gacha[n] ?? 0) > 1);
+        if (owned.length === 0) {
+          showDialog(['An empty display shelf, waiting. Win some gachapon figures across town and they\'ll move in here.']);
+        } else {
+          const list = owned.map(n => { const c = s.gacha[n] ?? 0; return c > 1 ? `${n} ×${c}` : n; }).join(', ');
+          showDialog([
+            `Your gachapon shelf: ${owned.length}/${GACHA_FIGURES.length} figures.`,
+            list,
+            dupes.length
+              ? 'The duplicates huddle together. You tell yourself they have personality.'
+              : owned.length === GACHA_FIGURES.length
+                ? 'Every last one. Mr. Maeda would weep.'
+                : 'Gaps in the lineup. The hunt continues.',
+          ]);
+        }
         break;
       }
       case 'landlord':
@@ -2991,6 +3115,20 @@ const LittleApartmentGame: React.FC = () => {
         contactShadow(MANEKI_SLOT.x, MANEKI_SLOT.y, 1);
         ctx.drawImage(atlas['f-maneki'], MANEKI_SLOT.x * TILE - cam.x, MANEKI_SLOT.y * TILE - cam.y);
       }
+      // Trophy shelf: a wall plank that fills with your gachapon figures, one toy
+      // per owned figure, spaced across the plank (a packed shelf as it fills).
+      const ownedFigs = GACHA_FIGURES.map((n, i) => i).filter(i => (s.gacha[GACHA_FIGURES[i]] ?? 0) > 0);
+      if (ownedFigs.length > 0) {
+        const sx = SHELF_SLOT.x * TILE - cam.x, sy = SHELF_SLOT.y * TILE - cam.y;
+        ctx.drawImage(atlas['f-shelf'], sx, sy);
+        const plankW = SHELF_SLOT.w * TILE, FW = 11, FH = 13;
+        const pad = 3, span = plankW - pad * 2 - FW;
+        const n = ownedFigs.length;
+        ownedFigs.forEach((fi, k) => {
+          const fx = sx + pad + (n === 1 ? span / 2 : (span * k) / (n - 1));
+          ctx.drawImage(atlas[`fig-${fi}`], Math.round(fx), sy + (TILE - 2) - FH);
+        });
+      }
     }
 
     // the greenhouse: growing crops on each plot + a sprinkler mist when on
@@ -3363,6 +3501,20 @@ const LittleApartmentGame: React.FC = () => {
         ctx.fillStyle = 'rgba(70, 90, 120, 0.12)';
         ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
       }
+    }
+
+    // Ambient soundscape: surf+gulls at the coast, drips in the mines, rain on the
+    // window when it's raining at home. Layered over (not replacing) the music.
+    {
+      const sid = scene.id;
+      const amb: AmbientKind | null =
+        sid === 'apartment' && isRainyDay(saveRef.current) ? 'rainhome'
+          : (sid === 'shore' || sid === 'deepsea' || sid === 'island') ? 'shore'
+            : (sid === 'mines' || sid === 'backrooms') ? 'mine'
+              : null;
+      const adt = Math.min(0.1, Math.max(0, t - ambLastTRef.current));
+      ambLastTRef.current = t;
+      ambientSet(amb, adt);
     }
 
     // Club Kaiju: a dim room lit by sweeping colored spotlights + a disco-ball
@@ -3799,6 +3951,7 @@ const LittleApartmentGame: React.FC = () => {
   useEffect(() => {
     if (screen !== 'title') return;
     syncRain(false); // no rain on the title screen
+    ambientStop();   // kill any surf/drip/rain bed left from a prior session
     engineStop();    // and no phantom motor droning behind the menu
     playMusicFor('title');
     const kick = () => playMusicFor('title');
@@ -4602,6 +4755,9 @@ const LittleApartmentGame: React.FC = () => {
       for (let dx = 0; dx < w; dx++) occ.add(`${p.x + dx},${p.y}`);
     }
     if (gachaComplete(s)) occ.add(`${MANEKI_SLOT.x},${MANEKI_SLOT.y}`);
+    // Reserve the trophy-shelf cells so wall-mounted items can't overlap it.
+    if (GACHA_FIGURES.some(n => (s.gacha[n] ?? 0) > 0))
+      for (let dx = 0; dx < SHELF_SLOT.w; dx++) occ.add(`${SHELF_SLOT.x + dx},${SHELF_SLOT.y}`);
     return occ;
   };
 

@@ -2914,6 +2914,84 @@ export const loadSheets = (atlas: Atlas, defs: SheetDef[], done?: () => void): v
 // 128px AI PNG player pipeline was dropped; loadSheets above stays for future
 // world/prop art.)
 
+// ---- Home trophy shelf ---------------------------------------------------
+// A wall-mounted display plank (3 tiles wide) + the 10 gachapon figures as tiny
+// shelf toys (`fig-0`..`fig-9`, aligned to GACHA_FIGURES order). The figures are
+// blitted onto the plank by the apartment draw loop, one per owned figure.
+const buildTrophies = (atlas: Atlas) => {
+  // 3-tile wooden plank with two end brackets + a thin lip + drop shadow.
+  atlas['f-shelf'] = tile(ctx => {
+    ctx.fillStyle = 'rgba(20,14,10,0.18)'; ctx.fillRect(2, 13, 44, 2);   // contact shadow
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 11, 44, 3);               // plank
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(2, 11, 44, 1);               // lit top edge
+    ctx.fillStyle = '#5a3a24'; ctx.fillRect(2, 13, 44, 1);               // front-lip shade
+    ctx.fillStyle = '#4a3120'; ctx.fillRect(4, 14, 2, 1); ctx.fillRect(42, 14, 2, 1); // brackets
+  }, 48, 16);
+
+  // Each figure is 11x13, sitting on a shared baseline (y≈12) so they line up.
+  const toy = (draw: Draw) => tile(draw, 11, 13);
+  const R = (ctx: CanvasRenderingContext2D, c: string, x: number, y: number, w: number, h: number) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+
+  atlas['fig-0'] = toy(ctx => { // Salaryman Cat
+    R(ctx, '#8a8e96', 4, 7, 3, 5); R(ctx, '#9aa0a8', 4, 7, 3, 1);       // body
+    R(ctx, '#c0392b', 5, 8, 1, 3);                                      // tie
+    R(ctx, '#8a8e96', 3, 2, 5, 5); R(ctx, '#9aa0a8', 3, 2, 5, 1);       // head
+    R(ctx, '#8a8e96', 2, 1, 2, 2); R(ctx, '#8a8e96', 7, 1, 2, 2);       // ears
+    R(ctx, '#e8a0a0', 3, 2, 1, 1); R(ctx, '#e8a0a0', 7, 2, 1, 1);
+    R(ctx, '#16181d', 4, 4, 1, 1); R(ctx, '#16181d', 6, 4, 1, 1);       // eyes
+  });
+  atlas['fig-1'] = toy(ctx => { // Tower Crab
+    R(ctx, '#c0392b', 2, 7, 7, 4); R(ctx, '#e0594b', 2, 7, 7, 1);       // shell
+    R(ctx, '#c0392b', 1, 5, 2, 2); R(ctx, '#c0392b', 8, 5, 2, 2);       // claws
+    R(ctx, '#16181d', 3, 4, 1, 2); R(ctx, '#16181d', 7, 4, 1, 2);       // eye stalks
+    R(ctx, '#c0392b', 2, 11, 1, 1); R(ctx, '#c0392b', 5, 11, 1, 1); R(ctx, '#c0392b', 8, 11, 1, 1); // legs
+  });
+  atlas['fig-2'] = toy(ctx => { // Drift King (car)
+    R(ctx, '#c9a227', 1, 7, 9, 3); R(ctx, '#e8c84a', 1, 7, 9, 1);       // body
+    R(ctx, '#9fc4e8', 3, 4, 5, 3);                                      // cabin
+    R(ctx, '#222', 2, 10, 3, 2); R(ctx, '#222', 6, 10, 3, 2);          // wheels
+  });
+  atlas['fig-3'] = toy(ctx => { // Melon Soda-kun (bottle)
+    R(ctx, '#3dbf6a', 3, 4, 4, 8); R(ctx, '#5ad88a', 3, 4, 1, 8);       // body + shine
+    R(ctx, '#3dbf6a', 4, 2, 2, 2);                                      // neck
+    R(ctx, '#c0392b', 4, 1, 2, 1);                                      // cap
+    R(ctx, '#fff', 4, 7, 2, 2);                                         // label
+  });
+  atlas['fig-4'] = toy(ctx => { // Pixel Gabe
+    R(ctx, '#e0b48a', 4, 2, 3, 3);                                      // head
+    R(ctx, '#4a3120', 4, 1, 3, 1);                                      // hair
+    R(ctx, '#16181d', 4, 3, 1, 1); R(ctx, '#16181d', 6, 3, 1, 1);       // eyes
+    R(ctx, '#3a6ea5', 3, 5, 5, 5); R(ctx, '#4a7eb5', 3, 5, 5, 1);       // shirt
+    R(ctx, '#2c3038', 3, 10, 2, 2); R(ctx, '#2c3038', 6, 10, 2, 2);     // legs
+  });
+  atlas['fig-5'] = toy(ctx => { // Konbini Ghost
+    R(ctx, '#eef0f4', 3, 3, 5, 7); R(ctx, '#fff', 3, 3, 5, 1);          // body
+    R(ctx, '#3a4452', 4, 5, 1, 2); R(ctx, '#3a4452', 6, 5, 1, 2);       // eyes
+    R(ctx, '#eef0f4', 3, 10, 1, 1); R(ctx, '#eef0f4', 5, 10, 1, 1); R(ctx, '#eef0f4', 7, 10, 1, 1); // tail
+  });
+  atlas['fig-6'] = toy(ctx => { // Mini Golden Carp
+    R(ctx, '#ffd24a', 3, 4, 4, 7); R(ctx, '#ffe9a0', 3, 4, 4, 1);       // body
+    R(ctx, '#e0a000', 2, 9, 6, 2);                                      // tail fan
+    R(ctx, '#16181d', 4, 5, 1, 1);                                      // eye
+  });
+  atlas['fig-7'] = toy(ctx => { // Robot Vacuum
+    R(ctx, '#2c3038', 1, 8, 9, 3); R(ctx, '#3a4250', 1, 8, 9, 1);       // disc
+    R(ctx, '#5ad8d0', 4, 9, 2, 1);                                      // sensor light
+    R(ctx, '#16181d', 1, 11, 9, 1);                                     // base shade
+  });
+  atlas['fig-8'] = toy(ctx => { // Bonsai Buddy
+    R(ctx, '#a0673a', 3, 9, 5, 3); R(ctx, '#b87a48', 3, 9, 5, 1);       // pot
+    R(ctx, '#5a3a24', 5, 6, 1, 3);                                      // trunk
+    R(ctx, '#3d8a4a', 2, 3, 7, 4); R(ctx, '#56a85e', 2, 3, 7, 1);       // canopy
+  });
+  atlas['fig-9'] = toy(ctx => { // UFO Catcher
+    R(ctx, '#8a96a0', 1, 6, 9, 3); R(ctx, '#aab4bc', 1, 6, 9, 1);       // saucer
+    R(ctx, '#9fc4e8', 3, 3, 5, 3);                                      // dome
+    R(ctx, '#ffd24a', 2, 9, 1, 1); R(ctx, '#ffd24a', 5, 9, 1, 1); R(ctx, '#ffd24a', 8, 9, 1, 1); // lights
+    R(ctx, '#8a96a0', 5, 9, 1, 3);                                      // claw stem
+  });
+};
+
 export const buildAtlas = (): Atlas => {
   const atlas: Atlas = {};
   // 'masc' vibe (also the legacy default 'player' key) + 'fem' vibe.
@@ -2928,6 +3006,7 @@ export const buildAtlas = (): Atlas => {
   buildTiles(atlas);
   buildDecorFood(atlas);
   buildFurniture(atlas);
+  buildTrophies(atlas);
   addFish(atlas, 'fish-minnow', '#8a9aa6');
   addFish(atlas, 'fish-mackerel', '#4a7a9e');
   addFish(atlas, 'fish-bream', '#c97a8a');

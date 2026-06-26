@@ -3,7 +3,8 @@
 Parking lot for features considered but not yet built. Each notes *why it fits*,
 *what it hooks into*, and a rough effort. Read [games.md](games.md) for the
 as-built systems these would extend. (Built already: Cooking, NPC friendship +
-gifting, wall/floor/rug decorating — see games.md.)
+gifting, wall/floor/rug decorating, home trophy shelf, ambient soundscapes —
+see games.md.)
 
 ## Strong candidates
 
@@ -33,14 +34,10 @@ second apartment `SceneDef` (or a grown grid) + a migration for placed-furniture
 coords. Pairs naturally with the decor system.
 
 ## Smaller charm
-- **Home trophy shelf** — display gacha dupes / museum-adjacent curios at home
-  (a placed shelf that renders owned `gacha` figures). Reuses `SpriteIcon` draw.
 - **Pet variety** — more strays beyond David the cat (a shore dog, a shrine fox);
   each a `catRef`-style roamer with its own lines. Reuses the cat entity system.
 - **Physical mail** — letters in a home mailbox alongside phone texts; some quests
   arrive by post. Reuses the `letter` overlay + `messages` catalog pattern.
-- **Ambient SFX** — rain-on-glass at home during rain, mine drips, shore gulls,
-  café murmur. Reuses `playSfx` + the per-scene/weather hooks.
 - **More achievements** — cooking/friendship/decor milestones for the `gameAch`
   system (e.g. "first 10♥", "fully restyled room", "cooked every recipe").
 - **Photo / memory mode** — snapshot the decorated room to a phone "gallery".
