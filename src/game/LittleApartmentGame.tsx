@@ -63,7 +63,7 @@ import {
   canCook, canCookHere, cook, eatDish, ingredientCount, buyGrocery, keepProduce,
   buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
-  ROOM_PRICE, skillLevel, skillProgress, addSkillXp,
+  ROOM_PRICE, JUKEBOX_PRICE, skillLevel, skillProgress, addSkillXp,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe, SkillId } from './state';
@@ -1483,6 +1483,20 @@ const LittleApartmentGame: React.FC = () => {
     refreshHud(); setShopTick(v => v + 1);
   };
 
+  // Buy the home jukebox from DJ Tanuki — unlocks the phone Music app.
+  const buyJukebox = () => {
+    const s = saveRef.current;
+    if (s.jukeboxUnlocked || s.money < JUKEBOX_PRICE) return;
+    s.money -= JUKEBOX_PRICE;
+    s.jukeboxUnlocked = true;
+    sfxBuy();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+    showDialog([
+      '"A home rig? HA. Respect. Most people just yell at their phone speaker."',
+      '"It\'s in your pocket now — Music app. Pick any place you\'ve actually BEEN. Authenticity. Matters."',
+    ], 'DJ Tanuki');
+  };
+
   // Home jukebox: choose which visited scene's track plays in the apartment.
   const setJukebox = (sceneId: string | null) => {
     const s = saveRef.current;
@@ -2608,8 +2622,9 @@ const LittleApartmentGame: React.FC = () => {
           const sNow = saveRef.current;
           const luck = shrineLuck(sNow);
           const rodPull = sNow.fishRod >= 1 ? 1 : 0;
+          const rain = isRainyDay(sNow) ? 0.8 : 0; // rainy days stir up the rare, hungry fish
           const base = fm.table === 'deep' ? DEEP_FISH : fm.table === 'tropical' ? TROPICAL_FISH : FISH;
-          const boost = 0.5 * luck + 0.6 * rodPull + 0.12 * skillLevel(sNow, 'fish'); // skill draws rarer fish
+          const boost = 0.5 * luck + 0.6 * rodPull + rain + 0.12 * skillLevel(sNow, 'fish'); // skill draws rarer fish
           const table = boost === 0 ? base : base.map(f => (f.value >= 500 ? { ...f, weight: f.weight * (1 + boost) } : f));
           fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table)), tile: fm.tile, table: fm.table };
         } else if (fm.t <= 0) {
@@ -5457,7 +5472,9 @@ const LittleApartmentGame: React.FC = () => {
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
               <AppIcon icon="📓" label="Journal" bg="linear-gradient(160deg,#4a6ea0,#28406a)" onClick={() => open('journal')} />
               <AppIcon icon="💛" label="Friends" bg="linear-gradient(160deg,#d0506e,#8a2f4a)" onClick={() => open('friends')} />
-              <AppIcon icon="🎵" label="Music" bg="linear-gradient(160deg,#7a4fd0,#3a2a8a)" onClick={() => open('music')} />
+              {s.jukeboxUnlocked && (
+                <AppIcon icon="🎵" label="Music" bg="linear-gradient(160deg,#7a4fd0,#3a2a8a)" onClick={() => open('music')} />
+              )}
               <AppIcon icon="📈" label="Skills" bg="linear-gradient(160deg,#3da26b,#1f6e45)" onClick={() => open('skills')} />
               {s.zamazonkApp && (
                 <AppIcon
@@ -6204,6 +6221,18 @@ const LittleApartmentGame: React.FC = () => {
             </div>
           ))}
           {locked > 0 && <p className="text-sm opacity-50 mt-2">{locked} more in the crate — go see more of the city first.</p>}
+          <div className="mt-3 pt-2 border-t border-white/15">
+            {s.jukeboxUnlocked ? (
+              <p className="text-sm opacity-60">"Your home rig's all set. Spin whatever you want back at the apartment."</p>
+            ) : (
+              <>
+                <p className="text-base leading-tight mb-1">🎵 Home Jukebox <span className="text-sm opacity-50">— play city tracks at your apartment</span></p>
+                <button className={`${btnCls} w-full`} disabled={s.money < JUKEBOX_PRICE} onClick={buyJukebox}>
+                  {s.money < JUKEBOX_PRICE ? `NEED ¥${JUKEBOX_PRICE.toLocaleString()}` : `BUY HOME JUKEBOX · ¥${JUKEBOX_PRICE.toLocaleString()}`}
+                </button>
+              </>
+            )}
+          </div>
         </ShopFrame>
       );
     }

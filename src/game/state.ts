@@ -106,6 +106,7 @@ export interface GameSave {
   ownedDecor: string[];             // DECOR ids owned (wall/floor/rug)
   rugs: { id: string; x: number; y: number }[]; // rugs placed on the apartment floor (2×2, walkable)
   roomUnlocked: boolean;            // paid the landlord to knock through to the next unit (bigger apartment)
+  jukeboxUnlocked: boolean;         // bought the home jukebox from DJ Tanuki (gates the Music phone app)
   homeTrack: string | null;         // jukebox: scene id whose music plays at the apartment (null = default theme)
   skills: { fish: number; mine: number; farm: number }; // gathering XP per skill (level derived)
 }
@@ -137,6 +138,7 @@ export const addSkillXp = (s: GameSave, k: SkillId, n: number): number => {
 // Price to expand the apartment (paid to the nameless landlord; gated behind the
 // backrooms being unlocked — you need the deep money first).
 export const ROOM_PRICE = 120000;
+export const JUKEBOX_PRICE = 8000; // DJ Tanuki's home jukebox (unlocks the Music app)
 
 // A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
 export interface ZamaOrder { itemId: string; dueDay: number }
@@ -270,6 +272,7 @@ export const newSave = (): GameSave => ({
   ownedDecor: [...STARTER_DECOR],
   rugs: [],
   roomUnlocked: false,
+  jukeboxUnlocked: false,
   homeTrack: null,
   skills: { fish: 0, mine: 0, farm: 0 },
 });
@@ -298,6 +301,7 @@ export const loadSave = (): GameSave | null => {
       s.canFish = true; // grandfather in anyone who already learned
     }
     if (!parsed.today) s.today = freshDayLog(s.money); // old saves: baseline today's tally
+    if (parsed.jukeboxUnlocked === undefined && s.homeTrack) s.jukeboxUnlocked = true; // grandfather jukebox users
     // Greenhouse 2.0 migration: old saves stored {sprinklerOn, plots:[{stage}]}.
     // Rebuild into the new shape, carrying over any planted plots + the sprinkler.
     const g = s.greenhouse as unknown as Record<string, unknown>;
