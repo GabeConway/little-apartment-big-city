@@ -585,6 +585,16 @@ export const waterPlot = (s: GameSave, plotIdx: number): boolean => {
   return true;
 };
 
+// Water every planted, growing, dry plot in one go (watering is free). Beds the
+// sprinkler already covers are skipped (they auto-water at dawn). Returns how many
+// beds actually got a drink, so the caller can toast/sfx only when something changed.
+export const waterAllPlots = (s: GameSave): number => {
+  if (s.greenhouse.sprinkler) return 0; // sprinkler covers every bed already
+  let n = 0;
+  for (let i = 0; i < s.greenhouse.beds; i++) if (waterPlot(s, i)) n++;
+  return n;
+};
+
 export const applyFertilizer = (s: GameSave, plotIdx: number): boolean => {
   const plot = s.greenhouse.plots[plotIdx];
   if (!plot || !plot.crop || plot.fertilized || s.greenhouse.fertilizer <= 0) return false;

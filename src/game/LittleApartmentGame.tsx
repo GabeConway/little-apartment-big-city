@@ -56,7 +56,7 @@ import {
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay, dayEventFor, DAY_EVENT_LABEL, type DayEvent, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
-  plotStage, waterPlot, applyFertilizer, sellShipping, buySeed, buySprinkler,
+  plotStage, waterPlot, waterAllPlots, applyFertilizer, sellShipping, buySeed, buySprinkler,
   buyFertilizer, expandBeds, upgradeGreenhouse, grantMoonSeed, seedShopFor, activeRequest,
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
@@ -2429,6 +2429,16 @@ const LittleApartmentGame: React.FC = () => {
           showDialog(['This bed isn\'t tilled yet.', 'Granny can break new ground for you at the supply counter.']);
           break;
         }
+        // One-press watering: if you're facing/standing on a planted, growing,
+        // un-sprinklered bed that's still dry today, water it right here — no menu.
+        // (Planting, harvesting, fertilizing, or a watered/empty bed open the menu.)
+        const gp = s.greenhouse.plots[idx];
+        if (gp.crop && !plotReady(gp) && !s.greenhouse.sprinkler && gp.wateredDay !== s.day) {
+          waterPlot(s, idx);
+          sfxCoin(); persistSave(s); refreshHud();
+          mineTextRef.current = { x: target!.x * TILE, y: target!.y * TILE - 6, text: '💧 watered', color: '#7ce8e0', t: 1.1 };
+          break;
+        }
         ghPlotRef.current = idx;
         setOverlayBoth({ type: 'shop', shop: 'greenhouse-plot' });
         break;
@@ -4673,6 +4683,11 @@ const LittleApartmentGame: React.FC = () => {
   const ghTick = () => { persistSave(saveRef.current); refreshHud(); setShopTick(v => v + 1); };
   const doPlantCrop = (cropId: string) => { if (plantCrop(saveRef.current, ghPlotRef.current, cropId)) { sfxBuy(); ghTick(); } };
   const doWaterPlot = () => { if (waterPlot(saveRef.current, ghPlotRef.current)) { sfxCoin(); ghTick(); } };
+  // Water every dry bed at once (free). Skips sprinkler-covered beds; one sfx + toast.
+  const doWaterAll = () => {
+    const n = waterAllPlots(saveRef.current);
+    if (n > 0) { sfxCoin(); ghTick(); showToast('💧 Watered every bed', `${n} bed${n > 1 ? 's' : ''} got a drink — they'll grow by morning.`); }
+  };
   const doFertilizePlot = () => { if (applyFertilizer(saveRef.current, ghPlotRef.current)) { sfxBuy(); ghTick(); } };
   const doHarvestPlot = (keep = false) => {
     const s = saveRef.current;
@@ -5816,6 +5831,12 @@ const LittleApartmentGame: React.FC = () => {
               </div>
             </div>
           )}
+          {!s.greenhouse.sprinkler && (() => {
+            const dry = s.greenhouse.plots.slice(0, s.greenhouse.beds).filter(p => p.crop && !plotReady(p) && p.wateredDay !== s.day).length;
+            return dry > 1 ? (
+              <button className={`${btnCls} w-full mt-3`} onClick={doWaterAll}>💧 WATER ALL BEDS ({dry})</button>
+            ) : null;
+          })()}
         </ShopFrame>
       );
     }
@@ -5845,6 +5866,15 @@ const LittleApartmentGame: React.FC = () => {
           ))}
           {g.moonSeed && <p className="text-xs opacity-60 py-1">🌙 Moonflower seed — a gift of the shrine (have ×{g.seeds.moonflower ?? 0})</p>}
           <p className="text-sm text-[#7ce8a0]/80 mt-2">SUPPLIES</p>
+          {!g.sprinkler && (() => {
+            const dry = g.plots.slice(0, g.beds).filter(p => p.crop && !plotReady(p) && p.wateredDay !== s.day).length;
+            return (
+              <div className="flex items-center gap-2 py-1 border-b border-white/10">
+                <div className="flex-grow"><p className="text-sm">Water all beds <span className="text-xs opacity-50">{dry} dry</span></p><p className="text-xs opacity-50">give every thirsty bed a drink — free</p></div>
+                <button className={`${btnCls} text-sm`} disabled={dry === 0} onClick={doWaterAll}>💧 WATER</button>
+              </div>
+            );
+          })()}
           <div className="flex items-center gap-2 py-1 border-b border-white/10">
             <div className="flex-grow"><p className="text-sm">Fertilizer <span className="text-xs opacity-50">have ×{g.fertilizer}</span></p><p className="text-xs opacity-50">apply to a bed for a quality boost</p></div>
             <button className={`${btnCls} text-sm`} disabled={s.money < FERTILIZER_COST} onClick={buyGhFertilizer}>¥{FERTILIZER_COST}</button>
