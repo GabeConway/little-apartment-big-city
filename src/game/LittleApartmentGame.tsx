@@ -5707,6 +5707,14 @@ const LittleApartmentGame: React.FC = () => {
     void shopTick;
     const s = saveRef.current;
     const close = () => setOverlayBoth(null);
+    // Merchant friends (Genji/Lulu/Manager) open a shop on E instead of a talk
+    // dialog, so they miss the end-of-conversation gift hook. Give their stalls a
+    // "Give a gift" button (same gift picker) when you can still gift them today
+    // and you're carrying something giftable.
+    const shopGiftButton = (friendId: string) =>
+      (canGiftToday(s, friendId) && giftableItems(s).length > 0) ? (
+        <button className={`${btnCls} w-full mt-3`} onClick={() => setOverlayBoth({ type: 'gift', npcId: friendId })}>🎁 Give a gift</button>
+      ) : null;
 
     if (ov.shop === 'yakuza') {
       return (
@@ -6281,6 +6289,7 @@ const LittleApartmentGame: React.FC = () => {
           ))}
           <button className={`${btnCls} mt-1`} disabled={sellableTotal === 0} onClick={sellMinerals}>SELL ALL — ¥{sellableTotal.toLocaleString()}</button>
           <p className="text-sm opacity-50 mt-2">It bows politely as you browse. Its shadow does not.</p>
+          {shopGiftButton('manager')}
         </ShopFrame>
       );
     }
@@ -6383,6 +6392,7 @@ const LittleApartmentGame: React.FC = () => {
             <p className="flex-grow text-lg opacity-80">Coconuts ×{s.coconuts} <span className="opacity-50">(¥120 ea — "the blender is hungry")</span></p>
             <button className={btnCls} disabled={s.coconuts === 0} onClick={sellCoconuts}>SELL ALL — ¥{cocoVal.toLocaleString()}</button>
           </div>
+          {shopGiftButton('lulu')}
         </ShopFrame>
       );
     }
@@ -6412,6 +6422,7 @@ const LittleApartmentGame: React.FC = () => {
           })() : (
             <p className="py-1 text-lg opacity-60">"That's the best rod I have, friend. The rest is up to the water."</p>
           )}
+          {shopGiftButton('genji')}
         </ShopFrame>
       );
     }
