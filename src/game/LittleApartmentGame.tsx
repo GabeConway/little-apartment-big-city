@@ -362,7 +362,7 @@ const HACK_LINES = [
 
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji' | 'landlord'
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji' | 'landlord'
   | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch'
   | 'greenhouse-plot' | 'greenhouse-supply';
 
@@ -474,8 +474,11 @@ interface DayRecap {
   collapsed: boolean;     // ended by passing out
 }
 
+// A trailing button on the FINAL line of a dialog (e.g. "🎁 Give a gift").
+type DialogAction = { label: string; onPick: () => void };
+
 type Overlay =
-  | { type: 'dialog'; lines: string[]; idx: number; speaker?: string }
+  | { type: 'dialog'; lines: string[]; idx: number; speaker?: string; actions?: DialogAction[] }
   | { type: 'shop'; shop: ShopId }
   | { type: 'letter'; beat: StoryBeat }
   | { type: 'sleep'; day: number; collapsed?: boolean; awaitClick?: boolean }
@@ -483,7 +486,6 @@ type Overlay =
   | { type: 'menu'; tab: PhoneApp; thread?: string }
   | { type: 'cook' }                          // home kitchen — cook known recipes
   | { type: 'gift'; npcId: string }           // pick a held item to gift an NPC
-  | { type: 'npcchoice'; npcId: string; interactId: string } // talk vs. give a gift
   | { type: 'ending' };
 
 type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills';
@@ -1027,9 +1029,6 @@ const LittleApartmentGame: React.FC = () => {
   // David the cat, once adopted: roams the apartment, sits, naps. Lives only in the
   // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
   const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; timer: number } | null>(null);
-  // When a befriendable NPC is talked to, we first offer TALK / GIFT. This holds
-  // the interaction-id the player chose TALK for, so the re-dispatch skips the chooser.
-  const talkChosenRef = useRef<string | null>(null);
   const ghPlotRef = useRef(0); // which greenhouse plot index the open plot menu is acting on
   const inputRef = useRef(new Input());
   const solidsRef = useRef(new Set<string>());
@@ -1179,8 +1178,8 @@ const LittleApartmentGame: React.FC = () => {
     });
   }, [award]);
 
-  const showDialog = useCallback((lines: string[], speaker?: string) => {
-    setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker });
+  const showDialog = useCallback((lines: string[], speaker?: string, actions?: DialogAction[]) => {
+    setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker, actions });
   }, [setOverlayBoth]);
 
   // Typewriter: reveal the current dialog line char-by-char (~83 cps). Restarts
@@ -1362,10 +1361,11 @@ const LittleApartmentGame: React.FC = () => {
       };
       if (pending.rescuer === 'yoshi') {
         showDialog([
-          'You wake on your own futon. The air smells faintly of cedar and incense. You do not remember leaving the shrine.',
-          'Yoshi is kneeling neatly by the door, perfectly composed. "You fell asleep on the steps. Under the torii. In the rain, very nearly."',
-          '"The kami does not mind a tired visitor. But the night does. So I walked you home. You talk in your sleep, by the way. Mostly about money."',
-          '"Drink water. Bow to nothing in particular. And do not nap on sacred steps again — the komainu judge you." She rises to leave.',
+          'You wake on your own futon. The air still carries cedar and a faint thread of incense — the way the shrine grounds smell at first light.',
+          'Yoshi kneels by the door, calm and unhurried. "You fell asleep beneath the torii. On sacred ground, in the cold. The kami keeps watch over the grounds — but watching is all a kami can do for a sleeping guest."',
+          '"So I saw you the rest of the way home. A guest who falls on the grounds is the shrine\'s guest, and the shrine looks after its own. There is no debt in it, so do not go looking for one."',
+          '"I left a small pinch of salt by your door — a little harae, to send the night\'s heaviness on its way. Drink water. Breathe slow. Be gentle with yourself today."',
+          '"And come back when you are rested. Bow twice, clap twice — the kami will be glad to see you on your feet." She rises, bows once to the quiet room, and turns to go.',
         ], 'Yoshi');
       } else {
         showDialog([
@@ -1567,6 +1567,18 @@ const LittleApartmentGame: React.FC = () => {
     showDialog(lines, f.name);
   };
 
+  // Talk is always the default now (no chooser). Gifting folds into the END of a
+  // conversation: if the player is carrying something giftable and hasn't gifted
+  // this friend today, the final dialog line gets a trailing "🎁 Give a gift"
+  // button that opens the existing gift picker. Returns undefined when there's
+  // nothing to offer (so the dialog just closes on the last line as before).
+  const giftActionFor = (friendId?: string): DialogAction[] | undefined => {
+    if (!friendId) return undefined;
+    const s = saveRef.current;
+    if (!canGiftToday(s, friendId) || giftableItems(s).length === 0) return undefined;
+    return [{ label: '🎁 Give a gift', onPick: () => setOverlayBoth({ type: 'gift', npcId: friendId }) }];
+  };
+
   const feedMonster = () => {
     const s = saveRef.current;
     if (s.peepis <= 0 || s.monsterFed) return;
@@ -1697,12 +1709,7 @@ const LittleApartmentGame: React.FC = () => {
       const ct = { x: Math.round(catRef.current.x / TILE), y: Math.round(catRef.current.y / TILE) };
       if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
         catRef.current.sitting = true; catRef.current.timer = 4; // he stops to address you
-        if (talkChosenRef.current !== 'david-cat' && canGiftToday(s, 'david') && giftableItems(s).length > 0) {
-          setOverlayBoth({ type: 'npcchoice', npcId: 'david', interactId: 'david-cat' });
-          return;
-        }
-        talkChosenRef.current = null;
-        showDialog(WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)], 'David');
+        showDialog(WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)], 'David', giftActionFor('david'));
         return;
       }
     }
@@ -1863,16 +1870,11 @@ const LittleApartmentGame: React.FC = () => {
       : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
           && !(NIGHT_EVEN_IDS.has(n.id) && !davidActive(s)));
     if (npc) {
-      // Befriendable NPC + you're carrying a giftable item + haven't gifted them
-      // today → offer TALK or GIFT first (in person; not from the phone). Choosing
-      // TALK re-runs this with talkChosenRef set, so it falls through to the talk.
+      // Talk is always the default (no chooser). Befriendable NPCs you actually
+      // converse with get a trailing "🎁 Give a gift" button on their last line
+      // (see giftActionFor); merchants open their stalls.
       const friendId = FRIEND_OF_NPC[npc.id];
-      if (friendId && talkChosenRef.current !== npc.id && canGiftToday(s, friendId) && giftableItems(s).length > 0) {
-        setOverlayBoth({ type: 'npcchoice', npcId: friendId, interactId: npc.id });
-        return;
-      }
-      talkChosenRef.current = null;
-      // Merchants open their stalls; everyone else just talks.
+      const giftAct = giftActionFor(friendId);
       if (npc.id === 'yakuza') {
         if (s.gangPaid) return; // already paid; he's on his way out
         setOverlayBoth({ type: 'shop', shop: 'yakuza' });
@@ -1881,7 +1883,7 @@ const LittleApartmentGame: React.FC = () => {
       if (npc.id === 'campfire') { showDialog(['Driftwood crackles, though no one gathered it. The fire smells of the sea — and something older.']); return; }
       if (npc.id === 'david') {
         if (s.rares.includes('coffin')) {
-          showDialog(['Max smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."'], 'Max');
+          showDialog(['Max smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."'], 'Max', giftAct);
           return;
         }
         if ((s.sodas['conk'] ?? 0) > 0) {
@@ -1899,7 +1901,7 @@ const LittleApartmentGame: React.FC = () => {
         showDialog([
           'A pale man tends a driftwood fire, though the night is not cold. "Lovely evening. Care to sit?"',
           'His smile is all teeth. "You wouldn\'t happen to have a Conk on you? I have such a... thirst."',
-        ], 'Max');
+        ], 'Max', giftAct);
         return;
       }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
@@ -1911,7 +1913,28 @@ const LittleApartmentGame: React.FC = () => {
         setOverlayBoth({ type: 'shop', shop: 'monster' });
         return;
       }
-      if (npc.id === 'tex') { setOverlayBoth({ type: 'shop', shop: 'hat' }); return; }
+      // Tex no longer opens a whole shop for one hat — he sells it right here in
+      // conversation, via an end-of-dialog action (Task: talk-first selling).
+      if (npc.id === 'tex') {
+        if (s.hat) {
+          showDialog([
+            '"Well howdy. That hat\'s ridin\' good on ya — knew it would the second I saw your head."',
+            'Tex tips his own brim. "Out here it\'s just me, the hats, and the sea breeze. One hat, one price, one dream. Looks like you\'re livin\' it, partner."',
+          ], 'Tex', giftAct);
+        } else if (s.money < 6700) {
+          showDialog([
+            'Tex pulls a cowboy hat from a sack slung over his shoulder. "Genuine article, this. Sixty-seven dollars."',
+            '"...That\'s ¥6,700 to you. Tex does not negotiate."',
+            'He eyes your wallet, not unkindly. "Come back with more yen, partner. The hat ain\'t goin\' nowhere. Neither am I."',
+          ], 'Tex', giftAct);
+        } else {
+          showDialog([
+            'Tex pulls a cowboy hat from a sack slung over his shoulder. "Genuine article, this. Sixty-seven dollars."',
+            '"...That\'s ¥6,700. Tex does not negotiate. You\'ll wear it forever — and you\'ll thank me forever, too."',
+          ], 'Tex', [{ label: 'Buy · ¥6,700', onPick: buyHat }, ...(giftAct ?? [])]);
+        }
+        return;
+      }
       if (npc.id === 'dj') { setOverlayBoth({ type: 'shop', shop: 'dj' }); return; }
       if (npc.id === 'tiki') { setOverlayBoth({ type: 'shop', shop: 'tiki' }); return; }
       if (npc.id === 'old-man' && !s.canFish) {
@@ -1983,7 +2006,7 @@ const LittleApartmentGame: React.FC = () => {
             ? `Here is one thing you could do for me: ${ask.ask}`
             : 'A few pieces are still out there in the world — alleys, shores, the deep places. You will know them when you see them.',
         ];
-        showDialog(lines, 'Bingus Doofelsmurt');
+        showDialog(lines, 'Bingus Doofelsmurt', giftAct);
         return;
       }
       // Granny Soto (out in the city): she gatekeeps the community greenhouse
@@ -1997,14 +2020,14 @@ const LittleApartmentGame: React.FC = () => {
             'That glass house east of the apartments? The community greenhouse — mine to mind, the neighborhood\'s really. Locked up tight these days.',
             'I might just hand you the key... if you do an old woman a kindness first. I do love a fresh fish.',
             'Bring me one from Sumikawa Shore and the greenhouse is yours to tend.',
-          ], 'Granny Sato');
+          ], 'Granny Sato', giftAct);
         }
         return;
       }
       const voice = NPC_VOICES[npc.id];
       if (voice) {
         const set = voice.sets[Math.floor(Math.random() * voice.sets.length)];
-        showDialog([...set, ...npcDynamicLines(npc.id, s)], voice.speaker);
+        showDialog([...set, ...npcDynamicLines(npc.id, s)], voice.speaker, giftAct);
       }
       return;
     }
@@ -2423,7 +2446,8 @@ const LittleApartmentGame: React.FC = () => {
     const full = (ov.lines[ov.idx] ?? '').length;
     if (typedRef.current < full) { typedRef.current = full; setTyped(full); return; }
     if (ov.idx + 1 < ov.lines.length) setOverlayBoth({ ...ov, idx: ov.idx + 1 });
-    else setOverlayBoth(null);
+    // Last line with trailing actions: don't auto-close — the buttons take over.
+    else if (!ov.actions || ov.actions.length === 0) setOverlayBoth(null);
   }, [setOverlayBoth]);
 
   const update = useCallback((dt: number) => {
@@ -2433,12 +2457,25 @@ const LittleApartmentGame: React.FC = () => {
 
     if (ov) {
       if (ov.type === 'dialog') {
-        if (input.consumeInteract() || input.consumeCancel()) advanceDialog();
+        // On the FINAL line with trailing actions (e.g. "🎁 Give a gift") the box
+        // becomes a navroot: useUiNav drives the buttons, so the engine just
+        // discards interact (no auto-close) and lets B/Esc close. Otherwise it's
+        // the usual snap-then-advance, closing past the last line.
+        const lineLen = (ov.lines[ov.idx] ?? '').length;
+        const actionPhase = ov.idx === ov.lines.length - 1
+          && !!ov.actions && ov.actions.length > 0
+          && typedRef.current >= lineLen;
+        if (actionPhase) {
+          input.consumeInteract();
+          if (input.consumeCancel()) setOverlayBoth(null);
+        } else if (input.consumeInteract() || input.consumeCancel()) {
+          advanceDialog();
+        }
         input.consumeInventory();
       } else if (ov.type === 'letter') {
         if (input.consumeInteract() || input.consumeCancel()) setOverlayBoth(null);
         input.consumeInventory();
-      } else if (ov.type === 'shop' || ov.type === 'cook' || ov.type === 'gift' || ov.type === 'npcchoice') {
+      } else if (ov.type === 'shop' || ov.type === 'cook' || ov.type === 'gift') {
         input.consumeInteract();
         if (input.consumeCancel()) setOverlayBoth(null);
         input.consumeInventory();
@@ -5578,29 +5615,6 @@ const LittleApartmentGame: React.FC = () => {
   };
 
   // Talk-or-gift chooser, shown when you walk up to a friend carrying something giftable.
-  const renderNpcChoice = (ov: Extract<Overlay, { type: 'npcchoice' }>) => {
-    const f = friendById(ov.npcId);
-    if (!f) { setOverlayBoth(null); return null; }
-    const hearts = friendHearts(saveRef.current, ov.npcId);
-    const talk = () => { talkChosenRef.current = ov.interactId; setOverlayBoth(null); handleInteract(); };
-    return (
-      <div className={`${panelCls} w-full max-w-sm px-4 pt-3 pb-3.5`}>
-        <div className="flex items-center gap-3 pb-2 mb-2.5 border-b border-[#ffd24a]/25">
-          <span className="text-3xl shrink-0">{f.emoji}</span>
-          <div className="min-w-0">
-            <h3 className="font-retro text-[#ffd24a] text-sm leading-snug">{f.name}</h3>
-            <p className="text-sm leading-tight tracking-tight">{'❤️'.repeat(hearts)}<span className="opacity-25">{'·'.repeat(MAX_HEARTS - hearts)}</span></p>
-          </div>
-          <button aria-label="Close" className="ml-auto w-7 h-7 shrink-0 rounded-full border border-[#ffd24a]/40 text-[#ffd24a]/80 hover:bg-[#ffd24a] hover:text-black active:translate-y-px transition-all flex items-center justify-center text-sm" onClick={() => setOverlayBoth(null)}>✕</button>
-        </div>
-        <div className="flex gap-2">
-          <button className={`${btnCls} flex-1 py-2`} onClick={talk}>💬 TALK</button>
-          <button className={`${btnCls} flex-1 py-2`} onClick={() => setOverlayBoth({ type: 'gift', npcId: ov.npcId })}>🎁 GIVE A GIFT</button>
-        </div>
-      </div>
-    );
-  };
-
   // Pick a held item to give an NPC (one gift/NPC/day). Reaction is a portrait dialog.
   const renderGift = (ov: Extract<Overlay, { type: 'gift' }>) => {
     void shopTick;
@@ -6305,22 +6319,6 @@ const LittleApartmentGame: React.FC = () => {
       );
     }
 
-    if (ov.shop === 'hat') {
-      return (
-        <ShopFrame title="TEX" subtitle={'"No shop, no sign, just me and the hats. One hat. One price. One dream."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
-          <div className="flex items-center gap-3 py-1.5">
-            <div className="flex-grow min-w-0">
-              <p className="text-xl leading-tight">Cowboy Hat</p>
-              <p className="text-sm opacity-60 leading-tight">Tex pulls it from a sack slung over his shoulder. The tag says $67 — that's ¥6,700. Tex does not negotiate. You will wear it forever.</p>
-            </div>
-            {s.hat
-              ? <span className="text-[#3da26b] text-base shrink-0">ON YOUR HEAD</span>
-              : <button className={`${btnCls} shrink-0`} disabled={s.money < 6700} onClick={buyHat}>¥6,700</button>}
-          </div>
-        </ShopFrame>
-      );
-    }
-
     if (ov.shop === 'genji') {
       const owned = rodInfo(s.fishRod);
       const next = s.fishRod + 1 < RODS.length ? rodInfo(s.fishRod + 1) : null;
@@ -6925,8 +6923,17 @@ const LittleApartmentGame: React.FC = () => {
           const imgSrc = overlay.speaker ? PORTRAIT_IMAGES[overlay.speaker] : undefined;
           const hasDrawPortrait = Boolean(overlay.speaker && PORTRAITS[overlay.speaker]);
           const hasPortrait = Boolean(imgSrc) || hasDrawPortrait;
+          // Trailing actions (e.g. "🎁 Give a gift") only show on the final line,
+          // once it's fully typed. The box then acts as a navroot menu.
+          const showActions = overlay.idx === overlay.lines.length - 1 && done
+            && !!overlay.actions && overlay.actions.length > 0;
+          const acts = overlay.actions;
           return (
-            <div className="absolute inset-x-2 bottom-2 cursor-pointer" onClick={advanceDialog}>
+            <div
+              {...(showActions ? { 'data-navroot': '' } : {})}
+              className={`absolute inset-x-2 bottom-2 ${showActions ? '' : 'cursor-pointer'}`}
+              onClick={showActions ? undefined : advanceDialog}
+            >
               <div className="flex items-end gap-2">
                 {hasPortrait && (
                   imgSrc
@@ -6938,7 +6945,16 @@ const LittleApartmentGame: React.FC = () => {
                 <div className={`${panelCls} px-4 py-2.5 flex-grow min-w-0`}>
                   {overlay.speaker && !imgSrc && <p className="text-[#ffd24a] text-base mb-0.5">{overlay.speaker}</p>}
                   <p className="text-xl leading-snug">{shown}<span className="opacity-0">{line.slice(typed)}</span></p>
-                  <p className="text-right text-sm opacity-40 mt-1">{overlay.idx + 1}/{overlay.lines.length} · {done ? 'E ▸' : '…'}</p>
+                  {showActions && acts ? (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {acts.map((a, i) => (
+                        <button key={i} className={`${btnCls} text-base py-1`} onClick={a.onPick}>{a.label}</button>
+                      ))}
+                      <button className={`${btnCls} text-base py-1`} onClick={() => setOverlayBoth(null)}>Close</button>
+                    </div>
+                  ) : (
+                    <p className="text-right text-sm opacity-40 mt-1">{overlay.idx + 1}/{overlay.lines.length} · {done ? 'E ▸' : '…'}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -6956,13 +6972,6 @@ const LittleApartmentGame: React.FC = () => {
         {overlay?.type === 'cook' && (
           <div data-navroot className="absolute inset-0 bg-black/72 backdrop-blur-[2px] flex items-center justify-center p-2 sm:p-4">
             {renderCook()}
-          </div>
-        )}
-
-        {/* talk-or-gift chooser */}
-        {overlay?.type === 'npcchoice' && (
-          <div data-navroot className="absolute inset-0 bg-black/72 backdrop-blur-[2px] flex items-center justify-center p-2 sm:p-4">
-            {renderNpcChoice(overlay)}
           </div>
         )}
 
