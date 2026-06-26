@@ -34,8 +34,9 @@ import {
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
   itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, CROP_QUALITY, FORAGE, forageById,
+  RECIPES, recipeById, GROCERIES, groceryById, BUFFS, FRIENDS, friendById, DECOR, decorById, MAX_HEARTS,
 } from './data';
-import type { BingusFetch } from './data';
+import type { BingusFetch, GiftKind, GiftTier, IngredientKind, DecorItem } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
   newSave, loadSave, persistSave, clearSave,
@@ -46,11 +47,14 @@ import {
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
-  isRainyDay, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
+  isRainyDay, dayEventFor, DAY_EVENT_LABEL, type DayEvent, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
   plotStage, waterPlot, applyFertilizer, sellShipping, buySeed, buySprinkler,
   buyFertilizer, expandBeds, upgradeGreenhouse, grantMoonSeed, seedShopFor, activeRequest,
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
+  canCook, canCookHere, cook, eatDish, ingredientCount, buyGrocery, keepProduce,
+  buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend,
+  buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe } from './state';
@@ -364,9 +368,16 @@ type Overlay =
   | { type: 'sleep'; day: number; collapsed?: boolean; awaitClick?: boolean }
   | { type: 'endday'; recap: DayRecap }
   | { type: 'menu'; tab: PhoneApp; thread?: string }
+  | { type: 'cook' }                          // home kitchen — cook known recipes
+  | { type: 'gift'; npcId: string }           // pick a held item to gift an NPC
   | { type: 'ending' };
 
-type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal';
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends';
+
+// Friendly label for each cooking ingredient kind (shown in the recipe list).
+const INGREDIENT_LABEL: Record<IngredientKind, string> = {
+  fish: 'Fish', crop: 'Crop', coconut: 'Coconut', peepis: 'Peepis', soda: 'Soda', rice: 'Rice', egg: 'Egg', veg: 'Greens',
+};
 
 const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
 
@@ -417,6 +428,7 @@ interface Hud {
   sceneName: string; fish: number; ownedCount: number;
   late: boolean; // past midnight — 2 AM collapse looms
   unread: number; // unread phone messages (badge on the 📱 button)
+  event: DayEvent; // today's special day ('market' / 'lucky' / null) — HUD chip
 }
 
 // Every named character has a voice: several line-sets, picked at random per
@@ -755,7 +767,7 @@ const LittleApartmentGame: React.FC = () => {
   // Mirrored into a ref so the keyboard/click advance path can read it synchronously.
   const [typed, setTyped] = useState(0);
   const typedRef = useRef(0);
-  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0 });
+  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette() }); // live casino game state
   // Stop the slot reels / roulette wheel spinning if the player leaves the overlay (Esc, etc.).
@@ -929,8 +941,9 @@ const LittleApartmentGame: React.FC = () => {
   // ---- furniture Arrange mode (drag-and-drop placement) ----------------------
   const arrangeRef = useRef(false);                 // loop reads this to freeze/render
   const [arrangeOpen, setArrangeOpen] = useState(false); // drives the DOM overlay
+  const [arrangeTab, setArrangeTab] = useState<'furniture' | 'rugs' | 'style' | 'shop'>('furniture');
   const [arrangeTick, setArrangeTick] = useState(0);     // re-render tray on change
-  const heldRef = useRef<{ id: string; from: 'box' | 'placed' } | null>(null);
+  const heldRef = useRef<{ id: string; from: 'box' | 'placed'; rug?: boolean } | null>(null);
   const ghostRef = useRef<{ tx: number; ty: number; valid: boolean } | null>(null);
   const dragStartRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const exitArrangeRef = useRef<() => void>(() => {}); // late-bound (update runs before the handler is defined)
@@ -998,6 +1011,13 @@ const LittleApartmentGame: React.FC = () => {
     achTimerRef.current = window.setTimeout(() => setAchToast(null), 3500);
   }, []);
 
+  // A transient banner that reuses the achievement-toast UI (food buffs, perks, etc).
+  const showToast = useCallback((title: string, desc = '') => {
+    setAchToast({ title, desc });
+    if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
+    achTimerRef.current = window.setTimeout(() => setAchToast(null), 3500);
+  }, []);
+
   const refreshHud = useCallback(() => {
     const s = saveRef.current;
     if (s.money >= 50000) award('rich');
@@ -1007,6 +1027,7 @@ const LittleApartmentGame: React.FC = () => {
       sceneName: sceneRef.current.name, fish: s.fishInv.length, ownedCount: s.owned.length,
       late: s.timeMin >= 24 * 60, // midnight or later
       unread: unreadCount(s),
+      event: dayEventFor(s),
     });
   }, [award]);
 
@@ -1159,6 +1180,14 @@ const LittleApartmentGame: React.FC = () => {
       }
       s.lotteryDay = 0;
     }
+    // Special-day herald: a morning bulletin so the player KNOWS today is special.
+    // Fresh id per day so it can fire again on a later special day (pushMessage
+    // dedupes by id). Reinforced by the HUD chip + the Journal.
+    const todayEvent = dayEventFor(s);
+    if (todayEvent) pushMessage(s, { id: `event-${s.day}`, from: 'Kawamachi Bulletin 📣', avatar: '📣', company: true,
+      body: [todayEvent === 'market'
+        ? "📣 MARKET DAY in Kawamachi! The pawn shop's stocked deep and even Jimmy on the corner is cutting prices. A good morning to go furniture-hunting. 🏷"
+        : "📣 Word is today's a LUCKY DAY. The tide left extra on Sumikawa Shore and the mine veins are running rich. Press your luck while it holds. ✨"] });
     checkStory();
     checkMessages(); // new day can trigger date-gated texts (buzz if so)
     persistSave(s);
@@ -1282,6 +1311,72 @@ const LittleApartmentGame: React.FC = () => {
     s.energy = Math.min(maxEnergy(s), s.energy + 12);
     sfxCoin();
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  // ---- Cooking ------------------------------------------------------------
+  const doCook = (recipeId: string) => {
+    const s = saveRef.current;
+    if (!cook(s, recipeId)) return;
+    blip([523, 659, 784], 0.05); // a happy little "ding"
+    refreshHud(); setShopTick(v => v + 1);
+  };
+  const doEat = (recipeId: string) => {
+    const s = saveRef.current;
+    const r = recipeById(recipeId);
+    if (!r || !eatDish(s, recipeId)) return;
+    sfxCoin();
+    if (r.buff) showToast(`${BUFFS[r.buff].emoji} ${BUFFS[r.buff].name}`, BUFFS[r.buff].desc);
+    refreshHud(); setShopTick(v => v + 1);
+  };
+  const buyGroceryItem = (id: string, price: number) => {
+    const s = saveRef.current;
+    if (!buyGrocery(s, id, price)) return;
+    sfxCoin();
+    refreshHud(); setShopTick(v => v + 1);
+  };
+
+  // ---- Friendship / gifting -----------------------------------------------
+  // Everything in your bag you could give as a gift, with its GiftKind. Crops
+  // that are flowers count as 'flower'; cooked dishes as 'dish'.
+  type GiftItem = { kind: GiftKind; label: string; sprite?: string; emoji?: string; count: number; take: (s: GameSave) => void };
+  const giftableItems = (s: GameSave): GiftItem[] => {
+    const out: GiftItem[] = [];
+    if (s.fishInv.length > 0) out.push({ kind: 'fish', label: 'A fresh fish', emoji: '🐟', count: s.fishInv.length, take: x => x.fishInv.shift() });
+    for (const [id, n] of Object.entries(s.produce)) if (n > 0) {
+      const isFlower = id === 'sunflower' || id === 'moonflower';
+      out.push({ kind: isFlower ? 'flower' : 'crop', label: CROPS[id]?.name ?? id, emoji: isFlower ? '🌸' : '🥬', count: n, take: x => { x.produce[id]--; if (x.produce[id] <= 0) delete x.produce[id]; } });
+    }
+    if (s.coconuts > 0) out.push({ kind: 'coconut', label: 'Coconut', emoji: '🥥', count: s.coconuts, take: x => { x.coconuts--; } });
+    if (s.peepis > 0) out.push({ kind: 'soda', label: 'Diet Doctor Peepis', emoji: '🥤', count: s.peepis, take: x => { x.peepis--; } });
+    for (const soda of SODAS) if (soda.id !== 'peepis' && (s.sodas[soda.id] ?? 0) > 0)
+      out.push({ kind: 'soda', label: soda.name, emoji: '🥤', count: s.sodas[soda.id], take: x => { x.sodas[soda.id]--; } });
+    for (const [id, n] of Object.entries(s.minerals)) if (n > 0)
+      out.push({ kind: 'mineral', label: mineralById(id)?.name ?? id, emoji: '💎', count: n, take: x => { x.minerals[id]--; } });
+    for (const [id, n] of Object.entries(s.dishes)) if (n > 0)
+      out.push({ kind: 'dish', label: recipeById(id)?.name ?? id, sprite: recipeById(id)?.sprite, count: n, take: x => { x.dishes[id]--; if (x.dishes[id] <= 0) delete x.dishes[id]; } });
+    return out;
+  };
+  const GIFT_REACTION: Record<GiftTier, (name: string) => string> = {
+    loved: n => `${n} lights up. "For me? This is exactly the sort of thing I love. You remembered." (❤️❤️ friendship up!)`,
+    liked: n => `${n} smiles, turning it over. "That's really thoughtful. Thank you." (❤️ friendship up)`,
+    neutral: n => `${n} accepts it politely. "Ah — thanks. That's kind of you." (friendship up a little)`,
+    disliked: n => `${n} takes it with a thin smile. "...Thank you. It's the thought that counts, I suppose." (not really their thing)`,
+  };
+  const doGift = (npcId: string, item: GiftItem) => {
+    const s = saveRef.current;
+    const f = friendById(npcId);
+    if (!f || !canGiftToday(s, npcId)) return;
+    item.take(s);
+    const beforeHearts = friendHearts(s, npcId);
+    const res = giftTo(s, npcId, item.kind);
+    sfxCoin();
+    refreshHud(); setShopTick(v => v + 1);
+    setOverlayBoth(null);
+    const lines = [GIFT_REACTION[res.tier](f.name)];
+    if (res.gainedHeart) lines.push(`You and ${f.name} are closer now. (${res.hearts}/10 ♥)`);
+    if (f.perk && beforeHearts < f.perk.hearts && res.hearts >= f.perk.hearts)
+      lines.push(`✦ ${f.name} perk unlocked: ${f.perk.text}`);
+    showDialog(lines, f.name);
   };
 
   const feedMonster = () => {
@@ -1559,6 +1654,8 @@ const LittleApartmentGame: React.FC = () => {
         };
         if (floor >= 10) tryMineCurio('arti-meteor', 0.07, 'A meteorite?!');
         else if (floor >= 6) tryMineCurio('arti-shard', 0.06, 'A humming shard!');
+        // ...and, at any depth, the inexplicable: a single chicken nugget.
+        tryMineCurio('arti-token', 0.02, 'A single chicken nugget?!');
         persistSave(s); refreshHud();
         return;
       }
@@ -2090,7 +2187,7 @@ const LittleApartmentGame: React.FC = () => {
       } else if (ov.type === 'letter') {
         if (input.consumeInteract() || input.consumeCancel()) setOverlayBoth(null);
         input.consumeInventory();
-      } else if (ov.type === 'shop') {
+      } else if (ov.type === 'shop' || ov.type === 'cook' || ov.type === 'gift') {
         input.consumeInteract();
         if (input.consumeCancel()) setOverlayBoth(null);
         input.consumeInventory();
@@ -2193,7 +2290,21 @@ const LittleApartmentGame: React.FC = () => {
         const ndx = w.dir === 'left' ? -sp : w.dir === 'right' ? sp : 0;
         const ndy = w.dir === 'up' ? -sp : w.dir === 'down' ? sp : 0;
         const nx = tryMove(sceneRef.current, { x: w.x, y: w.y }, ndx, ndy, solidsRef.current);
+        const blocked = Math.abs(nx.x - w.x) < 0.05 && Math.abs(nx.y - w.y) < 0.05;
         w.x = nx.x; w.y = nx.y;
+        if (blocked) {
+          // Bumped a wall/prop. Don't grind against it (that's how an NPC ends up
+          // pinned in one spot forever). Nudge once on the perpendicular axis —
+          // toward home — then stand and re-decide soon, so we always slip free.
+          const hx = w.homeX - w.x, hy = w.homeY - w.y;
+          const alt: Dir = ndx !== 0 ? (hy >= 0 ? 'down' : 'up') : (hx >= 0 ? 'right' : 'left');
+          const ax = alt === 'left' ? -sp : alt === 'right' ? sp : 0;
+          const ay = alt === 'up' ? -sp : alt === 'down' ? sp : 0;
+          const n2 = tryMove(sceneRef.current, { x: w.x, y: w.y }, ax, ay, solidsRef.current);
+          w.x = n2.x; w.y = n2.y; w.dir = alt;
+          w.moving = false;
+          w.stepT = Math.min(w.stepT, 0.25 + Math.random() * 0.5);
+        }
       }
     }
 
@@ -2350,20 +2461,27 @@ const LittleApartmentGame: React.FC = () => {
       const dist = speed * dt;
       const dx = dir === 'left' ? -dist : dir === 'right' ? dist : 0;
       const dy = dir === 'up' ? -dist : dir === 'down' ? dist : 0;
+      const before = posRef.current; // pre-move pos, so a locked door can bounce you off
       posRef.current = tryMove(sceneRef.current, posRef.current, dx, dy, solidsRef.current);
 
       const ft = feetTile(posRef.current);
       const warp = sceneRef.current.warps.find(w => w.x === ft.x && w.y === ft.y);
-      if (warp && warp.to === 'badtown' && !s.gangPaid) {
-        // The yakuza wall the alley off until you pay the toll.
-        warpCooldownRef.current = 0.4; // don't spam the line as you bump the edge
-        showDialog(['A yakuza enforcer steps into your path, gold watch glinting. "Private district."', 'Face one of them and press E to pay the ¥5,000 toll.'], 'Enforcer');
-        return;
-      }
-      if (warp && warp.to === 'greenhouse' && !s.greenhouseUnlocked) {
-        // Granny Soto holds the key until you do her fish errand.
-        warpCooldownRef.current = 0.4;
-        showDialog(['The greenhouse door is locked tight. Granny Soto keeps the key — do her a kindness first.', '(Word around the block is she loves a fresh fish.)']);
+      // Locked-door gates: a walkable warp tile you can't use yet. Bounce the player
+      // back off the threshold (so they can't stand on it re-triggering) and only
+      // speak the line on a fresh approach — never every frame held into the door.
+      const lockedGate =
+        (warp?.to === 'badtown' && !s.gangPaid) ||
+        (warp?.to === 'greenhouse' && !s.greenhouseUnlocked);
+      if (lockedGate) {
+        posRef.current = before;
+        movingRef.current = false;
+        if (warpCooldownRef.current <= 0) {
+          warpCooldownRef.current = 0.8; // re-arm; ticks down each frame at line above
+          if (warp!.to === 'badtown')
+            showDialog(['A yakuza enforcer steps into your path, gold watch glinting. "Private district."', 'Face one of them and press E to pay the ¥5,000 toll.'], 'Enforcer');
+          else
+            showDialog(['The greenhouse door is locked tight. Granny Soto keeps the key — do her a kindness first.', '(Word around the block is she loves a fresh fish.)']);
+        }
         return;
       }
       if (warp && warpCooldownRef.current <= 0) {
@@ -2547,6 +2665,29 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // Apartment decor: repaint the floor & walls with the chosen flooring/wallpaper,
+    // then lay any rugs down (under the furniture, which draws later in the y-sort).
+    if (scene.id === 'apartment') {
+      const dec = saveRef.current.decor;
+      const floorSpr = dec.floor !== 'floor-default' ? decorById(dec.floor)?.sprite : '';
+      const wallSpr = dec.wall !== 'wall-default' ? decorById(dec.wall)?.sprite : '';
+      if (floorSpr || wallSpr) {
+        for (let ty = ty0; ty <= ty1; ty++) {
+          const row = scene.grid[ty]; if (!row) continue;
+          for (let tx = tx0; tx <= tx1; tx++) {
+            const ch = row[tx];
+            const px = tx * TILE - cam.x, py = ty * TILE - cam.y;
+            if (floorSpr && (ch === '.' || ch === '=')) ctx.drawImage(atlas[floorSpr], px, py);
+            else if (wallSpr && (ch === 'P' || ch === '#')) ctx.drawImage(atlas[wallSpr], px, py);
+          }
+        }
+      }
+      for (const rug of saveRef.current.rugs) {
+        const spr = decorById(rug.id)?.sprite;
+        if (spr && atlas[spr]) ctx.drawImage(atlas[spr], rug.x * TILE - cam.x, rug.y * TILE - cam.y);
+      }
+    }
+
     // Museum: overlay a FILLED display sprite onto any slot the player has
     // donated to (empty slots keep their plain pedestal/frame tile). Donations
     // are empty by default, so this draws nothing until collectibles land.
@@ -2700,17 +2841,29 @@ const LittleApartmentGame: React.FC = () => {
       };
     }
 
-    // apartment furniture: whatever the player has placed, where they placed it
+    // apartment furniture: whatever the player has placed, where they placed it.
+    // A soft contact shadow under each floor piece grounds it (no more floating).
     if (scene.id === 'apartment') {
       const s = saveRef.current;
+      const contactShadow = (tx: number, ty: number, wTiles: number) => {
+        const cx = tx * TILE - cam.x + (wTiles * TILE) / 2;
+        const cy = ty * TILE - cam.y + TILE - 1.5;
+        ctx.fillStyle = 'rgba(20, 14, 10, 0.22)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, wTiles * TILE * 0.42, 2.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      };
       if (!s.placed['bed']) {
+        contactShadow(1, 1, 2);
         ctx.drawImage(atlas['f-futon'], 1 * TILE - cam.x, 1 * TILE - cam.y);
       }
       for (const itemId of Object.keys(s.placed)) {
         const pos = s.placed[itemId];
+        if (itemKind(itemId) !== 'wall') contactShadow(pos.x, pos.y, itemFootprintW(itemId));
         ctx.drawImage(atlas[furnitureById(itemId).sprite], pos.x * TILE - cam.x, pos.y * TILE - cam.y);
       }
       if (gachaComplete(s)) {
+        contactShadow(MANEKI_SLOT.x, MANEKI_SLOT.y, 1);
         ctx.drawImage(atlas['f-maneki'], MANEKI_SLOT.x * TILE - cam.x, MANEKI_SLOT.y * TILE - cam.y);
       }
     }
@@ -2985,8 +3138,10 @@ const LittleApartmentGame: React.FC = () => {
       ctx.lineWidth = 1;
       for (let ty = 0; ty <= 8; ty++) {
         for (let tx = 1; tx <= 14; tx++) {
-          const ok = held ? placeableAt(held.id, tx, ty) : (tileAt(scene, tx, ty) && !tileAt(scene, tx, ty)!.solid && ty >= 1);
-          if (ty === 0 && (!held || itemKind(held.id) !== 'wall')) continue;
+          const ok = held
+            ? (held.rug ? rugPlaceableAt(tx, ty) : placeableAt(held.id, tx, ty))
+            : (tileAt(scene, tx, ty) && !tileAt(scene, tx, ty)!.solid && ty >= 1);
+          if (ty === 0 && (!held || held.rug || itemKind(held.id) !== 'wall')) continue;
           const px = tx * TILE - cam.x, py = ty * TILE - cam.y;
           ctx.fillStyle = ok ? 'rgba(124, 232, 160, 0.14)' : 'rgba(255,255,255,0.03)';
           ctx.fillRect(px, py, TILE, TILE);
@@ -2997,15 +3152,16 @@ const LittleApartmentGame: React.FC = () => {
       // ghost sprite at the hovered tile
       const g = ghostRef.current;
       if (held && g) {
-        const spr = atlas[furnitureById(held.id).sprite];
+        const spr = held.rug ? atlas[decorById(held.id)?.sprite ?? ''] : atlas[furnitureById(held.id).sprite];
         const gx = g.tx * TILE - cam.x, gy = g.ty * TILE - cam.y;
         ctx.globalAlpha = 0.75;
         if (spr) ctx.drawImage(spr, gx, gy);
         ctx.globalAlpha = 1;
-        const w = itemFootprintW(held.id) * TILE;
+        const w = (held.rug ? RUG_W : itemFootprintW(held.id)) * TILE;
+        const h = (held.rug ? RUG_H : 1) * TILE;
         ctx.strokeStyle = g.valid ? '#7ce8a0' : '#e0552e';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(gx + 0.5, gy + 0.5, w - 1, TILE - 1);
+        ctx.strokeRect(gx + 0.5, gy + 0.5, w - 1, h - 1);
       }
     }
 
@@ -4012,11 +4168,15 @@ const LittleApartmentGame: React.FC = () => {
   };
 
   // Genji's upgraded rod (tier 1). One-time purchase; bumps the save's fishRod.
+  // Genji's rod price — 25% off once you're 3 ♥ friends with him.
+  const rodPriceFor = (s: GameSave, price: number): number =>
+    friendHearts(s, 'genji') >= 3 ? Math.round(price * 0.75 / 10) * 10 : price;
   const buyRod = () => {
     const s = saveRef.current;
     const next = rodInfo(s.fishRod + 1);
-    if (s.fishRod >= next.tier || s.money < next.price) return; // already top tier / broke
-    s.money -= next.price;
+    const price = rodPriceFor(s, next.price);
+    if (s.fishRod >= next.tier || s.money < price) return; // already top tier / broke
+    s.money -= price;
     s.fishRod = next.tier;
     sfxBuy();
     persistSave(s);
@@ -4141,15 +4301,17 @@ const LittleApartmentGame: React.FC = () => {
   const doPlantCrop = (cropId: string) => { if (plantCrop(saveRef.current, ghPlotRef.current, cropId)) { sfxBuy(); ghTick(); } };
   const doWaterPlot = () => { if (waterPlot(saveRef.current, ghPlotRef.current)) { sfxCoin(); ghTick(); } };
   const doFertilizePlot = () => { if (applyFertilizer(saveRef.current, ghPlotRef.current)) { sfxBuy(); ghTick(); } };
-  const doHarvestPlot = () => {
+  const doHarvestPlot = (keep = false) => {
     const s = saveRef.current;
-    const res = harvestCrop(s, ghPlotRef.current);
+    const res = harvestCrop(s, ghPlotRef.current, keep);
     if (!res) return;
     sfxCatch(); persistSave(s); refreshHud();
     if (res.capstone) award('greenthumb');
     setOverlayBoth(null);
     const q = CROP_QUALITY[res.quality];
-    const lines = [`You harvest a ${q}${CROPS[res.cropId].name} and lay it in the shipping box. (worth ¥${res.value.toLocaleString()})`];
+    const lines = keep
+      ? [`You harvest a ${q}${CROPS[res.cropId].name} and tuck it away to cook with later.`]
+      : [`You harvest a ${q}${CROPS[res.cropId].name} and lay it in the shipping box. (worth ¥${res.value.toLocaleString()})`];
     if (res.requestBonus > 0) lines.push(`That completes Granny's request! She presses a bonus into your hand. (+¥${res.requestBonus.toLocaleString()})`);
     if (res.capstone) lines.push('The Moonflower keeps glowing faintly in your arms. Granny gasps — then gives you a Bloom Lamp grown from its light.');
     showDialog(lines, 'Greenhouse');
@@ -4353,10 +4515,49 @@ const LittleApartmentGame: React.FC = () => {
     return { tx: Math.floor((lx + cam.x) / TILE), ty: Math.floor((ly + cam.y) / TILE) };
   };
 
-  const setHeld = (h: { id: string; from: 'box' | 'placed' } | null) => {
+  const setHeld = (h: { id: string; from: 'box' | 'placed'; rug?: boolean } | null) => {
     heldRef.current = h;
     if (!h) ghostRef.current = null;
     setArrangeTick(t => t + 1);
+  };
+
+  // Rugs are 2×2 floor decor: drawn under furniture, can sit anywhere on the
+  // interior floor (they layer freely — no occupancy check, unlike furniture).
+  const rugPlaceableAt = (tx: number, ty: number): boolean => {
+    if (sceneRef.current.id !== 'apartment') return false;
+    for (let dx = 0; dx < RUG_W; dx++) for (let dy = 0; dy < RUG_H; dy++) {
+      const cx = tx + dx, cy = ty + dy;
+      if (cx < 1 || cx > 14 || cy < 1 || cy > 8) return false;
+      const t = tileAt(sceneRef.current, cx, cy);
+      if (!t || t.solid) return false;
+    }
+    return true;
+  };
+  const commitRug = (tx: number, ty: number) => {
+    const h = heldRef.current;
+    if (!h?.rug) return;
+    placeRug(saveRef.current, h.id, tx, ty);
+    sfxBuy(); refreshHud();
+    heldRef.current = null; ghostRef.current = null;
+    setArrangeTick(t => t + 1);
+  };
+  const pickUpRug = (idx: number) => {
+    const s = saveRef.current;
+    const rug = s.rugs[idx];
+    if (!rug) return;
+    s.rugs.splice(idx, 1); persistSave(s);
+    setHeld({ id: rug.id, from: 'placed', rug: true });
+    blip([520, 392], 0.05);
+  };
+  // Decor shop / style panel (inside Arrange): apply an owned wall/floor, or buy.
+  const doApplyDecor = (id: string) => { if (applyDecor(saveRef.current, id)) { sfxCoin(); setArrangeTick(t => t + 1); } };
+  const doBuyDecor = (id: string) => {
+    if (buyDecor(saveRef.current, id)) {
+      sfxBuy();
+      const d = decorById(id);
+      if (d && (d.kind === 'wall' || d.kind === 'floor')) applyDecor(saveRef.current, id); // wear it immediately
+      refreshHud(); setArrangeTick(t => t + 1);
+    }
   };
 
   const pickUpPlaced = (id: string) => {
@@ -4421,18 +4622,30 @@ const LittleApartmentGame: React.FC = () => {
     dragStartRef.current = { x: e.clientX, y: e.clientY, moved: false };
     const el = e.target as HTMLElement;
     if (el.closest('[data-zz-done]')) { exitArrange(); return; }
+    const tabEl = el.closest('[data-arrange-tab]');
+    if (tabEl) { setArrangeTab(tabEl.getAttribute('data-arrange-tab') as typeof arrangeTab); setHeld(null); return; }
+    const applyEl = el.closest('[data-apply-decor]');
+    if (applyEl) { doApplyDecor(applyEl.getAttribute('data-apply-decor')!); return; }
+    const buyEl = el.closest('[data-buy-decor]');
+    if (buyEl) { doBuyDecor(buyEl.getAttribute('data-buy-decor')!); return; }
     const chip = el.closest('[data-zz-item]');
     if (chip) { setHeld({ id: chip.getAttribute('data-zz-item')!, from: 'box' }); return; }
+    const rugChip = el.closest('[data-rug-item]');
+    if (rugChip) { setHeld({ id: rugChip.getAttribute('data-rug-item')!, from: 'box', rug: true }); return; }
     if (el.closest('[data-zz-trash]')) { if (heldRef.current) boxHeld(); return; }
     if (isArrangeUI(el)) return; // a button handles its own click
     const tt = eventTile(e);
     if (!tt) return;
     if (heldRef.current) {
-      if (placeableAt(heldRef.current.id, tt.tx, tt.ty)) commitPlace(tt.tx, tt.ty);
+      const h = heldRef.current;
+      if (h.rug) { if (rugPlaceableAt(tt.tx, tt.ty)) commitRug(tt.tx, tt.ty); }
+      else if (placeableAt(h.id, tt.tx, tt.ty)) commitPlace(tt.tx, tt.ty);
       return;
     }
     const hit = findPlacedAt(tt.tx, tt.ty);
-    if (hit) { pickUpPlaced(hit); ghostRef.current = { tx: tt.tx, ty: tt.ty, valid: placeableAt(hit, tt.tx, tt.ty) }; }
+    if (hit) { pickUpPlaced(hit); ghostRef.current = { tx: tt.tx, ty: tt.ty, valid: placeableAt(hit, tt.tx, tt.ty) }; return; }
+    const ri = rugAt(saveRef.current, tt.tx, tt.ty);
+    if (ri >= 0) { pickUpRug(ri); ghostRef.current = { tx: tt.tx, ty: tt.ty, valid: rugPlaceableAt(tt.tx, tt.ty) }; }
   };
 
   const arrangeMove = (e: React.PointerEvent) => {
@@ -4444,7 +4657,8 @@ const LittleApartmentGame: React.FC = () => {
     if (isArrangeUI(e.target)) { ghostRef.current = null; return; }
     const tt = eventTile(e);
     if (!tt) return;
-    ghostRef.current = { tx: tt.tx, ty: tt.ty, valid: placeableAt(heldRef.current.id, tt.tx, tt.ty) };
+    const valid = heldRef.current.rug ? rugPlaceableAt(tt.tx, tt.ty) : placeableAt(heldRef.current.id, tt.tx, tt.ty);
+    ghostRef.current = { tx: tt.tx, ty: tt.ty, valid };
   };
 
   const arrangeUp = (e: React.PointerEvent) => {
@@ -4454,9 +4668,12 @@ const LittleApartmentGame: React.FC = () => {
     if (!heldRef.current) return;
     if (el.closest('[data-zz-trash]')) { boxHeld(); return; }
     if (!moved) return; // a tap: keep the item held for tap-to-place
-    if (isArrangeUI(el) || el.closest('[data-zz-item]')) { boxHeld(); return; } // dropped back on the tray
+    if (isArrangeUI(el) || el.closest('[data-zz-item]') || el.closest('[data-rug-item]')) { boxHeld(); return; } // dropped back on the tray
     const tt = eventTile(e);
-    if (tt && placeableAt(heldRef.current.id, tt.tx, tt.ty)) commitPlace(tt.tx, tt.ty);
+    if (!tt) return;
+    const h = heldRef.current;
+    if (h.rug) { if (rugPlaceableAt(tt.tx, tt.ty)) commitRug(tt.tx, tt.ty); }
+    else if (placeableAt(h.id, tt.tx, tt.ty)) commitPlace(tt.tx, tt.ty);
     // otherwise (invalid floor): keep holding so they can try again
   };
 
@@ -4494,6 +4711,29 @@ const LittleApartmentGame: React.FC = () => {
             : <p className="text-xs opacity-50 italic">Go home to arrange furniture (drag & drop).</p>}
         </div>
 
+        {/* Kitchen — cook once the fridge + microwave are both placed at home. */}
+        <div className="mb-3">
+          {canCookHere(s)
+            ? <button
+                className="w-full font-pixel text-base bg-[#e0843a] text-black px-3 py-2 rounded-lg shadow-[2px_2px_0_#000] hover:bg-[#f0a050] transition-colors flex items-center justify-center gap-2"
+                onClick={() => setOverlayBoth({ type: 'cook' })}
+              ><SpriteIcon atlas={atlasRef.current} sprite="i-cook" size={20} /> COOK — make a meal</button>
+            : <p className="text-xs opacity-50 italic">Place a fridge AND a microwave to cook at home.</p>}
+        </div>
+
+        {/* Cooked dishes — eat for energy + a day buff. */}
+        {Object.values(s.dishes).some(n => n > 0) && (<>
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide">KITCHEN — DISHES</p>
+          {RECIPES.filter(r => (s.dishes[r.id] ?? 0) > 0).map(r => (
+            <div key={r.id} className="flex items-center gap-2 py-1 border-b border-white/10">
+              <SpriteIcon atlas={atlasRef.current} sprite={r.sprite} size={22} />
+              <p className="flex-grow text-base">{r.name} ×{s.dishes[r.id]} <span className="opacity-50 text-sm">(+{r.energy} en{r.buff ? `, ${BUFFS[r.buff].emoji}` : ''})</span></p>
+              <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={s.energy >= maxEnergy(s) && !r.buff} onClick={() => doEat(r.id)}>EAT</button>
+            </div>
+          ))}
+          <div className="h-3" />
+        </>)}
+
         <p className="text-sm text-[#ffd24a]/80 tracking-wide">FURNITURE — BOXED ({boxed.length})</p>
         {boxed.length === 0 && <p className="py-1 text-base opacity-50">Nothing boxed up.</p>}
         {boxed.map(id => (
@@ -4524,6 +4764,20 @@ const LittleApartmentGame: React.FC = () => {
                 <p key={id} className="text-base py-0.5 opacity-80">{fishById(id).name} ×{n} <span className="opacity-50">(¥{fishById(id).value} ea)</span></p>
               ));
             })()}
+
+        {/* Cooking ingredients on hand: pantry staples (konbini) + kept crops. */}
+        {(Object.values(s.pantry).some(n => n > 0) || Object.values(s.produce).some(n => n > 0)) && (<>
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3">INGREDIENTS</p>
+          {GROCERIES.filter(g => (s.pantry[g.id] ?? 0) > 0).map(g => (
+            <div key={g.id} className="flex items-center gap-2 py-0.5">
+              <SpriteIcon atlas={atlasRef.current} sprite={g.sprite} size={18} />
+              <p className="text-base opacity-80">{g.name} ×{s.pantry[g.id]}</p>
+            </div>
+          ))}
+          {Object.entries(s.produce).filter(([, n]) => n > 0).map(([id, n]) => (
+            <p key={id} className="text-base py-0.5 opacity-80 pl-1">🌱 {CROPS[id]?.name ?? id} ×{n} <span className="opacity-50 text-sm">(for cooking)</span></p>
+          ))}
+        </>)}
 
         {(s.peepis > 0 || s.coconuts > 0 || Object.values(s.sodas).some(n => n > 0)) && (
           <>
@@ -4738,8 +4992,17 @@ const LittleApartmentGame: React.FC = () => {
       if (museumDone > 0 && museumDone < museumTotal) leads.push('Bingus the curator is always asking for one odd thing or another — and some curios turn up fishing, mining, or in far-flung corners.');
       // RUMORS: at most TWO cryptic achievement whispers (was four — too much).
       const rumors = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id)).slice(0, 2);
+      const todayEvent = dayEventFor(s);
       return (
         <div className="px-3 py-2">
+          {todayEvent && (
+            <div className={`flex items-start gap-2 rounded-md px-2 py-1.5 mb-2 ${todayEvent === 'lucky' ? 'bg-[#ffd24a]/15 text-[#ffe9a0]' : 'bg-[#e857a8]/15 text-[#f6b4dc]'}`}>
+              <span className="shrink-0 font-bold">{DAY_EVENT_LABEL[todayEvent]}</span>
+              <span className="text-sm leading-tight opacity-90">{todayEvent === 'lucky'
+                ? 'extra finds wash up on the shore and the mine veins run rich today.'
+                : 'the pawn shop and the street dealer are stocked deep and cheap today.'}</span>
+            </div>
+          )}
           <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">CURRENT GOALS</p>
           {goals.length === 0
             ? <p className="py-1 text-base opacity-50">Nothing pressing. Enjoy the city.</p>
@@ -4766,6 +5029,33 @@ const LittleApartmentGame: React.FC = () => {
       );
     })();
 
+    // Friends: the cast you can befriend. Tap one to give a gift; hearts unlock perks.
+    const friendsApp = (
+      <div className="px-3 py-2">
+        <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">FRIENDS</p>
+        <p className="text-xs opacity-50 mb-2 leading-snug">Give someone a gift they like — one each per day — to grow closer. Hearts unlock perks. (Loves/likes reveal at 2 ♥.)</p>
+        {FRIENDS.map(f => {
+          const hearts = friendHearts(s, f.id);
+          const gifted = !canGiftToday(s, f.id);
+          return (
+            <button
+              key={f.id}
+              onClick={() => setOverlayBoth({ type: 'gift', npcId: f.id })}
+              className="w-full flex items-center gap-3 py-2 border-b border-white/10 text-left hover:bg-white/5 transition"
+            >
+              <span className="text-2xl shrink-0">{f.emoji}</span>
+              <div className="flex-grow min-w-0">
+                <p className="text-base leading-tight">{f.name}</p>
+                <p className="text-xs opacity-55 leading-tight truncate">{f.blurb}</p>
+                <p className="text-sm leading-tight tracking-tight">{'❤️'.repeat(hearts)}<span className="opacity-25">{'·'.repeat(MAX_HEARTS - hearts)}</span></p>
+              </div>
+              <span className={`shrink-0 text-xs px-2 py-1 rounded ${gifted ? 'opacity-40 bg-white/5' : 'bg-[#ffd24a]/20 text-[#ffd24a]'}`}>{gifted ? 'gifted ✓' : 'GIFT'}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+
     // ---- app icon grid (home screen) -----------------------------------------
     const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: React.ReactNode; label: string; bg: string; badge?: number; onClick: () => void }) => (
       <button onClick={onClick} className="flex flex-col items-center gap-1 group">
@@ -4782,7 +5072,7 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
-      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal',
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends',
     };
 
     return (
@@ -4819,6 +5109,7 @@ const LittleApartmentGame: React.FC = () => {
               <AppIcon icon="🧳" label="Bag" bg="linear-gradient(160deg,#c9952f,#8a5a1f)" onClick={() => open('inventory')} />
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
               <AppIcon icon="📓" label="Journal" bg="linear-gradient(160deg,#4a6ea0,#28406a)" onClick={() => open('journal')} />
+              <AppIcon icon="💛" label="Friends" bg="linear-gradient(160deg,#d0506e,#8a2f4a)" onClick={() => open('friends')} />
               {s.zamazonkApp && (
                 <AppIcon
                   icon={<img src={ZAMAZONK_LOGO} alt="" className="w-full h-full object-contain p-0.5" />}
@@ -4848,6 +5139,7 @@ const LittleApartmentGame: React.FC = () => {
             <div className="flex-1 overflow-y-auto min-h-0">
               {ov.tab === 'inventory' && inventoryApp}
               {ov.tab === 'journal' && journalApp}
+              {ov.tab === 'friends' && friendsApp}
               {ov.tab === 'messages' && messagesApp}
               {ov.tab === 'zamazonk' && zamazonkApp}
               {ov.tab === 'achievements' && trophiesApp}
@@ -4871,8 +5163,10 @@ const LittleApartmentGame: React.FC = () => {
 
   // ---- UI pieces --------------------------------------------------------------
 
-  const panelCls = 'bg-[#16181d] border-2 border-[#ffd24a]/60 text-[#e8e0d0] font-pixel shadow-[4px_4px_0px_#000]';
-  const btnCls = 'border border-[#ffd24a]/60 px-3 py-1 text-[#ffd24a] hover:bg-[#ffd24a] hover:text-black transition-colors disabled:opacity-30 disabled:pointer-events-none text-lg';
+  // Shared overlay chrome — kept chunky/retro to match the game, but softened
+  // corners + a layered shadow (crisp pixel offset + a soft ambient) for depth.
+  const panelCls = 'bg-[#181a22] border-2 border-[#ffd24a]/55 text-[#e8e0d0] font-pixel rounded-lg shadow-[3px_3px_0_#000,0_10px_30px_-6px_rgba(0,0,0,0.65)]';
+  const btnCls = 'border border-[#ffd24a]/60 rounded px-3 py-1 text-[#ffd24a] hover:bg-[#ffd24a] hover:text-black active:translate-y-px transition-all disabled:opacity-30 disabled:pointer-events-none text-lg';
 
   // A round casino chip used as a bet button across all three games.
   const chipBtn = (c: number, active: boolean, disabled: boolean, onClick: () => void) => (
@@ -4884,6 +5178,71 @@ const LittleApartmentGame: React.FC = () => {
     >¥{c >= 1000 ? `${c / 1000}k` : c}</button>
   );
   const feltCls = 'rounded-xl bg-[radial-gradient(circle_at_50%_30%,#2a7d48,#14502b)] border-2 border-[#c9a227]/70 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]';
+
+  // Home kitchen: cook any known recipe whose ingredients you currently hold.
+  const renderCook = () => {
+    void shopTick;
+    const s = saveRef.current;
+    const close = () => setOverlayBoth(null);
+    const known = RECIPES.filter(r => s.recipes.includes(r.id));
+    const buffOn = s.buff && s.buff.day === s.day ? s.buff : null;
+    return (
+      <ShopFrame title="🍳 HOME KITCHEN" subtitle="Cook with what you've gathered" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        {buffOn && (
+          <p className="text-sm mb-2 px-2 py-1 rounded bg-[#e0843a]/20 text-[#ffd2a0]">{BUFFS[buffOn.id].emoji} {BUFFS[buffOn.id].name} active — {BUFFS[buffOn.id].desc}</p>
+        )}
+        {known.map(r => {
+          const ok = canCook(s, r);
+          return (
+            <div key={r.id} className="flex items-center gap-2 py-1.5 border-b border-white/10">
+              <SpriteIcon atlas={atlasRef.current} sprite={r.sprite} size={28} />
+              <div className="flex-grow leading-tight">
+                <p className="text-base">{r.name} <span className="opacity-50 text-sm">+{r.energy} en{r.buff ? ` · ${BUFFS[r.buff].emoji} ${BUFFS[r.buff].name}` : ''}</span></p>
+                <p className="text-xs opacity-65">{r.ingredients.map(i => `${INGREDIENT_LABEL[i.kind]} ${ingredientCount(s, i.kind)}/${i.n}`).join('  ·  ')}</p>
+              </div>
+              <button className={`${btnCls} text-sm px-2 py-0.5`} disabled={!ok} onClick={() => doCook(r.id)}>COOK</button>
+            </div>
+          );
+        })}
+        <p className="text-xs opacity-50 mt-2 italic leading-snug">Buy rice / eggs / greens at the konbini. Keep a greenhouse harvest (instead of shipping it) to cook with. Friends teach you new recipes.</p>
+      </ShopFrame>
+    );
+  };
+
+  // Pick a held item to give an NPC (one gift/NPC/day). Reaction is a portrait dialog.
+  const renderGift = (ov: Extract<Overlay, { type: 'gift' }>) => {
+    void shopTick;
+    const s = saveRef.current;
+    const close = () => setOverlayBoth(null);
+    const f = friendById(ov.npcId);
+    if (!f) { close(); return null; }
+    const hearts = friendHearts(s, ov.npcId);
+    const items = giftableItems(s);
+    const already = !canGiftToday(s, ov.npcId);
+    return (
+      <ShopFrame
+        title={`${f.emoji} GIVE ${f.name.toUpperCase()} A GIFT`}
+        subtitle={`${'❤️'.repeat(hearts)}${'·'.repeat(MAX_HEARTS - hearts)}  ${hearts}/10`}
+        money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}
+      >
+        {already
+          ? <p className="text-base opacity-65 py-3">You've already given {f.name} something today. Come back tomorrow.</p>
+          : items.length === 0
+            ? <p className="text-base opacity-65 py-3">Nothing to give right now. Catch a fish, grow a crop, cook a dish, grab a soda…</p>
+            : items.map((it, i) => (
+                <div key={i} className="flex items-center gap-2 py-1 border-b border-white/10">
+                  {it.sprite ? <SpriteIcon atlas={atlasRef.current} sprite={it.sprite} size={22} /> : <span className="w-[22px] text-center text-lg">{it.emoji}</span>}
+                  <p className="flex-grow text-base">{it.label} <span className="opacity-40 text-sm">×{it.count}</span></p>
+                  <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doGift(ov.npcId, it)}>GIVE</button>
+                </div>
+              ))}
+        {hearts >= 2 && (
+          <p className="text-xs opacity-55 mt-2 italic">Loves: {f.loved.join(', ')}{f.liked.length ? ` · Likes: ${f.liked.join(', ')}` : ''}</p>
+        )}
+        {f.perk && <p className="text-xs opacity-45 mt-1">✦ At {f.perk.hearts} ♥: {f.perk.text}</p>}
+      </ShopFrame>
+    );
+  };
 
   const renderShop = (ov: Extract<Overlay, { type: 'shop' }>) => {
     void shopTick;
@@ -4977,7 +5336,10 @@ const LittleApartmentGame: React.FC = () => {
           ) : ready ? (
             <div className="py-2">
               <div className="flex items-center gap-3 mb-3"><SpriteIcon atlas={atlasRef.current} sprite={crop.sprites[3]} size={40} /><p className="text-lg">{crop.name} — ripe and ready!</p></div>
-              <button className={`${btnCls} w-full`} onClick={doHarvestPlot}>HARVEST → shipping box</button>
+              <div className="flex flex-col gap-2">
+                <button className={`${btnCls} w-full`} onClick={() => doHarvestPlot(false)}>HARVEST → shipping box (sell)</button>
+                <button className={`${btnCls} w-full`} onClick={() => doHarvestPlot(true)}>HARVEST → keep to cook 🍳</button>
+              </div>
             </div>
           ) : (
             <div className="py-2">
@@ -5548,15 +5910,21 @@ const LittleApartmentGame: React.FC = () => {
           <p className="text-base text-[#ffd24a]/80 mt-1">YOUR ROD</p>
           <p className="text-lg py-0.5 opacity-80">{owned.name}</p>
           <p className="text-base text-[#ffd24a]/80 mt-3">FOR SALE</p>
-          {next ? (
+          {next ? (() => {
+            const price = rodPriceFor(s, next.price);
+            const discounted = price < next.price;
+            return (
             <div className="flex items-center gap-3 py-1.5">
               <div className="flex-grow min-w-0">
                 <p className="text-xl leading-tight">{next.name}</p>
                 <p className="text-sm opacity-60 leading-tight">{next.blurb}</p>
+                {discounted && <p className="text-xs text-[#7ce8a0] leading-tight">friend's price — 25% off</p>}
               </div>
-              <button className={`${btnCls} shrink-0`} disabled={s.money < next.price} onClick={buyRod}>¥{next.price.toLocaleString()}</button>
+              {discounted && <span className="text-sm opacity-40 line-through shrink-0">¥{next.price.toLocaleString()}</span>}
+              <button className={`${btnCls} shrink-0`} disabled={s.money < price} onClick={buyRod}>¥{price.toLocaleString()}</button>
             </div>
-          ) : (
+            );
+          })() : (
             <p className="py-1 text-lg opacity-60">"That's the best rod I have, friend. The rest is up to the water."</p>
           )}
         </ShopFrame>
@@ -5576,6 +5944,14 @@ const LittleApartmentGame: React.FC = () => {
           <div key={f.id} className="flex items-center gap-3 py-1 border-b border-white/10">
             <p className="flex-grow text-xl">{f.name} <span className="text-sm opacity-60">+{f.energy} energy</span></p>
             <button className={btnCls} disabled={s.money < f.price || s.energy >= maxEnergy(s)} onClick={() => buyFood(f.id)}>¥{f.price}</button>
+          </div>
+        ))}
+        <p className="text-base text-[#ffd24a]/80 mt-3">GROCERIES <span className="text-sm opacity-60">(cook with these at home)</span></p>
+        {GROCERIES.map(g => (
+          <div key={g.id} className="flex items-center gap-3 py-1 border-b border-white/10">
+            <SpriteIcon atlas={atlasRef.current} sprite={g.sprite} size={20} />
+            <p className="flex-grow text-xl">{g.name}{(s.pantry[g.id] ?? 0) > 0 && <span className="text-sm opacity-50"> (have {s.pantry[g.id]})</span>}</p>
+            <button className={btnCls} disabled={s.money < g.price} onClick={() => buyGroceryItem(g.id, g.price)}>¥{g.price}</button>
           </div>
         ))}
         <p className="text-base text-[#ffd24a]/80 mt-3">SELL FISH</p>
@@ -5681,8 +6057,18 @@ const LittleApartmentGame: React.FC = () => {
             );
           })()}
 
+          {/* special-day chip — Market / Lucky Day */}
+          {hud.event && (
+            <span
+              className={`ml-auto shrink-0 inline-flex items-center px-2 py-1 rounded text-xs sm:text-sm font-bold leading-none chip-pop ${hud.event === 'lucky' ? 'bg-[#ffd24a]/20 text-[#ffe9a0]' : 'bg-[#e857a8]/20 text-[#f6b4dc]'}`}
+              title={hud.event === 'lucky' ? 'Lucky Day — extra shore finds & richer mine veins' : 'Market Day — pawn shop & street dealer stocked deep and cheap'}
+            >
+              {DAY_EVENT_LABEL[hud.event]}
+            </span>
+          )}
+
           {/* scene name */}
-          <span className="ml-auto hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded bg-black/25 text-sm text-[#e8e0d0]/80 leading-none truncate max-w-[34%]">
+          <span className={`${hud.event ? '' : 'ml-auto'} hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded bg-black/25 text-sm text-[#e8e0d0]/80 leading-none truncate max-w-[34%]`}>
             <span className="opacity-50">📍</span>{hud.sceneName}
           </span>
 
@@ -6134,8 +6520,22 @@ const LittleApartmentGame: React.FC = () => {
 
         {/* shops */}
         {overlay?.type === 'shop' && (
-          <div data-navroot className="absolute inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4">
+          <div data-navroot className="absolute inset-0 bg-black/72 backdrop-blur-[2px] flex items-center justify-center p-2 sm:p-4">
             {renderShop(overlay)}
+          </div>
+        )}
+
+        {/* home kitchen */}
+        {overlay?.type === 'cook' && (
+          <div data-navroot className="absolute inset-0 bg-black/72 backdrop-blur-[2px] flex items-center justify-center p-2 sm:p-4">
+            {renderCook()}
+          </div>
+        )}
+
+        {/* gift an NPC */}
+        {overlay?.type === 'gift' && (
+          <div data-navroot className="absolute inset-0 bg-black/72 backdrop-blur-[2px] flex items-center justify-center p-2 sm:p-4">
+            {renderGift(overlay)}
           </div>
         )}
 
@@ -6289,6 +6689,23 @@ const LittleApartmentGame: React.FC = () => {
           const s = saveRef.current;
           const boxed = [...s.owned, ...s.rares].filter(id => !s.placed[id]);
           const held = heldRef.current;
+          const ownedRugs = DECOR.filter(d => d.kind === 'rug' && ownsDecor(s, d.id));
+          const styleItems = DECOR.filter(d => (d.kind === 'wall' || d.kind === 'floor') && ownsDecor(s, d.id));
+          const shopItems = DECOR.filter(d => !ownsDecor(s, d.id) && d.price > 0);
+          const tabCls = (t: typeof arrangeTab) => `font-pixel text-xs px-2 py-1 rounded-t ${arrangeTab === t ? 'bg-[#ffd24a] text-black' : 'bg-black/40 text-[#e8e0d0]/70'}`;
+          const swatch = (d: typeof DECOR[number], active: boolean, action: 'apply' | 'buy') => (
+            <div
+              key={d.id}
+              {...(action === 'apply' ? { 'data-apply-decor': d.id } : { 'data-buy-decor': d.id })}
+              className={`shrink-0 w-[72px] flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border cursor-pointer ${active ? 'border-[#7ce8a0] bg-[#7ce8a0]/10' : 'border-[#ffd24a]/40 bg-[#16181d]/90'}`}
+            >
+              {d.sprite
+                ? <SpriteIcon atlas={atlasRef.current} sprite={d.sprite} size={d.kind === 'rug' ? 34 : 30} />
+                : <span className="w-[30px] h-[30px] flex items-center justify-center text-xl">🚪</span>}
+              <span className="font-pixel text-[#e8e0d0] text-[9px] leading-tight text-center line-clamp-1">{d.name}</span>
+              {action === 'buy' && <span className="font-pixel text-[#ffd24a] text-[9px]">¥{d.price.toLocaleString()}</span>}
+            </div>
+          );
           return (
             <div
               className="absolute inset-0 z-30 select-none"
@@ -6308,28 +6725,46 @@ const LittleApartmentGame: React.FC = () => {
                 <button data-zz-ui data-zz-done className="font-pixel text-sm bg-[#ffd24a] text-black px-3 py-0.5 shadow-[2px_2px_0_#000] pointer-events-auto">DONE</button>
               </div>
 
-              {/* bottom tray of boxed furniture + the bin */}
-              <div data-zz-ui className="absolute bottom-0 inset-x-0 flex items-end gap-2 px-3 py-2 bg-black/70 border-t border-[#ffd24a]/30">
-                <div className="flex-1 flex gap-2 overflow-x-auto pb-1">
-                  {boxed.length === 0
-                    ? <span className="font-pixel text-[#e8e0d0]/50 text-sm py-3">No furniture in boxes. Buy some, or order from ZamaZonk.</span>
-                    : boxed.map(id => (
-                        <div
-                          key={id}
-                          data-zz-item={id}
-                          className={`shrink-0 w-[68px] flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border bg-[#16181d]/90 cursor-grab active:cursor-grabbing ${held?.id === id ? 'border-[#7ce8a0] opacity-40' : 'border-[#ffd24a]/40'}`}
-                        >
-                          <SpriteIcon atlas={atlasRef.current} sprite={furnitureById(id).sprite} size={30} />
-                          <span className="font-pixel text-[#e8e0d0] text-[10px] leading-tight text-center line-clamp-1">{furnitureById(id).name}</span>
-                        </div>
-                      ))}
+              {/* bottom panel: tabs + the active tray (furniture / rugs / style / shop) */}
+              <div data-zz-ui className="absolute bottom-0 inset-x-0 bg-black/70 border-t border-[#ffd24a]/30">
+                {/* tab row */}
+                <div className="flex gap-1 px-3 pt-1">
+                  <button data-zz-ui data-arrange-tab="furniture" className={tabCls('furniture')}>🛋 Furniture</button>
+                  <button data-zz-ui data-arrange-tab="rugs" className={tabCls('rugs')}>🟥 Rugs</button>
+                  <button data-zz-ui data-arrange-tab="style" className={tabCls('style')}>🎨 Style</button>
+                  <button data-zz-ui data-arrange-tab="shop" className={tabCls('shop')}>🛒 Shop <span className="opacity-70">¥{s.money.toLocaleString()}</span></button>
                 </div>
-                <div
-                  data-zz-trash
-                  className={`shrink-0 w-16 h-16 flex flex-col items-center justify-center rounded-md border-2 border-dashed ${held ? 'border-[#e0552e] text-[#e0552e] bg-[#e0552e]/10' : 'border-white/25 text-white/40'}`}
-                >
-                  <span className="text-2xl leading-none">🗑</span>
-                  <span className="font-pixel text-[9px]">box it</span>
+                <div className="flex items-end gap-2 px-3 pb-2 pt-1">
+                  <div className="flex-1 flex gap-2 overflow-x-auto pb-1 min-h-[78px]">
+                    {arrangeTab === 'furniture' && (boxed.length === 0
+                      ? <span className="font-pixel text-[#e8e0d0]/50 text-sm py-6">No furniture in boxes. Buy some, or order from ZamaZonk.</span>
+                      : boxed.map(id => (
+                          <div key={id} data-zz-item={id}
+                            className={`shrink-0 w-[68px] flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border bg-[#16181d]/90 cursor-grab active:cursor-grabbing ${held?.id === id && !held.rug ? 'border-[#7ce8a0] opacity-40' : 'border-[#ffd24a]/40'}`}>
+                            <SpriteIcon atlas={atlasRef.current} sprite={furnitureById(id).sprite} size={30} />
+                            <span className="font-pixel text-[#e8e0d0] text-[10px] leading-tight text-center line-clamp-1">{furnitureById(id).name}</span>
+                          </div>
+                        )))}
+                    {arrangeTab === 'rugs' && (ownedRugs.length === 0
+                      ? <span className="font-pixel text-[#e8e0d0]/50 text-sm py-6">No rugs yet. Buy one in the 🛒 Shop tab.</span>
+                      : ownedRugs.map(d => (
+                          <div key={d.id} data-rug-item={d.id}
+                            className={`shrink-0 w-[72px] flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border bg-[#16181d]/90 cursor-grab active:cursor-grabbing ${held?.id === d.id && held.rug ? 'border-[#7ce8a0] opacity-40' : 'border-[#ffd24a]/40'}`}>
+                            <SpriteIcon atlas={atlasRef.current} sprite={d.sprite} size={36} />
+                            <span className="font-pixel text-[#e8e0d0] text-[9px] leading-tight text-center line-clamp-1">{d.name}</span>
+                          </div>
+                        )))}
+                    {arrangeTab === 'style' && styleItems.map(d =>
+                      swatch(d, s.decor[d.kind as 'wall' | 'floor'] === d.id, 'apply'))}
+                    {arrangeTab === 'shop' && (shopItems.length === 0
+                      ? <span className="font-pixel text-[#e8e0d0]/50 text-sm py-6">You own every style going. The room is fully you.</span>
+                      : shopItems.map(d => swatch(d, false, 'buy')))}
+                  </div>
+                  <div data-zz-trash
+                    className={`shrink-0 w-16 h-16 flex flex-col items-center justify-center rounded-md border-2 border-dashed ${held ? 'border-[#e0552e] text-[#e0552e] bg-[#e0552e]/10' : 'border-white/25 text-white/40'}`}>
+                    <span className="text-2xl leading-none">🗑</span>
+                    <span className="font-pixel text-[9px]">{held?.rug ? 'remove' : 'box it'}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -6511,15 +6946,22 @@ const ShopFrame: React.FC<{
   title: string; subtitle: string; money: number; onClose: () => void;
   panelCls: string; btnCls: string; children: React.ReactNode;
 }> = ({ title, subtitle, money, onClose, panelCls, btnCls, children }) => (
-  <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-4 py-3`}>
-    <div className="flex items-start justify-between gap-2 border-b-2 border-[#ffd24a]/40 pb-1.5 mb-1.5">
-      <div>
-        <h3 className="font-retro text-[#ffd24a] text-sm sm:text-base">{title}</h3>
-        <p className="text-sm opacity-60">{subtitle}</p>
+  <div className={`${panelCls} w-full max-w-lg max-h-full overflow-y-auto px-4 pt-3 pb-3.5`}>
+    {/* header: title block on the left, a wallet pill + round close on the right */}
+    <div className="flex items-start gap-3 pb-2 mb-2.5 border-b border-[#ffd24a]/25">
+      <div className="min-w-0 flex-grow">
+        <h3 className="font-retro text-[#ffd24a] text-sm sm:text-base leading-snug drop-shadow-[1px_1px_0_rgba(0,0,0,0.6)]">{title}</h3>
+        {subtitle && <p className="text-sm opacity-55 leading-snug mt-1">{subtitle}</p>}
       </div>
-      <div className="text-right shrink-0">
-        <p className="text-[#ffd24a] text-xl">¥{money.toLocaleString()}</p>
-        <button className={`${btnCls} text-sm px-2 py-0.5 mt-1`} onClick={onClose}>ESC ✕</button>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="inline-flex items-center gap-1 rounded-full bg-black/40 border border-[#ffd24a]/30 px-2.5 py-1 text-[#ffd24a] text-base leading-none tabular-nums">
+          <span className="text-[#ffe9a0]">¥</span>{money.toLocaleString()}
+        </span>
+        <button
+          aria-label="Close"
+          className="w-7 h-7 shrink-0 rounded-full border border-[#ffd24a]/40 text-[#ffd24a]/80 hover:bg-[#ffd24a] hover:text-black active:translate-y-px transition-all flex items-center justify-center text-sm leading-none"
+          onClick={onClose}
+        >✕</button>
       </div>
     </div>
     {children}

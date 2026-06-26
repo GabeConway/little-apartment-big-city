@@ -168,8 +168,8 @@ export const MUSEUM_SLOTS: MuseumSlot[] = [
   // Pedestals — objects of interest (rows 2 and 4)
   { id: 'arti-coin', label: 'First Coin of the Realm', kind: 'artifact', x: 2, y: 2,
     blurb: '"The very first ¥1 anyone ever dropped in a vending machine here." Provenance: dubious.' },
-  { id: 'arti-token', label: 'The Unbreakable Token', kind: 'artifact', x: 5, y: 2,
-    blurb: 'A vending token that has outlived three vending machines.' },
+  { id: 'arti-token', label: 'A Single Chicken Nugget', kind: 'artifact', x: 5, y: 2,
+    blurb: 'Found deep in the mines, far from any chicken. Bingus has labelled it "Provenance: terrifying." It has not spoiled. It will not spoil.' },
   { id: 'arti-onigiri', label: 'Fossilized Onigiri', kind: 'artifact', x: 8, y: 2,
     blurb: 'Left in a coat pocket. Geologically speaking, it is now a mineral.' },
   { id: 'arti-rock', label: 'A Perfectly Ordinary Rock', kind: 'artifact', x: 11, y: 2,
@@ -206,9 +206,6 @@ export const BINGUS_FETCHES: BingusFetch[] = [
   { slot: 'art-bento', kind: 'peepis',
     ask: 'Bring me a cold "Diet Doctor Peepis" from a vending machine. The most honest still life requires the most honest subject.',
     thanks: 'A Peepis can, rendered in oils by morning. "Still Life with Konbini Bento." It goes on the wall this instant.' },
-  { slot: 'arti-token', kind: 'soda',
-    ask: 'Bring me any vending-machine soda. I am reliably informed one of them hides a TOKEN of unusual stubbornness.',
-    thanks: 'There — wedged in the can\'s shadow, a token that has outlived three machines. The Unbreakable Token. Ours now.' },
   { slot: 'arti-onigiri', kind: 'fish',
     ask: 'Bring me a fish, fresh from the bay. I intend to... preserve it. Please do not ask by what method.',
     thanks: 'In a few decades this will be, geologically, a mineral. We shall label it the Fossilized Onigiri and never speak of the fish.' },
@@ -221,8 +218,9 @@ export const BINGUS_FETCHES: BingusFetch[] = [
 ];
 
 // The rest are rare drops from activities (rolls live in the drop hooks):
-// arti-lure (fishing), arti-shard (mine floor 6+), arti-meteor (mine 10+),
-// arti-capsule (1% gachapon), arti-coin (cracking a geode).
+// arti-lure (fishing), arti-token = the chicken nugget (random mine drop, any floor),
+// arti-shard (mine floor 6+), arti-meteor (mine 10+), arti-capsule (1% gachapon),
+// arti-coin (cracking a geode).
 
 // In-game achievements — completely separate from the site-wide system in
 // utils/achievements.ts (which feeds the cake). These live in the game save.
@@ -653,3 +651,152 @@ export const MESSAGES: MessageDef[] = [
     ],
   },
 ];
+
+// ============================================================================
+// Cooking, Friendship & Decor — three life-sim systems layered on the base game.
+// Data tables only (no state import); the logic lives in state.ts, wiring in
+// LittleApartmentGame.tsx. See kb/games.md.
+// ============================================================================
+
+// ---- Cooking ---------------------------------------------------------------
+// Cook at home once the fridge AND microwave are placed. Recipes consume held
+// ingredients → a dish in your bag; eat a dish for energy + an optional day buff.
+// Ingredients come from things you already gather: fish (rod), crops (greenhouse,
+// kept not shipped), coconuts (island), sodas/peepis (vending), and pantry
+// staples (rice/egg/veg) bought at the konbini. One buff is active at a time.
+export type IngredientKind = 'fish' | 'crop' | 'coconut' | 'peepis' | 'soda' | 'rice' | 'egg' | 'veg';
+export type BuffId = 'hearty' | 'warm' | 'lucky';
+
+export interface BuffInfo { id: BuffId; name: string; emoji: string; desc: string }
+export const BUFFS: Record<BuffId, BuffInfo> = {
+  hearty: { id: 'hearty', name: 'Hearty', emoji: '💪', desc: '+20 max energy until tomorrow.' },
+  warm:   { id: 'warm',   name: 'Warmed',  emoji: '🔥', desc: 'Everything costs 20% less energy today.' },
+  lucky:  { id: 'lucky',  name: 'Lucky',   emoji: '🍀', desc: 'Extra shore finds & richer mine veins today.' },
+};
+
+export interface Recipe {
+  id: string;
+  name: string;
+  sprite: string;                                   // atlas dish icon
+  ingredients: { kind: IngredientKind; n: number }[];
+  energy: number;                                   // restored when eaten
+  buff?: BuffId;                                     // optional day buff on eat
+  learn: 'start' | string;                          // 'start', or flavor for how it's taught
+  blurb: string;
+}
+// Pantry staples sold at the konbini counter (into save.pantry).
+export interface Grocery { id: 'rice' | 'egg' | 'veg'; name: string; price: number; sprite: string }
+export const GROCERIES: Grocery[] = [
+  { id: 'rice', name: 'Bag of Rice',   price: 120, sprite: 'i-rice' },
+  { id: 'egg',  name: 'Eggs',          price: 160, sprite: 'i-egg' },
+  { id: 'veg',  name: 'Fresh Greens',  price: 200, sprite: 'i-veg' },
+];
+export const groceryById = (id: string): Grocery | undefined => GROCERIES.find(g => g.id === id);
+
+export const RECIPES: Recipe[] = [
+  { id: 'onigiri', name: 'Onigiri', sprite: 'i-dish-onigiri', energy: 25, learn: 'start',
+    ingredients: [{ kind: 'rice', n: 1 }],
+    blurb: 'A rice ball wrapped in nori. The first thing anyone learns to make.' },
+  { id: 'grillfish', name: 'Grilled Fish', sprite: 'i-dish-grillfish', energy: 35, learn: 'start',
+    ingredients: [{ kind: 'fish', n: 1 }],
+    blurb: 'Salt, heat, patience. Whatever you caught, made dinner.' },
+  { id: 'tamago', name: 'Tamago & Rice', sprite: 'i-dish-breakfast', energy: 55, buff: 'hearty', learn: 'start',
+    ingredients: [{ kind: 'egg', n: 1 }, { kind: 'rice', n: 1 }],
+    blurb: 'Egg over rice — the breakfast that makes a whole day feel possible.' },
+  { id: 'donburi', name: 'Fish Donburi', sprite: 'i-dish-fishbowl', energy: 60, learn: 'start',
+    ingredients: [{ kind: 'fish', n: 1 }, { kind: 'rice', n: 1 }],
+    blurb: 'Fresh fish over a warm bowl of rice. Konbini bento, but better.' },
+  { id: 'stirfry', name: 'Veg Stir-fry', sprite: 'i-dish-stirfry', energy: 40, buff: 'warm', learn: "Granny Sato shows you, once you're friends.",
+    ingredients: [{ kind: 'veg', n: 1 }, { kind: 'crop', n: 1 }],
+    blurb: 'Greens and garden veg, hot and fast in the pan. Sticks to your ribs.' },
+  { id: 'miso', name: 'Miso Soup', sprite: 'i-dish-misosoup', energy: 30, buff: 'warm', learn: 'start',
+    ingredients: [{ kind: 'veg', n: 1 }, { kind: 'egg', n: 1 }],
+    blurb: 'Tofu, scallion, broth. The bowl that says the day is over now.' },
+  { id: 'smoothie', name: 'Island Smoothie', sprite: 'i-dish-smoothie', energy: 45, buff: 'lucky', learn: "Lulu mixes you one, once you're friends.",
+    ingredients: [{ kind: 'coconut', n: 1 }, { kind: 'crop', n: 1 }],
+    blurb: 'Coconut and something sweet from the garden. Tastes like a day off.' },
+  { id: 'hotpot', name: 'Nabe Hot Pot', sprite: 'i-dish-hotpot', energy: 80, buff: 'hearty', learn: "Granny Sato's reward for true friendship.",
+    ingredients: [{ kind: 'fish', n: 1 }, { kind: 'veg', n: 1 }, { kind: 'rice', n: 1 }],
+    blurb: 'Everything in one bubbling pot. The meal you make for someone you like.' },
+];
+export const recipeById = (id: string): Recipe | undefined => RECIPES.find(r => r.id === id);
+export const STARTER_RECIPES = RECIPES.filter(r => r.learn === 'start').map(r => r.id);
+
+// ---- Friendship & gifting --------------------------------------------------
+// Give an NPC something they like (one gift/NPC/day) to raise friendship. Hearts
+// = floor(points / 100), capped at 10. Items are classified by GiftKind; each NPC
+// loves some kinds, likes others, dislikes a few. A handful of hearts thresholds
+// grant a concrete perk (handled at the relevant shop/interaction).
+export type GiftKind = 'fish' | 'crop' | 'flower' | 'coconut' | 'peepis' | 'soda' | 'mineral' | 'dish';
+export type GiftTier = 'loved' | 'liked' | 'neutral' | 'disliked';
+export const GIFT_POINTS: Record<GiftTier, number> = { loved: 40, liked: 22, neutral: 8, disliked: -15 };
+export const HEART_POINTS = 100;       // points per heart
+export const MAX_HEARTS = 10;
+
+export interface FriendDef {
+  id: string;            // npc id (matches the speaker/interaction id)
+  name: string;          // display name
+  emoji: string;         // avatar in the Friends app
+  blurb: string;         // one-line who-they-are
+  loved: GiftKind[];
+  liked: GiftKind[];
+  disliked: GiftKind[];
+  perk?: { hearts: number; text: string };   // a concrete reward at N hearts (applied in code)
+}
+// The cast you can befriend. ids match how the game refers to them on interact.
+export const FRIENDS: FriendDef[] = [
+  { id: 'genji', name: 'Genji', emoji: '🎣', blurb: 'The shore fisherman who taught you to cast.',
+    loved: ['fish'], liked: ['mineral', 'soda'], disliked: ['flower'],
+    perk: { hearts: 3, text: 'His Carbon Rod is 25% off.' } },
+  { id: 'granny', name: 'Granny Sato', emoji: '🌻', blurb: 'Keeper of the community greenhouse.',
+    loved: ['crop', 'flower'], liked: ['dish'], disliked: ['soda', 'peepis'],
+    perk: { hearts: 3, text: 'Teaches you Stir-fry (and Nabe Hot Pot at 5 ♥).' } },
+  { id: 'lulu', name: 'Lulu', emoji: '🍹', blurb: 'Runs the tiki bar on Kiwami Island.',
+    loved: ['coconut', 'dish'], liked: ['fish'], disliked: ['mineral'],
+    perk: { hearts: 3, text: 'Teaches you the Island Smoothie recipe.' } },
+  { id: 'charlie', name: 'Charlie', emoji: '🎸', blurb: 'The bearded filmmaker out front of the konbini.',
+    loved: ['dish'], liked: ['coconut', 'soda'], disliked: ['mineral'] },
+  { id: 'max', name: 'Max', emoji: '🧛', blurb: 'The shore vampire, out on even nights.',
+    loved: ['soda'], liked: ['fish'], disliked: ['crop', 'flower'] },
+  { id: 'bingus', name: 'Bingus', emoji: '🖼️', blurb: 'The eccentric museum curator.',
+    loved: ['mineral'], liked: ['dish', 'fish'], disliked: ['peepis'] },
+  { id: 'manager', name: 'The Manager', emoji: '👁️', blurb: 'Minds the backrooms shop.',
+    loved: ['mineral'], liked: ['soda'], disliked: ['flower'] },
+  { id: 'tex', name: 'Tex', emoji: '🤠', blurb: 'The cowboy hawking hats on the shore.',
+    loved: ['soda'], liked: ['fish', 'mineral'], disliked: ['dish'] },
+  { id: 'david', name: 'David', emoji: '🐈‍⬛', blurb: 'The wise talking cat who lives with you.',
+    loved: ['fish'], liked: ['dish'], disliked: ['peepis', 'soda'] },
+  { id: 'miko', name: 'Yoshi', emoji: '⛩️', blurb: 'The miko who keeps the shrine.',
+    loved: ['flower', 'crop'], liked: ['dish'], disliked: ['mineral'] },
+];
+export const friendById = (id: string): FriendDef | undefined => FRIENDS.find(f => f.id === id);
+
+// ---- Decor: wallpaper / flooring / rugs ------------------------------------
+// Bought + applied right in Arrange mode. Wall & floor are room-wide swaps; rugs
+// are 2×2 objects placed on the floor (under furniture, walkable). The 'default'
+// wall/floor render the original apartment tiles (free, always owned).
+export interface DecorItem { id: string; name: string; kind: 'wall' | 'floor' | 'rug'; sprite: string; price: number; blurb: string }
+export const DECOR: DecorItem[] = [
+  // walls
+  { id: 'wall-default', name: 'Plain Wall', kind: 'wall', sprite: '', price: 0, blurb: 'The apartment as it came.' },
+  { id: 'wall-cream',  name: 'Cream Pinstripe', kind: 'wall', sprite: 't-wall-cream', price: 1200, blurb: 'Soft and bright. Makes 19 sqm feel like 20.' },
+  { id: 'wall-wood',   name: 'Wood Panel',      kind: 'wall', sprite: 't-wall-wood',  price: 2200, blurb: 'Warm wainscot. Old-coffee-house cosy.' },
+  { id: 'wall-mint',   name: 'Mint Trellis',    kind: 'wall', sprite: 't-wall-mint',  price: 2400, blurb: 'A calm sage-green. Easy to wake up to.' },
+  { id: 'wall-sakura', name: 'Sakura Bloom',    kind: 'wall', sprite: 't-wall-sakura', price: 3200, blurb: 'Pale pink with drifting petals. Spring, indoors.' },
+  { id: 'wall-navy',   name: 'Starlit Navy',    kind: 'wall', sprite: 't-wall-navy',  price: 3600, blurb: 'Deep blue scattered with little gold stars.' },
+  // floors
+  { id: 'floor-default', name: 'Original Floor', kind: 'floor', sprite: '', price: 0, blurb: 'The boards that were always here.' },
+  { id: 'floor-oak',    name: 'Oak Boards',     kind: 'floor', sprite: 't-floor-oak',    price: 1600, blurb: 'Clean honeyed planks underfoot.' },
+  { id: 'floor-tatami', name: 'Tatami Mats',    kind: 'floor', sprite: 't-floor-tatami', price: 2600, blurb: 'Woven rush. The whole room smells faintly of summer.' },
+  { id: 'floor-checker', name: 'Checker Tile',  kind: 'floor', sprite: 't-floor-checker', price: 3000, blurb: 'A diner-ish checkerboard. Surprisingly fun.' },
+  { id: 'floor-stone',  name: 'Slate Stone',    kind: 'floor', sprite: 't-floor-stone',  price: 3400, blurb: 'Cool grey flagstones. Modern and quiet.' },
+  { id: 'floor-pink',   name: 'Pink Carpet',    kind: 'floor', sprite: 't-floor-pink',   price: 3800, blurb: 'Plush and rosy. Warm on bare feet.' },
+  // rugs (2×2, placed)
+  { id: 'rug-red',     name: 'Red Area Rug',   kind: 'rug', sprite: 't-rug-red',     price: 2000, blurb: 'A classic bordered rug that anchors the room.' },
+  { id: 'rug-blue',    name: 'Blue Round Rug', kind: 'rug', sprite: 't-rug-blue',    price: 2200, blurb: 'A soft blue medallion to sink your feet into.' },
+  { id: 'rug-persian', name: 'Persian Rug',    kind: 'rug', sprite: 't-rug-persian', price: 4200, blurb: 'Ornate red-and-gold. Looks like it has stories.' },
+  { id: 'rug-tatami',  name: 'Tatami Mat',     kind: 'rug', sprite: 't-rug-tatami',  price: 1800, blurb: 'A bordered rush mat. A spot to kneel and breathe.' },
+];
+export const decorById = (id: string): DecorItem | undefined => DECOR.find(d => d.id === id);
+export const DEFAULT_DECOR = { wall: 'wall-default', floor: 'floor-default' };
+export const STARTER_DECOR = ['wall-default', 'floor-default'];

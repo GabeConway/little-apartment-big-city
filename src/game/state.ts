@@ -9,7 +9,10 @@ import {
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
   itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, cropStage, CROP_QUALITY_MULT,
   CROP_REQUESTS, NON_MANAGER_RARES, FORAGE, ERRANDS,
+  RECIPES, recipeById, STARTER_RECIPES, GIFT_POINTS, HEART_POINTS, MAX_HEARTS,
+  friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
 } from './data';
+import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind } from './data';
 import type { CropRequest } from './data';
 import type { Errand } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
@@ -92,6 +95,16 @@ export interface GameSave {
   greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
   cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
   collectibles: string[];       // museum collectible item ids found but not yet donated (in your bag)
+  // --- Cooking / Friendship / Decor (all default-safe; see kb/games.md) ---
+  friends: Record<string, { pts: number; giftDay: number }>; // npc id -> friendship points + last day gifted
+  pantry: Record<string, number>;   // konbini staples held for cooking (rice/egg/veg -> count)
+  produce: Record<string, number>;  // greenhouse crops KEPT (not shipped) for cooking (cropId -> count)
+  dishes: Record<string, number>;   // cooked, uneaten dishes (recipeId -> count)
+  recipes: string[];                // recipe ids the player knows
+  buff: { id: BuffId; day: number } | null; // active food buff (only valid while day matches)
+  decor: { wall: string; floor: string };   // applied room style (DECOR ids; 'default' = original tiles)
+  ownedDecor: string[];             // DECOR ids owned (wall/floor/rug)
+  rugs: { id: string; x: number; y: number }[]; // rugs placed on the apartment floor (2×2, walkable)
 }
 
 // A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
@@ -216,6 +229,15 @@ export const newSave = (): GameSave => ({
   greenhouse: freshGreenhouse(),
   cat: { found: false, name: '' },
   collectibles: [],
+  friends: {},
+  pantry: {},
+  produce: {},
+  dishes: {},
+  recipes: [...STARTER_RECIPES],
+  buff: null,
+  decor: { ...DEFAULT_DECOR },
+  ownedDecor: [...STARTER_DECOR],
+  rugs: [],
 });
 
 export const loadSave = (): GameSave | null => {
@@ -278,11 +300,14 @@ export const maxEnergy = (s: GameSave): number =>
   BASE_MAX_ENERGY
   + (s.placed['microwave'] ? 10 : 0)
   + (s.placed['fridge'] ? 10 : 0)
-  + (s.placed['kotatsu'] ? 10 : 0);
+  + (s.placed['kotatsu'] ? 10 : 0)
+  + (buffActive(s, 'hearty') ? 20 : 0); // a Hearty meal lifts the cap for the day
 
-// AC makes every exertion 20% cheaper.
+// AC (and a Warming meal) make every exertion 20% cheaper — they stack.
 export const energyCost = (s: GameSave, base: number): number =>
-  Math.max(1, Math.round(base * (s.placed['ac'] ? 0.8 : 1)));
+  Math.max(1, Math.round(base
+    * (s.placed['ac'] ? 0.8 : 1)
+    * (buffActive(s, 'warm') ? 0.8 : 1)));
 
 export const sleep = (s: GameSave): void => {
   s.day += 1;
@@ -300,6 +325,29 @@ export const sleep = (s: GameSave): void => {
 // shrine offering that "suddenly stops" the rain (rainCleared) wins over both.
 export const isRainyDay = (s: GameSave): boolean =>
   !s.rainCleared && (s.forceRain || (s.day > 1 && mulberry32(s.day * 1013904223 + 53)() < 0.2));
+
+// ---- Daily special events ----------------------------------------------------
+// At most one "special day" rolls per day — seeded so it's stable across reloads,
+// never day 1. Most days stay ordinary, which is what makes a special one feel
+// special. Independent of the weather roll (a day can be rainy AND a market day).
+//   'market' — the pawn shop & sketchy dealer carry more, and cheaper.
+//   'lucky'  — extra shore finds + richer mine veins; the day just goes your way.
+// The player is told each special morning by a phone text (see finishSleep) and
+// reminded by a HUD chip + the Journal.
+export type DayEvent = 'market' | 'lucky' | null;
+export const dayEventFor = (s: GameSave): DayEvent => {
+  if (s.day <= 1) return null;
+  const r = mulberry32(s.day * 2654435761 + 97)();
+  if (r < 0.12) return 'market';
+  if (r < 0.24) return 'lucky';
+  return null;
+};
+export const DAY_EVENT_LABEL: Record<'market' | 'lucky', string> = {
+  market: '🏷 Market Day',
+  lucky: '✨ Lucky Day',
+};
+// Luck today comes from EITHER a Lucky Day OR a Lucky food buff (a smoothie).
+export const luckyToday = (s: GameSave): boolean => dayEventFor(s) === 'lucky' || buffActive(s, 'lucky');
 
 export const clockLabel = (s: GameSave): string => {
   const m = Math.floor(s.timeMin) % (24 * 60);
@@ -333,14 +381,17 @@ export interface PawnOffer { itemId: string; price: number }
 export const pawnStockFor = (s: GameSave): PawnOffer[] => {
   const pool = FURNITURE.filter(f => f.pawnable && !s.owned.includes(f.id));
   const rand = mulberry32(s.day * 7919 + 17);
+  const market = dayEventFor(s) === 'market';            // Market Day: one more slot, cheaper
+  const size = PAWN_STOCK_SIZE + (market ? 1 : 0);
+  const disc = PAWN_DISCOUNT * (market ? 0.85 : 1);
   const picks: PawnOffer[] = [];
   const candidates = [...pool];
-  while (picks.length < PAWN_STOCK_SIZE && candidates.length > 0) {
+  while (picks.length < size && candidates.length > 0) {
     const i = Math.floor(rand() * candidates.length);
     const f = candidates.splice(i, 1)[0];
     // small per-day price wobble so "used" prices feel haggled
     const wobble = 0.9 + rand() * 0.2;
-    picks.push({ itemId: f.id, price: Math.round((f.price * PAWN_DISCOUNT * wobble) / 10) * 10 });
+    picks.push({ itemId: f.id, price: Math.round((f.price * disc * wobble) / 10) * 10 });
   }
   return picks;
 };
@@ -357,7 +408,7 @@ export const shoreForageFor = (s: GameSave): ForageSpot[] => {
   const tiles: { x: number; y: number }[] = [];
   for (let y = 5; y <= 8; y++) for (let x = 1; x <= 22; x++) tiles.push({ x, y });
   for (let i = tiles.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; }
-  const count = 4 + Math.floor(rand() * 3); // 4-6 finds a day
+  const count = 4 + Math.floor(rand() * 3) + (luckyToday(s) ? 2 : 0); // 4-6/day, +2 when luck is with you
   const totalW = FORAGE.reduce((a, f) => a + f.weight, 0);
   const spots: ForageSpot[] = [];
   for (let i = 0; i < count; i++) {
@@ -537,14 +588,18 @@ const creditRequest = (s: GameSave, cropId: string): number => {
 export interface HarvestResult { cropId: string; quality: number; value: number; requestBonus: number; capstone: boolean }
 // Harvest a ready plot: produce goes to the shipping box (paid next morning).
 // Regrowing crops re-ripen; others clear the plot. Returns the harvest details.
-export const harvestCrop = (s: GameSave, plotIdx: number): HarvestResult | null => {
+// `keep` diverts the crop into your cooking pantry (save.produce) instead of the
+// shipping box — so it pays nothing now but can be cooked. (No request credit when
+// kept; community requests are about what you ship.)
+export const harvestCrop = (s: GameSave, plotIdx: number, keep = false): HarvestResult | null => {
   const plot = s.greenhouse.plots[plotIdx];
   if (!plot || !plot.crop || !plotReady(plot)) return null;
   const crop = CROPS[plot.crop]; const cropId = plot.crop;
   const quality = harvestQuality(s, plot);
   const value = Math.round(crop.reward * CROP_QUALITY_MULT[quality]);
-  s.greenhouse.shipped.push({ crop: cropId, quality, value });
-  const requestBonus = creditRequest(s, cropId);
+  if (keep) s.produce[cropId] = (s.produce[cropId] ?? 0) + 1;
+  else s.greenhouse.shipped.push({ crop: cropId, quality, value });
+  const requestBonus = keep ? 0 : creditRequest(s, cropId);
   const capstone = cropId === 'moonflower' && !s.rares.includes('bloomlamp');
   if (capstone) s.rares.push('bloomlamp'); // achievement toast fired by the caller (award)
   if (crop.regrow) {
@@ -692,7 +747,8 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   // richness drives BOTH how many nodes and how rare they skew. Squared so lean
   // days are the norm; depth, the shrine, and your streak push toward the jackpot.
   let richness = rand() * rand();
-  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06);
+  const luckyOre = luckyToday(s) ? 0.2 : 0; // Lucky Day or a Lucky meal: veins run rich
+  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre);
   if (ch.id === 'rich') richness = Math.min(1, richness + 0.2);
   if (ch.id === 'calm') richness = Math.min(1, richness + 0.05);
   const oreCount = Math.round(3 + richness * 12 + depth);
@@ -797,7 +853,8 @@ export const sketchyOfferFor = (s: GameSave): SketchyOffer | null => {
   if (pool.length === 0) return null;
   const rand = mulberry32(s.day * 104729 + 3);
   const f = pool[Math.floor(rand() * pool.length)];
-  return { itemId: f.id, price: Math.round((f.price * SKETCHY_DISCOUNT) / 10) * 10 };
+  const disc = SKETCHY_DISCOUNT * (dayEventFor(s) === 'market' ? 0.8 : 1); // Market Day: even Jimmy cuts deals
+  return { itemId: f.id, price: Math.round((f.price * disc) / 10) * 10 };
 };
 
 export const gachaComplete = (s: GameSave): boolean =>
@@ -902,4 +959,132 @@ export const fulfillDeliveries = (s: GameSave): string[] => {
     });
   }
   return ids;
+};
+
+// ============================================================================
+// Cooking, Friendship & Decor — logic (data tables live in data.ts).
+// ============================================================================
+
+// ---- Food buffs --------------------------------------------------------------
+// One buff at a time; only valid on the day it was eaten. Fed into maxEnergy /
+// energyCost / luckyToday above.
+export const buffActive = (s: GameSave, id: BuffId): boolean => s.buff?.id === id && s.buff.day === s.day;
+
+// ---- Cooking -----------------------------------------------------------------
+export const canCookHere = (s: GameSave): boolean => Boolean(s.placed['fridge'] && s.placed['microwave']);
+
+// How many of an ingredient KIND the player holds (across the right pocket).
+export const ingredientCount = (s: GameSave, kind: IngredientKind): number => {
+  switch (kind) {
+    case 'fish': return s.fishInv.length;
+    case 'crop': return Object.values(s.produce).reduce((a, b) => a + b, 0);
+    case 'coconut': return s.coconuts;
+    case 'peepis': return s.peepis;
+    case 'soda': return Object.values(s.sodas).reduce((a, b) => a + b, 0);
+    case 'rice': case 'egg': case 'veg': return s.pantry[kind] ?? 0;
+  }
+};
+export const canCook = (s: GameSave, recipe: Recipe): boolean =>
+  s.recipes.includes(recipe.id) && recipe.ingredients.every(i => ingredientCount(s, i.kind) >= i.n);
+
+const consumeIngredient = (s: GameSave, kind: IngredientKind, n: number): void => {
+  for (let k = 0; k < n; k++) {
+    switch (kind) {
+      case 'fish': s.fishInv.shift(); break;
+      case 'crop': { const id = Object.keys(s.produce).find(c => s.produce[c] > 0); if (id) { s.produce[id]--; if (s.produce[id] <= 0) delete s.produce[id]; } break; }
+      case 'coconut': s.coconuts = Math.max(0, s.coconuts - 1); break;
+      case 'peepis': s.peepis = Math.max(0, s.peepis - 1); break;
+      case 'soda': { const id = Object.keys(s.sodas).find(c => s.sodas[c] > 0); if (id) { s.sodas[id]--; if (s.sodas[id] <= 0) delete s.sodas[id]; } break; }
+      case 'rice': case 'egg': case 'veg': { s.pantry[kind] = Math.max(0, (s.pantry[kind] ?? 0) - 1); if (!s.pantry[kind]) delete s.pantry[kind]; break; }
+    }
+  }
+};
+// Cook a known recipe whose ingredients you hold → one dish in your bag.
+export const cook = (s: GameSave, recipeId: string): boolean => {
+  const r = recipeById(recipeId);
+  if (!r || !canCook(s, r)) return false;
+  for (const i of r.ingredients) consumeIngredient(s, i.kind, i.n);
+  s.dishes[recipeId] = (s.dishes[recipeId] ?? 0) + 1;
+  persistSave(s);
+  return true;
+};
+// Eat a cooked dish: apply its buff (so the higher cap counts), then restore energy.
+export const eatDish = (s: GameSave, recipeId: string): boolean => {
+  const r = recipeById(recipeId);
+  if (!r || (s.dishes[recipeId] ?? 0) <= 0) return false;
+  s.dishes[recipeId]--; if (s.dishes[recipeId] <= 0) delete s.dishes[recipeId];
+  if (r.buff) s.buff = { id: r.buff, day: s.day };
+  s.energy = Math.min(maxEnergy(s), s.energy + r.energy);
+  persistSave(s);
+  return true;
+};
+export const learnRecipe = (s: GameSave, recipeId: string): boolean => {
+  if (s.recipes.includes(recipeId) || !recipeById(recipeId)) return false;
+  s.recipes.push(recipeId); persistSave(s); return true;
+};
+export const buyGrocery = (s: GameSave, id: string, price: number): boolean => {
+  if (s.money < price) return false;
+  s.money -= price; s.pantry[id] = (s.pantry[id] ?? 0) + 1; persistSave(s); return true;
+};
+// Keep a harvested greenhouse crop for cooking instead of shipping it for cash.
+export const keepProduce = (s: GameSave, cropId: string, n = 1): void => {
+  s.produce[cropId] = (s.produce[cropId] ?? 0) + n; persistSave(s);
+};
+
+// ---- Friendship --------------------------------------------------------------
+export const friendPts = (s: GameSave, id: string): number => s.friends[id]?.pts ?? 0;
+export const friendHearts = (s: GameSave, id: string): number =>
+  Math.max(0, Math.min(MAX_HEARTS, Math.floor(friendPts(s, id) / HEART_POINTS)));
+export const canGiftToday = (s: GameSave, id: string): boolean => (s.friends[id]?.giftDay ?? -1) !== s.day;
+export const metFriend = (s: GameSave, id: string): boolean => id in s.friends;
+export const giftTier = (npcId: string, kind: GiftKind): GiftTier => {
+  const f = friendById(npcId);
+  if (!f) return 'neutral';
+  if (f.loved.includes(kind)) return 'loved';
+  if (f.liked.includes(kind)) return 'liked';
+  if (f.disliked.includes(kind)) return 'disliked';
+  return 'neutral';
+};
+// Concrete heart-threshold perks. Recipe teaches are the mechanical ones; the
+// rest (Genji's rod discount, Granny's free seed) are read at their shops.
+export const applyFriendPerks = (s: GameSave): void => {
+  const at = (id: string, h: number) => friendHearts(s, id) >= h;
+  if (at('lulu', 3)) learnRecipe(s, 'smoothie');
+  if (at('granny', 3)) learnRecipe(s, 'stirfry');
+  if (at('granny', 5)) learnRecipe(s, 'hotpot');
+};
+// Record a gift (one/NPC/day enforced by the caller). Returns reaction + hearts.
+export const giftTo = (s: GameSave, npcId: string, kind: GiftKind): { tier: GiftTier; hearts: number; gainedHeart: boolean } => {
+  const before = friendHearts(s, npcId);
+  const tier = giftTier(npcId, kind);
+  const cur = s.friends[npcId] ?? { pts: 0, giftDay: -1 };
+  cur.pts = Math.max(0, Math.min(MAX_HEARTS * HEART_POINTS, cur.pts + GIFT_POINTS[tier]));
+  cur.giftDay = s.day;
+  s.friends[npcId] = cur;
+  applyFriendPerks(s);
+  persistSave(s);
+  const hearts = friendHearts(s, npcId);
+  return { tier, hearts, gainedHeart: hearts > before };
+};
+
+// ---- Decor: wallpaper / flooring / rugs --------------------------------------
+export const RUG_W = 2, RUG_H = 2;
+export const ownsDecor = (s: GameSave, id: string): boolean => s.ownedDecor.includes(id);
+export const buyDecor = (s: GameSave, id: string): boolean => {
+  const d = decorById(id);
+  if (!d || ownsDecor(s, id) || s.money < d.price) return false;
+  s.money -= d.price; s.ownedDecor.push(id); persistSave(s); return true;
+};
+export const applyDecor = (s: GameSave, id: string): boolean => {
+  const d = decorById(id);
+  if (!d || !ownsDecor(s, id) || (d.kind !== 'wall' && d.kind !== 'floor')) return false;
+  s.decor[d.kind] = id; persistSave(s); return true;
+};
+export const rugAt = (s: GameSave, x: number, y: number): number =>
+  s.rugs.findIndex(r => x >= r.x && x < r.x + RUG_W && y >= r.y && y < r.y + RUG_H);
+export const placeRug = (s: GameSave, id: string, x: number, y: number): void => { s.rugs.push({ id, x, y }); persistSave(s); };
+export const removeRugAt = (s: GameSave, x: number, y: number): boolean => {
+  const i = rugAt(s, x, y);
+  if (i < 0) return false;
+  s.rugs.splice(i, 1); persistSave(s); return true;
 };

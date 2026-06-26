@@ -123,6 +123,8 @@ const city: SceneDef = {
     'p': T('t-planter', true),     // flowering planter flanking the entrance
     'F': T('t-grass-v2'),          // clover/daisy grass detail (walkable)
     'E': T('t-gh-front', true),    // community greenhouse glass facade (east of home)
+    'R': T('t-gh-roof', true),     // greenhouse pitched glass roof (over the facade)
+    'G': T('t-gh-door'),           // greenhouse glass door (walk-in warp, gated)
     'J': T('t-board', true),       // odd-jobs notice board (errand giver)
   },
   outdoor: true,
@@ -137,10 +139,10 @@ const city: SceneDef = {
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
-    'gTggggwwggggggggggggggggggggggfg',
-    'ggHHHHHHHHggggggEEgggggggggggggg',
-    'ggHHHHHHHHggggggEEgggggggggggggg',
-    'ggHHHHDDHHgJggggDDggTgggggggggfg',
+    'gTggggwwggggggRRRRggggggggggggfg',
+    'ggHHHHHHHHggggEEEEgggggggggggggg',
+    'ggHHHHHHHHggggEEEEgggggggggggggg',
+    'ggHHHHDDHHgJggEGGEggTgggggggggfg',
     'gggggpwwpggggggggggfgfgggggggggg',
     'wwwwwwwwgggggggggggggggnmmnggggg',
     'wwwwwwwwggggggggggggggojggjo~~gg',
@@ -158,8 +160,8 @@ const city: SceneDef = {
     { x: 6, y: 13, to: 'apartment', tx: 12, ty: 8, dir: 'up' },
     { x: 7, y: 13, to: 'apartment', tx: 13, ty: 8, dir: 'up' },
     // Community greenhouse (walk in — gated by greenhouseUnlocked in the warp check).
-    { x: 16, y: 13, to: 'greenhouse', tx: 7, ty: 8, dir: 'up' },
-    { x: 17, y: 13, to: 'greenhouse', tx: 8, ty: 8, dir: 'up' },
+    { x: 15, y: 13, to: 'greenhouse', tx: 7, ty: 8, dir: 'up' },
+    { x: 16, y: 13, to: 'greenhouse', tx: 8, ty: 8, dir: 'up' },
     { x: 0, y: 15, to: 'shore', tx: 22, ty: 3, dir: 'left' },
     { x: 0, y: 16, to: 'shore', tx: 22, ty: 4, dir: 'left' },
     { x: 31, y: 5, to: 'badtown', tx: 1, ty: 5, dir: 'right' },
@@ -668,7 +670,9 @@ const shrine: SceneDef = {
     { x: 10, y: 10, to: 'city', tx: 25, ty: 13, dir: 'up' },
   ],
   interactables: [{ id: 'shrine', x: 9, y: 4, w: 2, h: 1, label: 'Offer ¥500 at the saisen-bako' }],
-  npcs: [{ id: 'miko', x: 13, y: 5, sprite: 'npc-miko', dir: 'down' }],
+  // Yoshi paces the open forecourt (roomy on three sides) instead of the cramped
+  // slot between the komainu and the stone lantern, where she used to pin herself.
+  npcs: [{ id: 'miko', x: 7, y: 6, sprite: 'npc-miko', dir: 'down' }],
 };
 
 // ---- Community Greenhouse (off the shrine grounds) -----------------------------------

@@ -6,10 +6,16 @@ import {
   WAKE_MIN, type GameSave,
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
-  mineChallengeFor, enterMineStreak, crackGeode,
+  mineChallengeFor, enterMineStreak, crackGeode, dayEventFor, shoreForageFor,
   plantCrop, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
 } from '../src/game/state';
-import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, GACHA_FIGURES, CROPS } from '../src/game/data';
+import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, SKETCHY_DISCOUNT, PAWN_DISCOUNT, GACHA_FIGURES, CROPS } from '../src/game/data';
+import {
+  canCookHere, canCook, cook, eatDish, ingredientCount, buyGrocery, learnRecipe,
+  buffActive, friendHearts, giftTo, canGiftToday, applyFriendPerks,
+  buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt,
+} from '../src/game/state';
+import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES } from '../src/game/data';
 import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
@@ -455,5 +461,182 @@ describe('ZamaZonk', () => {
     expect(s.owned).not.toContain('tv');
     expect(s.orders).toEqual([{ itemId: 'tv', dueDay: 6 }]);
     expect(s.today.newFurniture).toContain('bed');
+  });
+});
+
+describe('dayEventFor (special days)', () => {
+  it('never fires on day 1', () => {
+    const s = newSave();
+    s.day = 1;
+    expect(dayEventFor(s)).toBeNull();
+  });
+  it('is deterministic per day (stable across reloads)', () => {
+    const s = newSave();
+    for (const d of [6, 9, 15, 23]) {
+      s.day = d;
+      expect(dayEventFor(s)).toBe(dayEventFor({ ...s }));
+    }
+  });
+  it('rolls the known seeded market & lucky days', () => {
+    const s = newSave();
+    s.day = 6; expect(dayEventFor(s)).toBe('market');
+    s.day = 9; expect(dayEventFor(s)).toBe('lucky');
+  });
+  it('Market Day adds a pawn slot vs an ordinary day', () => {
+    const plain = newSave(); plain.day = 7;   // ordinary
+    const market = newSave(); market.day = 6; // Market Day
+    expect(dayEventFor(plain)).toBeNull();
+    expect(pawnStockFor(plain).length).toBe(PAWN_STOCK_SIZE);
+    expect(pawnStockFor(market).length).toBe(PAWN_STOCK_SIZE + 1);
+  });
+  it('Market Day prices the sketchy deal at 80% of the usual discount', () => {
+    const market = newSave(); market.day = 6;
+    const plain = newSave(); plain.day = 7;
+    const mo = sketchyOfferFor(market)!, po = sketchyOfferFor(plain)!;
+    const mf = FURNITURE.find(f => f.id === mo.itemId)!;
+    const pf = FURNITURE.find(f => f.id === po.itemId)!;
+    expect(mo.price).toBe(Math.round(mf.price * SKETCHY_DISCOUNT * 0.8 / 10) * 10);
+    expect(po.price).toBe(Math.round(pf.price * SKETCHY_DISCOUNT / 10) * 10);
+  });
+  it('Lucky Day scatters extra shore finds (6-8 vs the usual 4-6)', () => {
+    const lucky = newSave(); lucky.scene = 'shore'; lucky.day = 9;
+    const plain = newSave(); plain.scene = 'shore'; plain.day = 7;
+    expect(dayEventFor(lucky)).toBe('lucky');
+    const lc = shoreForageFor(lucky).length, pc = shoreForageFor(plain).length;
+    expect(pc).toBeGreaterThanOrEqual(4); expect(pc).toBeLessThanOrEqual(6); // ordinary band
+    expect(lc).toBeGreaterThanOrEqual(6); expect(lc).toBeLessThanOrEqual(8); // +2 lucky band
+    // seeded → stable across reloads (verifies the +2 is baked into this day's roll)
+    expect(shoreForageFor({ ...lucky, foragedSpots: [], forageDay: 0 }).length).toBe(lc);
+  });
+});
+
+describe('cooking', () => {
+  it('needs a fridge AND microwave placed to cook at home', () => {
+    const s = newSave();
+    expect(canCookHere(s)).toBe(false);
+    s.placed['fridge'] = { x: 1, y: 4 };
+    expect(canCookHere(s)).toBe(false);
+    s.placed['microwave'] = { x: 3, y: 4 };
+    expect(canCookHere(s)).toBe(true);
+  });
+  it('counts ingredients across the right pockets', () => {
+    const s = newSave();
+    s.fishInv = ['minnow', 'koi'];
+    s.pantry = { rice: 2 };
+    s.produce = { tomato: 3 };
+    s.coconuts = 1;
+    expect(ingredientCount(s, 'fish')).toBe(2);
+    expect(ingredientCount(s, 'rice')).toBe(2);
+    expect(ingredientCount(s, 'crop')).toBe(3);
+    expect(ingredientCount(s, 'coconut')).toBe(1);
+    expect(ingredientCount(s, 'egg')).toBe(0);
+  });
+  it('cooks a known recipe, consuming ingredients into a dish', () => {
+    const s = newSave();
+    s.fishInv = ['minnow'];
+    s.pantry = { rice: 1 };
+    expect(s.recipes).toContain('donburi'); // a starter
+    expect(canCook(s, recipeById('donburi')!)).toBe(true);
+    expect(cook(s, 'donburi')).toBe(true);
+    expect(s.dishes['donburi']).toBe(1);
+    expect(s.fishInv.length).toBe(0);
+    expect(s.pantry['rice'] ?? 0).toBe(0);
+    expect(cook(s, 'donburi')).toBe(false); // out of ingredients now
+  });
+  it('refuses to cook an unknown recipe even with ingredients', () => {
+    const s = newSave();
+    s.recipes = s.recipes.filter(r => r !== 'donburi');
+    s.fishInv = ['minnow']; s.pantry = { rice: 1 };
+    expect(cook(s, 'donburi')).toBe(false);
+  });
+  it('eating a dish restores energy and sets its day buff', () => {
+    const s = newSave();
+    s.dishes = { tamago: 1 };   // +55 energy, Hearty buff
+    s.energy = 10;
+    expect(eatDish(s, 'tamago')).toBe(true);
+    expect(s.dishes['tamago'] ?? 0).toBe(0);
+    expect(buffActive(s, 'hearty')).toBe(true);
+    expect(s.energy).toBeGreaterThan(10);
+  });
+  it('Hearty lifts max energy; Warmed cuts energy cost; buffs expire next day', () => {
+    const s = newSave();
+    const baseMax = maxEnergy(s);
+    s.buff = { id: 'hearty', day: s.day };
+    expect(maxEnergy(s)).toBe(baseMax + 20);
+    s.buff = { id: 'warm', day: s.day };
+    expect(energyCost(s, 10)).toBeLessThan(10);
+    s.day += 1; // a new day — yesterday's buff is dead
+    expect(buffActive(s, 'warm')).toBe(false);
+    expect(energyCost(s, 10)).toBe(10);
+  });
+  it('groceries buy into the pantry', () => {
+    const s = newSave(); s.money = 1000;
+    expect(buyGrocery(s, 'rice', 120)).toBe(true);
+    expect(s.pantry['rice']).toBe(1);
+    expect(s.money).toBe(880);
+  });
+});
+
+describe('friendship', () => {
+  it('hearts = points / 100, capped', () => {
+    const s = newSave();
+    s.friends['genji'] = { pts: 340, giftDay: -1 };
+    expect(friendHearts(s, 'genji')).toBe(3);
+    s.friends['genji'].pts = 99999;
+    expect(friendHearts(s, 'genji')).toBe(MAX_HEARTS);
+  });
+  it('a loved gift adds more than a disliked one, and is once per day', () => {
+    const s = newSave();
+    const loved = giftTo(s, 'genji', 'fish');   // Genji loves fish
+    expect(loved.tier).toBe('loved');
+    expect(friendHearts(s, 'genji') >= 0).toBe(true);
+    expect(s.friends['genji'].pts).toBe(GIFT_POINTS.loved);
+    expect(canGiftToday(s, 'genji')).toBe(false); // already gifted today
+    const s2 = newSave();
+    giftTo(s2, 'genji', 'flower');               // Genji dislikes flowers
+    expect(s2.friends['genji'].pts).toBe(Math.max(0, GIFT_POINTS.disliked));
+  });
+  it('heart-threshold perks teach recipes', () => {
+    const s = newSave();
+    expect(s.recipes).not.toContain('smoothie');
+    s.friends['lulu'] = { pts: 300, giftDay: -1 }; // 3 hearts
+    applyFriendPerks(s);
+    expect(s.recipes).toContain('smoothie');
+  });
+});
+
+describe('decor', () => {
+  it('starts owning only the defaults', () => {
+    const s = newSave();
+    expect(ownsDecor(s, 'wall-default')).toBe(true);
+    expect(ownsDecor(s, 'wall-sakura')).toBe(false);
+    expect(s.decor.wall).toBe('wall-default');
+  });
+  it('buys then applies a wallpaper', () => {
+    const s = newSave(); s.money = 9999;
+    expect(applyDecor(s, 'wall-sakura')).toBe(false); // not owned yet
+    expect(buyDecor(s, 'wall-sakura')).toBe(true);
+    expect(ownsDecor(s, 'wall-sakura')).toBe(true);
+    expect(applyDecor(s, 'wall-sakura')).toBe(true);
+    expect(s.decor.wall).toBe('wall-sakura');
+    expect(buyDecor(s, 'wall-sakura')).toBe(false); // can't re-buy
+  });
+  it('places and removes a 2x2 rug', () => {
+    const s = newSave();
+    placeRug(s, 'rug-red', 5, 5);
+    expect(s.rugs.length).toBe(1);
+    expect(rugAt(s, 6, 6)).toBe(0);   // within the 2x2 footprint
+    expect(rugAt(s, 8, 8)).toBe(-1);  // outside
+    expect(removeRugAt(s, 6, 6)).toBe(true);
+    expect(s.rugs.length).toBe(0);
+  });
+});
+
+describe('museum: the chicken nugget', () => {
+  it('repurposes the arti-token slot as "A Single Chicken Nugget"', () => {
+    const slot = MUSEUM_SLOTS.find(sl => sl.id === 'arti-token')!;
+    expect(slot.label).toBe('A Single Chicken Nugget');
+    // it is no longer a Bingus fetch (it's a random mine drop now)
+    expect(BINGUS_FETCHES.some(f => f.slot === 'arti-token')).toBe(false);
   });
 });
