@@ -2778,67 +2778,69 @@ const buildMisc = (atlas: Atlas) => {
   });
 
   // ---- Black stray cat (found in the dumpster, then lives at home) ----------
-  // Right-facing side profile with a 2-frame walk cycle (mirror for left); plus a
-  // sitting/napping pose. k=body black, s=lighter-black fur sheen (upper-left rim),
-  // d=deep shadow ramp, g=green eye, p=pink nose/inner-ear.
+  // SIDE PROFILE (not front-facing). Head on the RIGHT: one green eye + a pink nose
+  // at the muzzle, two pointy ears on top, a curved back, an upright tail at the
+  // rear (left), and four legs. He's black, but flat black reads as a blob — so:
+  // k=body black, s=fur sheen on the top/back rim (light from upper-left),
+  // d=deep shadow on the underside/feet, g=green eye, p=pink nose / inner-ear.
   const CATPAL = { k: '#16161c', s: '#26262f', d: '#0e0e13', g: '#86e06a', p: '#e0879f' };
-  // Side profile, head on the right (one big green eye + pink nose at the muzzle),
-  // upright curving tail on the left, four legs. Shared head/back/tail; the two
-  // frames differ in the legs (diagonal gait, shifted 1px) so he reads as walking.
-  // Feet sit near the bottom so the drawn floor shadow grounds him.
-  // Front-facing chibi cat (matches the game's big-head chibi people): a round head
-  // with two ears + two big green eyes + a pink nose, a small body, and a tail
-  // flicking to one side (right = cat-r; mirror flips it for cat-l, which also
-  // reads as the facing). The two walk frames step the front paws.
-  const CAT_BODY = [
-    '................', // 0
-    '...k........k...', // 1  ear tips
-    '...kk......kk...', // 2  ears
-    '..skpk....kpks..', // 3  pink inner ears + sheen
-    '..skkkkkkkkkks..', // 4  head top
-    '..kkkkkkkkkkkk..', // 5  head
-    '..kkkggkkggkkk..', // 6  two green eyes
-    '..kkkkkppkkkkk..', // 7  pink nose
-    '..kskkkkkkkksk..', // 8  cheeks (whisker hint)
-    '...kkkkkkkkkk...', // 9  jaw → body
-    '...kkkkkkkkkkk..', // 10 body + tail nub (right)
-    '...kkkkkkkkdkkk.', // 11 body + tail curl
+  // Shared upper body (head + back + raised tail) reused by both walk frames; the
+  // frames differ only in the legs (gather vs stride) so he visibly steps. Feet sit
+  // on rows 13-14 so the drawn floor contact-shadow grounds him.
+  const CAT_UP = [
+    '.k..............', // 0  tail tip (curls back-left)
+    '.k........k..k..', // 1  tail + ear tips
+    '.kk......kkk.kk.', // 2  tail + ears (left 9-11, right 13-14)
+    '..k......kpkkpk.', // 3  tail + pink inner ears
+    '..kk....skkkkkk.', // 4  tail base + head top (sheen on neck)
+    '..skkkkkskkkgkk.', // 5  back (sheen rim) + head + green eye
+    '..skkkkkkkkkkkkp', // 6  body + head + pink nose (muzzle, right edge)
+    '...kkkkkkkkkkkk.', // 7  belly / jaw
+    '...kkkkkkkkkkk..', // 8  lower body
   ];
   const catR0 = strSprite([
-    ...CAT_BODY,
-    '...kk....kk.....', // 12 front paws
-    '...kk....kk.....', // 13
+    ...CAT_UP,
+    '....kk....kk....', // 9  legs gathered (back 4-5, front 10-11)
+    '....kk....kk....', // 10
+    '....kk....kk....', // 11
+    '....kk....kk....', // 12
+    '....dd....dd....', // 13 feet (deep-shadow contact)
     '................', // 14
     '................', // 15
   ], CATPAL);
   const catR1 = strSprite([
-    ...CAT_BODY,
-    '....kk..kk......', // 12 front paws (stepped)
-    '....kk..kk......', // 13
+    ...CAT_UP,
+    '...kk......kk...', // 9  mid-stride (back steps left, front steps right)
+    '...kk......kk...', // 10
+    '...kk......kk...', // 11
+    '...kk......kk...', // 12
+    '...dd......dd...', // 13 feet
     '................', // 14
     '................', // 15
   ], CATPAL);
   atlas['cat-r-0'] = catR0; atlas['cat-l-0'] = mirror(catR0);
   atlas['cat-r-1'] = catR1; atlas['cat-l-1'] = mirror(catR1);
-  // Aliases (frame 0) so any stale `cat-r` / `cat-l` reference still resolves.
+  // Aliases (frame 0) so any `cat-r` / `cat-l` reference still resolves.
   atlas['cat-r'] = catR0; atlas['cat-l'] = mirror(catR0);
-  // Sitting / napping: same face, a rounder settled body, paws together, tail curled.
+  // Sitting / napping (classic curled cat): a narrow upright torso with the head
+  // high on the right, wide tucked haunches forming a triangular base, front paws
+  // down, and the tail sweeping up to curl around the front of the base.
   const catSitR = strSprite([
     '................', // 0
-    '...k........k...', // 1  ears
-    '...kk......kk...', // 2
-    '..skpk....kpks..', // 3  pink inner ears
-    '..skkkkkkkkkks..', // 4  head top
-    '..kkkkkkkkkkkk..', // 5  head
-    '..kkkggkkggkkk..', // 6  two green eyes
-    '..kkkkkppkkkkk..', // 7  pink nose
-    '..kskkkkkkkksk..', // 8  cheeks
-    '...kkkkkkkkkk...', // 9  chest
-    '...kkkkkkkkkkk..', // 10 body + tail nub
-    '...kkkkkkkkdkkk.', // 11 body + tail curl
-    '...kkkkkkkkkkk..', // 12 body
-    '...kkkkkkkkkk...', // 13 haunches
-    '....kk..kk......', // 14 front paws together
+    '..........k..k..', // 1  ear tips
+    '..........kkkkk.', // 2  head top + ears (10-14)
+    '.........kpkkpk.', // 3  head + pink inner ears
+    '.........skkkkk.', // 4  head (sheen)
+    '.........skkkgk.', // 5  head + green eye (forward, toward the muzzle)
+    '........skkkkkkp', // 6  head / muzzle + pink nose
+    '.......skkkkkk..', // 7  neck → chest (front sheen)
+    '......skkkkkkk..', // 8  chest widening
+    '.....skkkkkkkk..', // 9  body
+    '....skkkkkkkkk..', // 10 haunch
+    '...skkkkkkkkkk..', // 11 haunch
+    '..skkkkkkkkkkk..', // 12 sitting base (widest)
+    '..kkkkkkkkkkkdk.', // 13 base + tail curl rising at the front
+    '..dkkkkkkkkkkdk.', // 14 paws + tail wrapping the front
     '................', // 15
   ], CATPAL);
   atlas['cat-sit-r'] = catSitR; atlas['cat-sit-l'] = mirror(catSitR);
