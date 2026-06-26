@@ -2476,8 +2476,21 @@ const LittleApartmentGame: React.FC = () => {
           && !!ov.actions && ov.actions.length > 0
           && typedRef.current >= lineLen;
         if (actionPhase) {
-          input.consumeInteract();
-          if (input.consumeCancel()) setOverlayBoth(null);
+          const interact = input.consumeInteract();
+          const cancel = input.consumeCancel();
+          if (cancel) setOverlayBoth(null);
+          else if (interact) {
+            // E/A on the final line activates the focused button. "Done" is the
+            // first (default-focused) button, so a normal press just ends the
+            // chat; arrow/stick over to reach the gift/buy options. On gamepad,
+            // useUiNav already maps A → focused button, so the engine only drives
+            // keyboard/pointer here to avoid a double activation.
+            if (document.body.dataset.input !== 'gamepad') {
+              const el = document.activeElement as HTMLElement | null;
+              if (el && el.tagName === 'BUTTON' && el.closest('[data-navroot]')) el.click();
+              else setOverlayBoth(null);
+            }
+          }
         } else if (input.consumeInteract() || input.consumeCancel()) {
           advanceDialog();
         }
@@ -7026,10 +7039,13 @@ const LittleApartmentGame: React.FC = () => {
                   <p className="text-xl leading-snug">{shown}<span className="opacity-0">{line.slice(typed)}</span></p>
                   {showActions && acts ? (
                     <div className="flex flex-wrap gap-2 mt-2">
+                      {/* Done is first so it's the default-focused / primary action:
+                          a normal E/A press just ends the chat. Move over to the
+                          gift/buy buttons to pick those. */}
+                      <button className={`${btnCls} text-base py-1`} onClick={() => setOverlayBoth(null)}>Done</button>
                       {acts.map((a, i) => (
                         <button key={i} className={`${btnCls} text-base py-1`} onClick={a.onPick}>{a.label}</button>
                       ))}
-                      <button className={`${btnCls} text-base py-1`} onClick={() => setOverlayBoth(null)}>Close</button>
                     </div>
                   ) : (
                     <p className="text-right text-sm opacity-40 mt-1">{overlay.idx + 1}/{overlay.lines.length} · {done ? 'E ▸' : '…'}</p>
