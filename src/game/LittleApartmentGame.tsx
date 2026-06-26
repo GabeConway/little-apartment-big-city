@@ -25,7 +25,15 @@ const drawVibeThumb = (el: HTMLCanvasElement | null, vibe: 'fem' | 'masc') => {
   cx.clearRect(0, 0, el.width, el.height);
   cx.drawImage(spr, 0, 0, el.width, el.height);
 };
-import { SCENES, SCENE_SIGNS, MANEKI_SLOT, GREENHOUSE_PLOTS } from './maps';
+import { SCENES, SCENE_SIGNS, MANEKI_SLOT, GREENHOUSE_PLOTS, APARTMENT_BIG_GRID } from './maps';
+// The original (small) apartment grid, captured once before any room-expansion
+// swap so we can switch back on a fresh game.
+const APARTMENT_SMALL_GRID = SCENES.apartment.grid;
+// Swap the apartment between the one-room and two-room layouts. Mutates the shared
+// SceneDef; sceneSize() then reports the new dims and placement bounds follow.
+const applyApartmentSize = (unlocked: boolean) => {
+  SCENES.apartment.grid = unlocked ? APARTMENT_BIG_GRID : APARTMENT_SMALL_GRID;
+};
 import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
@@ -55,9 +63,10 @@ import {
   canCook, canCookHere, cook, eatDish, ingredientCount, buyGrocery, keepProduce,
   buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
+  ROOM_PRICE, skillLevel, skillProgress, addSkillXp,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
-import type { GameSave, Vibe } from './state';
+import type { GameSave, Vibe, SkillId } from './state';
 import { startFishing, updateFishing, ZONE_H } from './fishing';
 import type { FishingState } from './fishing';
 import { useUiNav } from './useUiNav';
@@ -249,7 +258,7 @@ const HACK_LINES = [
 
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji'
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'hat' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji' | 'landlord'
   | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch'
   | 'greenhouse-plot' | 'greenhouse-supply';
 
@@ -373,7 +382,7 @@ type Overlay =
   | { type: 'npcchoice'; npcId: string; interactId: string } // talk vs. give a gift
   | { type: 'ending' };
 
-type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends';
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills';
 
 // Friendly label for each cooking ingredient kind (shown in the recipe list).
 const INGREDIENT_LABEL: Record<IngredientKind, string> = {
@@ -840,7 +849,9 @@ const LittleApartmentGame: React.FC = () => {
     const djSrc = sceneId === 'nightclub' && djPickRef.current
       ? (SCENE_MUSIC[djPickRef.current] ?? DEFAULT_MUSIC)
       : null;
-    const src = djSrc ?? SCENE_MUSIC[sceneId] ?? DEFAULT_MUSIC;
+    // The home jukebox: at the apartment, play whatever track you've put on.
+    const homePick = sceneId === 'apartment' ? saveRef.current.homeTrack : null;
+    const src = djSrc ?? (homePick ? (SCENE_MUSIC[homePick] ?? DEFAULT_MUSIC) : null) ?? SCENE_MUSIC[sceneId] ?? DEFAULT_MUSIC;
     const tracks = tracksRef.current;
     const prevSrc = currentTrackRef.current;
     // While rain stands in for the music, keep the scene track loaded but silent
@@ -1041,6 +1052,13 @@ const LittleApartmentGame: React.FC = () => {
     if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
     achTimerRef.current = window.setTimeout(() => setAchToast(null), 3500);
   }, []);
+
+  // Award gathering XP; toast on a level-up.
+  const SKILL_NAME: Record<SkillId, string> = { fish: 'Fishing', mine: 'Mining', farm: 'Farming' };
+  const gainSkill = (k: SkillId, n: number) => {
+    const lvl = addSkillXp(saveRef.current, k, n);
+    if (lvl) showToast(`📈 ${SKILL_NAME[k]} Lv.${lvl}!`, 'Your skill is growing — the rolls tilt your way.');
+  };
 
   const refreshHud = useCallback(() => {
     const s = saveRef.current;
@@ -1360,6 +1378,32 @@ const LittleApartmentGame: React.FC = () => {
     refreshHud(); setShopTick(v => v + 1);
   };
 
+  // Home jukebox: choose which visited scene's track plays in the apartment.
+  const setJukebox = (sceneId: string | null) => {
+    const s = saveRef.current;
+    s.homeTrack = sceneId;
+    persistSave(s);
+    if (sceneRef.current.id === 'apartment') playMusicFor('apartment'); // switch the home track now
+    setShopTick(v => v + 1);
+  };
+
+  // Pay the landlord to knock through into the next unit (a second room).
+  const payLandlord = () => {
+    const s = saveRef.current;
+    if (s.roomUnlocked || !s.backroomsUnlocked || s.money < ROOM_PRICE) return;
+    s.money -= ROOM_PRICE;
+    s.roomUnlocked = true;
+    applyApartmentSize(true);   // grow the apartment now (you're in the city; no live glitch)
+    computeSolids();
+    sfxBuy(); persistSave(s); refreshHud();
+    setOverlayBoth(null);
+    showDialog([
+      'You slide the cash through the slot. A long pause, then the buzz of a door release.',
+      '"Pleasure doing business. Keys are in the lockbox. The wall between the units is already... thin. You\'ll see."',
+      '(Your apartment now has a SECOND ROOM — go home and decorate it. Furniture, rugs, the works.)',
+    ], 'Landlord');
+  };
+
   // ---- Friendship / gifting -----------------------------------------------
   // Everything in your bag you could give as a gift, with its GiftKind. Crops
   // that are flowers count as 'flower'; cooked dishes as 'dish'.
@@ -1442,6 +1486,7 @@ const LittleApartmentGame: React.FC = () => {
     s.fishInv.push(fish.id);
     s.fishLog[fish.id] = (s.fishLog[fish.id] || 0) + 1;
     s.today.fishCaught += 1;
+    gainSkill('fish', fish.value >= 500 ? 35 : 18); // bigger fish, more XP
     // Rare snag: Genji's Lost Lure, a museum curio.
     const gotLure = !s.collectibles.includes('arti-lure') && !s.museum.donated.includes('arti-lure') && Math.random() < 0.05;
     if (gotLure) s.collectibles.push('arti-lure');
@@ -1666,6 +1711,7 @@ const LittleApartmentGame: React.FC = () => {
           if (pick.bonusChance > 0 && Math.random() < pick.bonusChance) amount += 1; // pickaxe lucky strike
           s.minerals[node.mineral.id] = (s.minerals[node.mineral.id] ?? 0) + amount;
           s.today.mineralsMined += amount;
+          gainSkill('mine', 5 + Math.round(node.mineral.value / 60)); // rarer ore, more XP
           mineTextRef.current = {
             x: node.x * TILE, y: node.y * TILE,
             text: amount > 1 ? `+${amount} ${node.mineral.name}` : node.mineral.name,
@@ -1887,6 +1933,23 @@ const LittleApartmentGame: React.FC = () => {
         ]);
         break;
       }
+      case 'landlord':
+        // Nameless landlord on the building intercom. The unit next door only
+        // frees up once you've been to the backrooms (the "particular tenant").
+        if (!s.backroomsUnlocked) {
+          showDialog([
+            'A bored voice crackles over the intercom. "Lease office. What."',
+            '"The unit next to yours? Occupied. Tenant is... particular. Keeps strange hours, hums through the wall. Does not come out much."',
+            '"When they finally clear out, maybe we talk about knocking through. Not before."',
+          ], 'Landlord');
+          break;
+        }
+        if (s.roomUnlocked) {
+          showDialog(['The intercom crackles. "Knock-through is done. Enjoy the extra room. Try not to fill it with fish." Click.'], 'Landlord');
+          break;
+        }
+        setOverlayBoth({ type: 'shop', shop: 'landlord' });
+        break;
       case 'vending': useVending(); break;
       case 'errand-board': {
         if (errandDoneToday(s)) { showDialog(["ODD JOBS — today's job is handled. Come back in the morning; there's always something."]); break; }
@@ -2422,7 +2485,7 @@ const LittleApartmentGame: React.FC = () => {
           const luck = shrineLuck(sNow);
           const rodPull = sNow.fishRod >= 1 ? 1 : 0;
           const base = fm.table === 'deep' ? DEEP_FISH : fm.table === 'tropical' ? TROPICAL_FISH : FISH;
-          const boost = 0.5 * luck + 0.6 * rodPull;
+          const boost = 0.5 * luck + 0.6 * rodPull + 0.12 * skillLevel(sNow, 'fish'); // skill draws rarer fish
           const table = boost === 0 ? base : base.map(f => (f.value >= 500 ? { ...f, weight: f.weight * (1 + boost) } : f));
           fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table)), tile: fm.tile, table: fm.table };
         } else if (fm.t <= 0) {
@@ -3118,8 +3181,9 @@ const LittleApartmentGame: React.FC = () => {
           const bob = cat.sitting ? 0 : Math.round(Math.sin(animRef.current * 9) * 0.6);
           ctx.drawImage(atlas['m-shadow'], cx, cy + 2);
           const d = cat.dir === 'left' ? 'l' : 'r';
-          const key = cat.sitting ? `cat-sit-${d}` : `cat-${d}`;
-          ctx.drawImage(atlas[key], cx, cy + bob);
+          // walking cat now has a 2-frame leg cycle; sitting is a single pose
+          const key = cat.sitting ? `cat-sit-${d}` : `cat-${d}-${Math.floor(animRef.current * 8) % 2}`;
+          ctx.drawImage(atlas[key] ?? atlas[`cat-${d}`], cx, cy + bob);
         },
       });
     }
@@ -3198,10 +3262,11 @@ const LittleApartmentGame: React.FC = () => {
       ctx.fillStyle = 'rgba(8, 10, 24, 0.45)';
       ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
       const held = heldRef.current;
-      // grid + valid-cell wash over the interior floor (y 1..8, x 1..14)
+      // grid + valid-cell wash over the interior floor (bounds follow the grid)
       ctx.lineWidth = 1;
-      for (let ty = 0; ty <= 8; ty++) {
-        for (let tx = 1; tx <= 14; tx++) {
+      const aSz = sceneSize(scene);
+      for (let ty = 0; ty <= aSz.y - 2; ty++) {
+        for (let tx = 1; tx <= aSz.x - 2; tx++) {
           const ok = held
             ? (held.rug ? rugPlaceableAt(tx, ty) : placeableAt(held.id, tx, ty))
             : (tileAt(scene, tx, ty) && !tileAt(scene, tx, ty)!.solid && ty >= 1);
@@ -3602,6 +3667,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = fresh ? newSave() : (loadSave() ?? newSave());
     if (fresh) { s.vibe = pendingVibeRef.current; s.name = pendingNameRef.current; } // apply the new-game pick
     saveRef.current = s;
+    applyApartmentSize(s.roomUnlocked); // pick the one/two-room apartment before the scene is read
     sceneRef.current = SCENES[s.scene] ?? SCENES.apartment;
     wanderersRef.current = makeWanderers(sceneRef.current);
     posRef.current = { x: s.px, y: s.py };
@@ -4369,6 +4435,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const res = harvestCrop(s, ghPlotRef.current, keep);
     if (!res) return;
+    gainSkill('farm', 16);
     sfxCatch(); persistSave(s); refreshHud();
     if (res.capstone) award('greenthumb');
     setOverlayBoth(null);
@@ -4542,17 +4609,19 @@ const LittleApartmentGame: React.FC = () => {
     const scene = sceneRef.current;
     if (scene.id !== 'apartment') return false;
     const s = saveRef.current;
+    const sz = sceneSize(scene);            // bounds follow the grid (small vs expanded apartment)
+    const maxX = sz.x - 2, maxY = sz.y - 2;
     const occ = apartmentOccupied(s, heldRef.current?.id ?? id);
     if (itemKind(id) === 'wall') {
       // wall mounts cling to the top wall row on a solid (non-window) tile
-      if (ty !== 0 || tx < 1 || tx > 14) return false;
+      if (ty !== 0 || tx < 1 || tx > maxX) return false;
       const t = tileAt(scene, tx, ty);
       return Boolean(t && t.solid) && !occ.has(`${tx},${ty}`);
     }
     const w = itemFootprintW(id);
     for (let dx = 0; dx < w; dx++) {
       const cx = tx + dx;
-      if (cx < 1 || cx > 14 || ty < 1 || ty > 8) return false;
+      if (cx < 1 || cx > maxX || ty < 1 || ty > maxY) return false;
       const t = tileAt(scene, cx, ty);
       if (!t || t.solid) return false;
       if (occ.has(`${cx},${ty}`)) return false;
@@ -4589,9 +4658,11 @@ const LittleApartmentGame: React.FC = () => {
   // interior floor (they layer freely — no occupancy check, unlike furniture).
   const rugPlaceableAt = (tx: number, ty: number): boolean => {
     if (sceneRef.current.id !== 'apartment') return false;
+    const sz = sceneSize(sceneRef.current);
+    const maxX = sz.x - 2, maxY = sz.y - 2;
     for (let dx = 0; dx < RUG_W; dx++) for (let dy = 0; dy < RUG_H; dy++) {
       const cx = tx + dx, cy = ty + dy;
-      if (cx < 1 || cx > 14 || cy < 1 || cy > 8) return false;
+      if (cx < 1 || cx > maxX || cy < 1 || cy > maxY) return false;
       const t = tileAt(sceneRef.current, cx, cy);
       if (!t || t.solid) return false;
     }
@@ -5117,6 +5188,65 @@ const LittleApartmentGame: React.FC = () => {
       </div>
     );
 
+    // Jukebox: pick the apartment's background track from places you've been.
+    const musicApp = (() => {
+      const tracks = DJ_SETLIST.filter(t => t.scene !== 'apartment' && s.visited.includes(t.scene));
+      const Row = ({ id, label }: { id: string | null; label: string }) => {
+        const active = s.homeTrack === id;
+        return (
+          <button
+            onClick={() => setJukebox(id)}
+            className={`w-full flex items-center gap-3 py-2 border-b border-white/10 text-left transition ${active ? 'bg-[#ffd24a]/10' : 'hover:bg-white/5'}`}
+          >
+            <span className="text-xl shrink-0">{active ? '▶️' : '🎵'}</span>
+            <span className="flex-grow text-base leading-tight">{label}</span>
+            {active && <span className="shrink-0 text-xs px-2 py-0.5 rounded bg-[#ffd24a]/20 text-[#ffd24a]">PLAYING</span>}
+          </button>
+        );
+      };
+      return (
+        <div className="px-3 py-2">
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">JUKEBOX</p>
+          <p className="text-xs opacity-50 mb-2 leading-snug">Set the track that plays in your apartment. More unlock as you see the city.</p>
+          <Row id={null} label="Home theme (default)" />
+          {tracks.map(t => <Row key={t.scene} id={t.scene} label={t.label} />)}
+        </div>
+      );
+    })();
+
+    // Skills: fishing / mining / farming levels with a progress bar + the live perk.
+    const skillsApp = (() => {
+      const rows: { k: SkillId; icon: string; name: string; perk: (lv: number) => string }[] = [
+        { k: 'fish', icon: '🎣', name: 'Fishing', perk: lv => lv > 0 ? `rarer & bigger fish bite (+${lv * 12}%)` : 'level up to draw the rare fish' },
+        { k: 'mine', icon: '⛏️', name: 'Mining', perk: lv => lv > 0 ? `richer veins (+${(lv * 2.5).toFixed(0)}% ore)` : 'level up for richer ore' },
+        { k: 'farm', icon: '🌱', name: 'Farming', perk: lv => lv >= 8 ? '+2 crop quality' : lv >= 4 ? '+1 crop quality' : 'better crops from Lv.4' },
+      ];
+      return (
+        <div className="px-3 py-2">
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">SKILLS</p>
+          <p className="text-xs opacity-50 mb-2 leading-snug">Fish, mine, and farm to gain XP. Higher levels quietly tilt the odds your way.</p>
+          {rows.map(sk => {
+            const pr = skillProgress(s, sk.k);
+            const maxed = pr.level >= 10;
+            const pct = maxed ? 100 : Math.round((pr.into / pr.need) * 100);
+            return (
+              <div key={sk.k} className="py-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl shrink-0">{sk.icon}</span>
+                  <span className="flex-grow text-base">{sk.name}</span>
+                  <span className="text-sm text-[#ffd24a]">Lv. {pr.level}{maxed ? ' · MAX' : ''}</span>
+                </div>
+                <div className="mt-1 h-2 rounded-full bg-black/50 overflow-hidden">
+                  <div className="h-full bg-[#7ce8a0] transition-[width]" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-xs opacity-55 mt-1">{sk.perk(pr.level)}</p>
+              </div>
+            );
+          })}
+        </div>
+      );
+    })();
+
     // ---- app icon grid (home screen) -----------------------------------------
     const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: React.ReactNode; label: string; bg: string; badge?: number; onClick: () => void }) => (
       <button onClick={onClick} className="flex flex-col items-center gap-1 group">
@@ -5133,7 +5263,7 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
-      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends',
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends', music: 'Music', skills: 'Skills',
     };
 
     return (
@@ -5171,6 +5301,8 @@ const LittleApartmentGame: React.FC = () => {
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
               <AppIcon icon="📓" label="Journal" bg="linear-gradient(160deg,#4a6ea0,#28406a)" onClick={() => open('journal')} />
               <AppIcon icon="💛" label="Friends" bg="linear-gradient(160deg,#d0506e,#8a2f4a)" onClick={() => open('friends')} />
+              <AppIcon icon="🎵" label="Music" bg="linear-gradient(160deg,#7a4fd0,#3a2a8a)" onClick={() => open('music')} />
+              <AppIcon icon="📈" label="Skills" bg="linear-gradient(160deg,#3da26b,#1f6e45)" onClick={() => open('skills')} />
               {s.zamazonkApp && (
                 <AppIcon
                   icon={<img src={ZAMAZONK_LOGO} alt="" className="w-full h-full object-contain p-0.5" />}
@@ -5201,6 +5333,8 @@ const LittleApartmentGame: React.FC = () => {
               {ov.tab === 'inventory' && inventoryApp}
               {ov.tab === 'journal' && journalApp}
               {ov.tab === 'friends' && friendsApp}
+              {ov.tab === 'music' && musicApp}
+              {ov.tab === 'skills' && skillsApp}
               {ov.tab === 'messages' && messagesApp}
               {ov.tab === 'zamazonk' && zamazonkApp}
               {ov.tab === 'achievements' && trophiesApp}
@@ -5344,6 +5478,21 @@ const LittleApartmentGame: React.FC = () => {
               {s.money < 5000 ? "CAN'T AFFORD · ¥5,000" : 'PAY THE TOLL · ¥5,000'}
             </button>
             <button className={btnCls} onClick={close}>WALK AWAY</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'landlord') {
+      return (
+        <ShopFrame title="LEASE OFFICE" subtitle={'"The unit next door. It\'s yours — for a number."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">The tenant next door has, at last, moved out. The landlord will knock through the wall and fold the unit into yours — doubling your space.</p>
+          <p className="text-base opacity-60 py-1 leading-snug">"It's a whole second room. Furnish it, rug it, do what you like. I don't ask questions about the humming."</p>
+          <div className="flex items-center gap-3 mt-3">
+            <button className={`${btnCls} flex-grow`} disabled={s.money < ROOM_PRICE} onClick={payLandlord}>
+              {s.money < ROOM_PRICE ? `NEED ¥${ROOM_PRICE.toLocaleString()}` : `KNOCK THROUGH · ¥${ROOM_PRICE.toLocaleString()}`}
+            </button>
+            <button className={btnCls} onClick={close}>NOT YET</button>
           </div>
         </ShopFrame>
       );

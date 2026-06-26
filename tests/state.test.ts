@@ -14,6 +14,7 @@ import {
   canCookHere, canCook, cook, eatDish, ingredientCount, buyGrocery, learnRecipe,
   buffActive, friendHearts, giftTo, canGiftToday, applyFriendPerks,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt,
+  skillLevel, addSkillXp, skillProgress, SKILL_XP, ROOM_PRICE,
 } from '../src/game/state';
 import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES } from '../src/game/data';
 import { SCENES } from '../src/game/maps';
@@ -638,5 +639,45 @@ describe('museum: the chicken nugget', () => {
     expect(slot.label).toBe('A Single Chicken Nugget');
     // it is no longer a Bingus fetch (it's a random mine drop now)
     expect(BINGUS_FETCHES.some(f => f.slot === 'arti-token')).toBe(false);
+  });
+});
+
+describe('skills (fish/mine/farm)', () => {
+  it('starts every skill at level 0', () => {
+    const s = newSave();
+    expect(skillLevel(s, 'fish')).toBe(0);
+    expect(skillLevel(s, 'mine')).toBe(0);
+    expect(skillLevel(s, 'farm')).toBe(0);
+  });
+  it('derives level from cumulative XP thresholds', () => {
+    const s = newSave();
+    s.skills.fish = SKILL_XP[1] - 1; expect(skillLevel(s, 'fish')).toBe(0);
+    s.skills.fish = SKILL_XP[1];     expect(skillLevel(s, 'fish')).toBe(1);
+    s.skills.fish = SKILL_XP[3];     expect(skillLevel(s, 'fish')).toBe(3);
+    s.skills.fish = 999999;          expect(skillLevel(s, 'fish')).toBe(10); // capped
+  });
+  it('addSkillXp returns the new level only when it goes up', () => {
+    const s = newSave();
+    expect(addSkillXp(s, 'mine', SKILL_XP[1] - 1)).toBe(0); // still level 0
+    expect(addSkillXp(s, 'mine', 1)).toBe(1);               // crossed into level 1
+    expect(addSkillXp(s, 'mine', 5)).toBe(0);               // no new level
+    expect(s.skills.mine).toBe(SKILL_XP[1] + 5);
+  });
+  it('skillProgress reports into/need within the current level', () => {
+    const s = newSave();
+    s.skills.farm = SKILL_XP[2] + 10;
+    const pr = skillProgress(s, 'farm');
+    expect(pr.level).toBe(2);
+    expect(pr.into).toBe(10);
+    expect(pr.need).toBe(SKILL_XP[3] - SKILL_XP[2]);
+  });
+});
+
+describe('apartment room + jukebox save fields', () => {
+  it('defaults: not expanded, default home track', () => {
+    const s = newSave();
+    expect(s.roomUnlocked).toBe(false);
+    expect(s.homeTrack).toBeNull();
+    expect(ROOM_PRICE).toBeGreaterThan(0);
   });
 });

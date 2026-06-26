@@ -2778,47 +2778,69 @@ const buildMisc = (atlas: Atlas) => {
   });
 
   // ---- Black stray cat (found in the dumpster, then lives at home) ----------
-  // Standing/walking, right-facing (mirror for left); plus a sitting pose.
-  const CATPAL = { k: '#16161c', g: '#86e06a', p: '#e0879f' };
-  // Standing/walking, right-facing (side profile → one big green eye). Feet sit at
-  // the bottom of the tile so the drawn shadow grounds him.
-  const catR = strSprite([
-    '................',
-    '................',
-    '................',
-    '...........k..k.',
-    '.k.........kkkk.',
-    '.kk.......kkkkkk',
-    '..kk......kggpkk',
-    '...kkkkkkkkkkkk.',
-    '...kkkkkkkkkkkk.',
-    '...kkkkkkkkkkkk.',
-    '...kkkkkkkkkk...',
-    '...k.kk..kk.k...',
-    '...k.kk..kk.k...',
-    '...k.kk..kk.k...',
-    '................',
-    '................',
+  // Right-facing side profile with a 2-frame walk cycle (mirror for left); plus a
+  // sitting/napping pose. k=body black, s=lighter-black fur sheen (upper-left rim),
+  // d=deep shadow ramp, g=green eye, p=pink nose/inner-ear.
+  const CATPAL = { k: '#16161c', s: '#26262f', d: '#0e0e13', g: '#86e06a', p: '#e0879f' };
+  // Side profile, head on the right (one big green eye + pink nose at the muzzle),
+  // upright curving tail on the left, four legs. Shared head/back/tail; the two
+  // frames differ in the legs (diagonal gait, shifted 1px) so he reads as walking.
+  // Feet sit near the bottom so the drawn floor shadow grounds him.
+  const CAT_TOP = [
+    '................', // 0
+    '...s............', // 1  tail tip (lit)
+    '...k......k..k..', // 2  tail + two ear tips
+    '...sk....kkkpkk.', // 3  tail (lit edge) + head top, pink inner ear
+    '...sk....kgkkkk.', // 4  green eye
+    '...kk....kkkkkkp', // 5  muzzle + pink nose at the front
+    '...kk....kkkkkk.', // 6  chin
+    '..skkkkkkkkkkkk.', // 7  back topline (lit upper-left)
+    '..kkkkkkkkkkkkk.', // 8  body
+    '..kkkkkkkkkkkk..', // 9  belly
+    '...dkkkkkkkkd...', // 10 underbelly shadow
+  ];
+  // Frame 0: outer diagonal planted (back col3 + front col12 reach the floor),
+  // inner pair (col5, col10) lifted a pixel.
+  const catR0 = strSprite([
+    ...CAT_TOP,
+    '...k.k....k.k...', // 11
+    '...k.k....k.k...', // 12
+    '...k.k....k.k...', // 13
+    '...k........k...', // 14 planted legs only
+    '................', // 15
   ], CATPAL);
-  atlas['cat-r'] = catR; atlas['cat-l'] = mirror(catR);
-  // Sitting (front-facing → two green eyes + pink nose).
+  // Frame 1: gait swapped + legs shifted 1px forward; inner diagonal planted now.
+  const catR1 = strSprite([
+    ...CAT_TOP,
+    '....k.k....k.k..', // 11
+    '....k.k....k.k..', // 12
+    '....k.k....k.k..', // 13
+    '......k....k....', // 14 planted legs only
+    '................', // 15
+  ], CATPAL);
+  atlas['cat-r-0'] = catR0; atlas['cat-l-0'] = mirror(catR0);
+  atlas['cat-r-1'] = catR1; atlas['cat-l-1'] = mirror(catR1);
+  // Aliases (frame 0) so any stale `cat-r` / `cat-l` reference still resolves.
+  atlas['cat-r'] = catR0; atlas['cat-l'] = mirror(catR0);
+  // Sitting / napping, low 3/4 view: two green eyes, pink nose, ears up, front paws
+  // together at the bottom, tail curled around the right side (d seam = wrap line).
   const catSitR = strSprite([
-    '................',
-    '................',
-    '................',
-    '................',
-    '..........k.k...',
-    '.........kkkkk..',
-    '.........kgkgk..',
-    '.........kkpkk..',
-    '........kkkkkk..',
-    '.......kkkkkkk..',
-    '......kkkkkkkk..',
-    '......kkkkkkkkk.',
-    '.....kkkkkkkkkk.',
-    '.....kkkkkkkkkk.',
-    '.....kk...kkkkk.',
-    '................',
+    '................', // 0
+    '.....s....s.....', // 1  ear tips (lit)
+    '.....kk..kk.....', // 2  ears
+    '.....kpkkpk.....', // 3  pink inner ears
+    '.....kgkkgk.....', // 4  two green eyes
+    '.....kkppkk.....', // 5  pink nose
+    '....skkkkkkk....', // 6  jaw (lit)
+    '....skkkkkkk....', // 7  shoulders
+    '...skkkkkkkkk...', // 8  chest
+    '...kkkkkkkkkkk..', // 9  body
+    '..kkkkkkkkkkdkk.', // 10 haunch + tail wrap (d seam)
+    '..skkkkkkkkkdkk.', // 11
+    '..kkkkkkkkkkdkk.', // 12
+    '..kkkkkkkkkkkk..', // 13 tail tip curling back in
+    '.....kk..kk.....', // 14 two front paws together
+    '................', // 15
   ], CATPAL);
   atlas['cat-sit-r'] = catSitR; atlas['cat-sit-l'] = mirror(catSitR);
 

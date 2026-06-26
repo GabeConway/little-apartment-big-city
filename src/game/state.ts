@@ -105,7 +105,38 @@ export interface GameSave {
   decor: { wall: string; floor: string };   // applied room style (DECOR ids; 'default' = original tiles)
   ownedDecor: string[];             // DECOR ids owned (wall/floor/rug)
   rugs: { id: string; x: number; y: number }[]; // rugs placed on the apartment floor (2×2, walkable)
+  roomUnlocked: boolean;            // paid the landlord to knock through to the next unit (bigger apartment)
+  homeTrack: string | null;         // jukebox: scene id whose music plays at the apartment (null = default theme)
+  skills: { fish: number; mine: number; farm: number }; // gathering XP per skill (level derived)
 }
+
+// ---- Skills (fishing / mining / farming) -------------------------------------
+// XP earned per gather action → a level 0..10 → a perk read at the roll site.
+export type SkillId = 'fish' | 'mine' | 'farm';
+export const SKILL_XP = [0, 60, 150, 300, 520, 820, 1200, 1700, 2350, 3200, 4300]; // cumulative for levels 0..10
+export const skillLevel = (s: GameSave, k: SkillId): number => {
+  const xp = s.skills[k] ?? 0; let lv = 0;
+  for (let i = 0; i < SKILL_XP.length; i++) if (xp >= SKILL_XP[i]) lv = i;
+  return lv;
+};
+// Progress within the current level (for the UI bar): {level, into, need}.
+export const skillProgress = (s: GameSave, k: SkillId): { level: number; into: number; need: number } => {
+  const lv = skillLevel(s, k);
+  if (lv >= SKILL_XP.length - 1) return { level: lv, into: 1, need: 1 }; // maxed
+  const base = SKILL_XP[lv], next = SKILL_XP[lv + 1];
+  return { level: lv, into: (s.skills[k] ?? 0) - base, need: next - base };
+};
+// Add XP; returns the NEW level if it went up this call, else 0.
+export const addSkillXp = (s: GameSave, k: SkillId, n: number): number => {
+  const before = skillLevel(s, k);
+  s.skills[k] = (s.skills[k] ?? 0) + n;
+  const after = skillLevel(s, k);
+  return after > before ? after : 0;
+};
+
+// Price to expand the apartment (paid to the nameless landlord; gated behind the
+// backrooms being unlocked — you need the deep money first).
+export const ROOM_PRICE = 120000;
 
 // A ZamaZonk order in transit. Paid for now; lands in the boxes on `dueDay`.
 export interface ZamaOrder { itemId: string; dueDay: number }
@@ -238,6 +269,9 @@ export const newSave = (): GameSave => ({
   decor: { ...DEFAULT_DECOR },
   ownedDecor: [...STARTER_DECOR],
   rugs: [],
+  roomUnlocked: false,
+  homeTrack: null,
+  skills: { fish: 0, mine: 0, farm: 0 },
 });
 
 export const loadSave = (): GameSave | null => {
@@ -562,6 +596,7 @@ const harvestQuality = (s: GameSave, plot: GreenhousePlot): number => {
   if (plot.fertilized) pts += 1;
   pts += s.greenhouse.tier;     // 0..2
   pts += shrineLuck(s);         // 0..2 — the shrine's favor shows in the soil
+  pts += skillLevel(s, 'farm') >= 8 ? 2 : skillLevel(s, 'farm') >= 4 ? 1 : 0; // a green thumb shows
   return pts >= 5 ? 2 : pts >= 3 ? 1 : 0;
 };
 
@@ -748,7 +783,8 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   // days are the norm; depth, the shrine, and your streak push toward the jackpot.
   let richness = rand() * rand();
   const luckyOre = luckyToday(s) ? 0.2 : 0; // Lucky Day or a Lucky meal: veins run rich
-  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre);
+  const mineSkill = skillLevel(s, 'mine') * 0.025; // a seasoned miner finds more
+  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre + mineSkill);
   if (ch.id === 'rich') richness = Math.min(1, richness + 0.2);
   if (ch.id === 'calm') richness = Math.min(1, richness + 0.05);
   const oreCount = Math.round(3 + richness * 12 + depth);

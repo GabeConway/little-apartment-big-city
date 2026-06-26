@@ -44,3 +44,18 @@ coords. Pairs naturally with the decor system.
 - **More achievements** — cooking/friendship/decor milestones for the `gameAch`
   system (e.g. "first 10♥", "fully restyled room", "cooked every recipe").
 - **Photo / memory mode** — snapshot the decorated room to a phone "gallery".
+
+## Research: removing the Gemini/Imagen watermark from `public/images/` (2026-06-25)
+The `public/images/portraits/*.jpeg` (all 1024², EXIF `software=Picasa`) + `title-bg.png`
+are the likely AI-generated assets; the PNG logos and `granny-soto.png` (256² pixel art)
+probably are not — **confirm by eye**. Two separate watermarks:
+- **Visible corner "sparkle"** (free/AI-Pro Gemini exports): removable + batchable —
+  best via **IOPaint/LaMa** inpaint with one corner mask (portraits share 1024² so one
+  mask covers all); `ffmpeg delogo` or a corner crop are cruder and risky on faces/pixel art.
+- **SynthID** (invisible, embedded across all pixels): **not reliably removable** — built
+  to survive crop/compress/filter/reformat; no official tool; "remover" sites are marketing
+  and only ~15–30% effective with image-quality cost. Stripping it trashes the art.
+- **ToS caveat**: removing provenance marks may breach Google's terms — flagged, not advised.
+- **Recommendation**: don't build an auto-stripper for ~8 files. **Regenerate watermark-free**
+  via the Gemini/Imagen **API** (outputs carry SynthID but **no visible sparkle**), or
+  **replace with in-code/commissioned art** (sidesteps ToS + matches the project's in-code style).

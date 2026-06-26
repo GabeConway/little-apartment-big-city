@@ -110,6 +110,25 @@ const apartment: SceneDef = {
   npcs: [],
 };
 
+// The expanded apartment: once you've paid the landlord to "knock through to the
+// next unit", `apartment.grid` is swapped to this at load/purchase (see
+// applyApartmentSize in the main file). Same bottom door + windows so the city
+// warps still line up; a divider wall with a 2-tile doorway joins the two rooms.
+// Placement bounds derive from grid size (width-2 / height-2), so the new room is
+// fully furnishable + decoratable with no other changes.
+export const APARTMENT_BIG_GRID: string[] = [
+  'PPPnnPPPPPPnnPP#PPnnPPP#',
+  '#====..........#.......#',
+  '#====..........#.......#',
+  '#..............#.......#',
+  '#......................#',
+  '#......................#',
+  '#..............#.......#',
+  '#..............#.......#',
+  '#...........mm.#.......#',
+  '############DD##########',
+];
+
 // ---- City ------------------------------------------------------------------
 
 const city: SceneDef = {
@@ -176,6 +195,7 @@ const city: SceneDef = {
     { id: 'vending', x: 8, y: 4, label: 'Vending machine' },
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
     { id: 'errand-board', x: 11, y: 13, label: 'Odd-jobs board' },
+    { id: 'landlord', x: 9, y: 13, label: 'Lease office' },
   ],
   npcs: [
     { id: 'charlie', x: 17, y: 3, sprite: 'npc-charlie', dir: 'down' },
