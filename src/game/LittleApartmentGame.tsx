@@ -370,6 +370,7 @@ type Overlay =
   | { type: 'menu'; tab: PhoneApp; thread?: string }
   | { type: 'cook' }                          // home kitchen — cook known recipes
   | { type: 'gift'; npcId: string }           // pick a held item to gift an NPC
+  | { type: 'npcchoice'; npcId: string; interactId: string } // talk vs. give a gift
   | { type: 'ending' };
 
 type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends';
@@ -377,6 +378,14 @@ type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' 
 // Friendly label for each cooking ingredient kind (shown in the recipe list).
 const INGREDIENT_LABEL: Record<IngredientKind, string> = {
   fish: 'Fish', crop: 'Crop', coconut: 'Coconut', peepis: 'Peepis', soda: 'Soda', rice: 'Rice', egg: 'Egg', veg: 'Greens',
+};
+
+// Map an in-world NPC's interaction id → its FRIENDS id (they differ for a few:
+// Genji is the 'old-man', Lulu the 'tiki' bar, The Manager the 'monster', Max the
+// shore 'david'). The cat David (FRIENDS id 'david') is handled at his own catRef.
+const FRIEND_OF_NPC: Record<string, string> = {
+  'old-man': 'genji', 'tiki': 'lulu', 'monster': 'manager', 'david': 'max',
+  'granny': 'granny', 'charlie': 'charlie', 'bingus': 'bingus', 'tex': 'tex', 'miko': 'miko',
 };
 
 const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
@@ -429,6 +438,7 @@ interface Hud {
   late: boolean; // past midnight — 2 AM collapse looms
   unread: number; // unread phone messages (badge on the 📱 button)
   event: DayEvent; // today's special day ('market' / 'lucky' / null) — HUD chip
+  buff: { emoji: string; name: string } | null; // active food buff today — HUD chip
 }
 
 // Every named character has a voice: several line-sets, picked at random per
@@ -767,7 +777,7 @@ const LittleApartmentGame: React.FC = () => {
   // Mirrored into a ref so the keyboard/click advance path can read it synchronously.
   const [typed, setTyped] = useState(0);
   const typedRef = useRef(0);
-  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null });
+  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette() }); // live casino game state
   // Stop the slot reels / roulette wheel spinning if the player leaves the overlay (Esc, etc.).
@@ -902,6 +912,9 @@ const LittleApartmentGame: React.FC = () => {
   // David the cat, once adopted: roams the apartment, sits, naps. Lives only in the
   // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
   const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; timer: number } | null>(null);
+  // When a befriendable NPC is talked to, we first offer TALK / GIFT. This holds
+  // the interaction-id the player chose TALK for, so the re-dispatch skips the chooser.
+  const talkChosenRef = useRef<string | null>(null);
   const ghPlotRef = useRef(0); // which greenhouse plot index the open plot menu is acting on
   const inputRef = useRef(new Input());
   const solidsRef = useRef(new Set<string>());
@@ -919,7 +932,18 @@ const LittleApartmentGame: React.FC = () => {
   const nursedRef = useRef(false);
   // Jean-Pierre rescue cutscene (after a mines KO): he's stood in your apartment
   // while he talks, then walks to the door and leaves before you can get up.
-  const cutsceneRef = useRef<{ actor: { x: number; y: number; dir: Dir; sprite: string }; phase: 'talk' | 'walk'; path: { x: number; y: number }[] } | null>(null);
+  // Scripted NPC actor. 'talk'→'walk' = the rescue (talk over you, then leave).
+  // 'approach'→'warn'→'return' = an NPC walks TO you, says a line, walks back
+  // (Jean-Pierre blocking the mines). `hideNpc` suppresses that NPC's static map
+  // draw so we don't see two of them; `then` fires when the approach completes.
+  const cutsceneRef = useRef<{
+    actor: { x: number; y: number; dir: Dir; sprite: string };
+    phase: 'talk' | 'walk' | 'approach' | 'warn' | 'return';
+    path: { x: number; y: number }[];
+    home?: { x: number; y: number };
+    then?: () => void;
+    hideNpc?: string;
+  } | null>(null);
   const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap; rescuer?: 'jean' | 'yoshi' } | null>(null);
   const sparkleRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Floating "+N Mineral" pickup text that rises and fades over a mined node.
@@ -1028,6 +1052,7 @@ const LittleApartmentGame: React.FC = () => {
       late: s.timeMin >= 24 * 60, // midnight or later
       unread: unreadCount(s),
       event: dayEventFor(s),
+      buff: s.buff && s.buff.day === s.day ? { emoji: BUFFS[s.buff.id].emoji, name: BUFFS[s.buff.id].name } : null,
     });
   }, [award]);
 
@@ -1508,6 +1533,11 @@ const LittleApartmentGame: React.FC = () => {
       const ct = { x: Math.round(catRef.current.x / TILE), y: Math.round(catRef.current.y / TILE) };
       if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
         catRef.current.sitting = true; catRef.current.timer = 4; // he stops to address you
+        if (talkChosenRef.current !== 'david-cat' && canGiftToday(s, 'david') && giftableItems(s).length > 0) {
+          setOverlayBoth({ type: 'npcchoice', npcId: 'david', interactId: 'david-cat' });
+          return;
+        }
+        talkChosenRef.current = null;
         showDialog(WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)], 'David');
         return;
       }
@@ -1668,6 +1698,15 @@ const LittleApartmentGame: React.FC = () => {
       : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
           && !(NIGHT_EVEN_IDS.has(n.id) && !davidActive(s)));
     if (npc) {
+      // Befriendable NPC + you're carrying a giftable item + haven't gifted them
+      // today → offer TALK or GIFT first (in person; not from the phone). Choosing
+      // TALK re-runs this with talkChosenRef set, so it falls through to the talk.
+      const friendId = FRIEND_OF_NPC[npc.id];
+      if (friendId && talkChosenRef.current !== npc.id && canGiftToday(s, friendId) && giftableItems(s).length > 0) {
+        setOverlayBoth({ type: 'npcchoice', npcId: friendId, interactId: npc.id });
+        return;
+      }
+      talkChosenRef.current = null;
       // Merchants open their stalls; everyone else just talks.
       if (npc.id === 'yakuza') {
         if (s.gangPaid) return; // already paid; he's on his way out
@@ -2012,11 +2051,22 @@ const LittleApartmentGame: React.FC = () => {
         break;
       case 'descend':
         if (!s.wand && !s.gun) {
-          showDialog([
-            'A hand on your shoulder. Jean-Pierre, suddenly very serious.',
-            '"Non non non, mon ami. Down zere? Wizout ze sparkle stick? Zey will EAT you. Conceptually AND literally."',
-            '"Ze big monsieur sells ze magical girl wand. Buy first. Descend second. Zis is ze order of operations."',
-          ], 'Jean-Pierre');
+          // Jean-Pierre hustles over from across the room and physically heads you
+          // off the ladder instead of warning you from his corner. (One at a time.)
+          if (!cutsceneRef.current) {
+            cutsceneRef.current = {
+              actor: { x: 6 * TILE, y: 6 * TILE, dir: 'down', sprite: 'npc-tourist' },
+              phase: 'approach',
+              path: [{ x: 6 * TILE, y: 9 * TILE }, { x: 11 * TILE, y: 9 * TILE }],
+              home: { x: 6 * TILE, y: 6 * TILE },
+              hideNpc: 'tourist',
+              then: () => showDialog([
+                'Jean-Pierre scrambles across the room and plants himself between you and the ladder, a little out of breath.',
+                '"Non non non, mon ami. Down zere? Wizout ze sparkle stick? Zey will EAT you. Conceptually AND literally."',
+                '"Ze big monsieur sells ze magical girl wand. Buy first. Descend second. Zis is ze order of operations."',
+              ], 'Jean-Pierre'),
+            };
+          }
           break;
         }
         mineFloorRef.current = 1;       // a dive from the surface always starts at the top floor
@@ -2187,7 +2237,7 @@ const LittleApartmentGame: React.FC = () => {
       } else if (ov.type === 'letter') {
         if (input.consumeInteract() || input.consumeCancel()) setOverlayBoth(null);
         input.consumeInventory();
-      } else if (ov.type === 'shop' || ov.type === 'cook' || ov.type === 'gift') {
+      } else if (ov.type === 'shop' || ov.type === 'cook' || ov.type === 'gift' || ov.type === 'npcchoice') {
         input.consumeInteract();
         if (input.consumeCancel()) setOverlayBoth(null);
         input.consumeInventory();
@@ -2221,11 +2271,23 @@ const LittleApartmentGame: React.FC = () => {
       input.consumeInteract(); input.consumeInventory(); input.consumeCancel();
       movingRef.current = false;
       if (cs.phase === 'talk') {
-        cs.phase = 'walk'; // the dialog was dismissed — time for him to leave
+        cs.phase = 'walk'; // the rescue dialog was dismissed — time for him to leave
+      } else if (cs.phase === 'warn') {
+        // his warning was dismissed — turn around and walk back to where he stood
+        cs.phase = 'return';
+        if (cs.home) cs.path = [cs.home];
       } else {
         const wp = cs.path[0];
-        if (!wp) { cutsceneRef.current = null; } // he's out the door — you can move
-        else {
+        if (!wp) {
+          if (cs.phase === 'approach') {
+            // reached you — face you, deliver the line (which opens a dialog and
+            // freezes this block until dismissed), then he'll walk back.
+            cs.phase = 'warn';
+            cs.then?.();
+          } else {
+            cutsceneRef.current = null; // 'walk' (out the door) or 'return' (home) — you're free
+          }
+        } else {
           const a = cs.actor;
           const step = 70 * dt;
           const ddx = wp.x - a.x, ddy = wp.y - a.y;
@@ -3011,6 +3073,7 @@ const LittleApartmentGame: React.FC = () => {
       if (npc.id === 'yakuza' && saveRef.current.gangPaid) continue; // paid off — gone
       if (WANDER_IDS.has(npc.id)) continue; // wanderers are drawn from their live positions below
       if (NIGHT_EVEN_IDS.has(npc.id) && !davidActive(saveRef.current)) continue; // David only on even nights
+      if (cutsceneRef.current?.hideNpc === npc.id) continue; // this NPC is currently a walking cutscene actor
       ents.push({
         y: npc.y * TILE,
         draw: () => {
@@ -3039,7 +3102,8 @@ const LittleApartmentGame: React.FC = () => {
         y: a.y,
         draw: () => {
           ctx.drawImage(atlas['m-shadow'], Math.round(a.x) - cam.x, Math.round(a.y) - cam.y + 2);
-          const frame = cutsceneRef.current!.phase === 'walk' ? (Math.floor(animRef.current * 7) % 2) : 0;
+          const moving = ['walk', 'approach', 'return'].includes(cutsceneRef.current!.phase);
+          const frame = moving ? (Math.floor(animRef.current * 7) % 2) : 0;
           ctx.drawImage(atlas[`${a.sprite}-${a.dir}-${frame}`], Math.round(a.x) - cam.x, Math.round(a.y) - cam.y);
         },
       });
@@ -5033,24 +5097,21 @@ const LittleApartmentGame: React.FC = () => {
     const friendsApp = (
       <div className="px-3 py-2">
         <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">FRIENDS</p>
-        <p className="text-xs opacity-50 mb-2 leading-snug">Give someone a gift they like — one each per day — to grow closer. Hearts unlock perks. (Loves/likes reveal at 2 ♥.)</p>
+        <p className="text-xs opacity-50 mb-2 leading-snug">Walk up to someone and choose GIVE A GIFT (one each per day) to grow closer. Hearts unlock perks. (Loves/likes reveal at 2 ♥.)</p>
         {FRIENDS.map(f => {
           const hearts = friendHearts(s, f.id);
+          const met = metFriend(s, f.id);
           const gifted = !canGiftToday(s, f.id);
           return (
-            <button
-              key={f.id}
-              onClick={() => setOverlayBoth({ type: 'gift', npcId: f.id })}
-              className="w-full flex items-center gap-3 py-2 border-b border-white/10 text-left hover:bg-white/5 transition"
-            >
+            <div key={f.id} className="w-full flex items-center gap-3 py-2 border-b border-white/10">
               <span className="text-2xl shrink-0">{f.emoji}</span>
               <div className="flex-grow min-w-0">
                 <p className="text-base leading-tight">{f.name}</p>
                 <p className="text-xs opacity-55 leading-tight truncate">{f.blurb}</p>
                 <p className="text-sm leading-tight tracking-tight">{'❤️'.repeat(hearts)}<span className="opacity-25">{'·'.repeat(MAX_HEARTS - hearts)}</span></p>
               </div>
-              <span className={`shrink-0 text-xs px-2 py-1 rounded ${gifted ? 'opacity-40 bg-white/5' : 'bg-[#ffd24a]/20 text-[#ffd24a]'}`}>{gifted ? 'gifted ✓' : 'GIFT'}</span>
-            </button>
+              {met && gifted && <span className="shrink-0 text-xs px-2 py-1 rounded opacity-40 bg-white/5">gifted today ✓</span>}
+            </div>
           );
         })}
       </div>
@@ -5206,6 +5267,30 @@ const LittleApartmentGame: React.FC = () => {
         })}
         <p className="text-xs opacity-50 mt-2 italic leading-snug">Buy rice / eggs / greens at the konbini. Keep a greenhouse harvest (instead of shipping it) to cook with. Friends teach you new recipes.</p>
       </ShopFrame>
+    );
+  };
+
+  // Talk-or-gift chooser, shown when you walk up to a friend carrying something giftable.
+  const renderNpcChoice = (ov: Extract<Overlay, { type: 'npcchoice' }>) => {
+    const f = friendById(ov.npcId);
+    if (!f) { setOverlayBoth(null); return null; }
+    const hearts = friendHearts(saveRef.current, ov.npcId);
+    const talk = () => { talkChosenRef.current = ov.interactId; setOverlayBoth(null); handleInteract(); };
+    return (
+      <div className={`${panelCls} w-full max-w-sm px-4 pt-3 pb-3.5`}>
+        <div className="flex items-center gap-3 pb-2 mb-2.5 border-b border-[#ffd24a]/25">
+          <span className="text-3xl shrink-0">{f.emoji}</span>
+          <div className="min-w-0">
+            <h3 className="font-retro text-[#ffd24a] text-sm leading-snug">{f.name}</h3>
+            <p className="text-sm leading-tight tracking-tight">{'❤️'.repeat(hearts)}<span className="opacity-25">{'·'.repeat(MAX_HEARTS - hearts)}</span></p>
+          </div>
+          <button aria-label="Close" className="ml-auto w-7 h-7 shrink-0 rounded-full border border-[#ffd24a]/40 text-[#ffd24a]/80 hover:bg-[#ffd24a] hover:text-black active:translate-y-px transition-all flex items-center justify-center text-sm" onClick={() => setOverlayBoth(null)}>✕</button>
+        </div>
+        <div className="flex gap-2">
+          <button className={`${btnCls} flex-1 py-2`} onClick={talk}>💬 TALK</button>
+          <button className={`${btnCls} flex-1 py-2`} onClick={() => setOverlayBoth({ type: 'gift', npcId: ov.npcId })}>🎁 GIVE A GIFT</button>
+        </div>
+      </div>
     );
   };
 
@@ -6057,6 +6142,14 @@ const LittleApartmentGame: React.FC = () => {
             );
           })()}
 
+          {/* active food buff */}
+          {hud.buff && (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-[#e0843a]/20 text-base leading-none"
+              title={`${hud.buff.name} meal — active until tomorrow`}
+            >{hud.buff.emoji}</span>
+          )}
+
           {/* special-day chip — Market / Lucky Day */}
           {hud.event && (
             <span
@@ -6529,6 +6622,13 @@ const LittleApartmentGame: React.FC = () => {
         {overlay?.type === 'cook' && (
           <div data-navroot className="absolute inset-0 bg-black/72 backdrop-blur-[2px] flex items-center justify-center p-2 sm:p-4">
             {renderCook()}
+          </div>
+        )}
+
+        {/* talk-or-gift chooser */}
+        {overlay?.type === 'npcchoice' && (
+          <div data-navroot className="absolute inset-0 bg-black/72 backdrop-blur-[2px] flex items-center justify-center p-2 sm:p-4">
+            {renderNpcChoice(overlay)}
           </div>
         )}
 
