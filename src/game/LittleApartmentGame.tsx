@@ -1070,7 +1070,7 @@ const LittleApartmentGame: React.FC = () => {
   const warpCooldownRef = useRef(0); // grace after a warp so you don't bounce back through an adjacent return warp
   const shrineHealRef = useRef(0);   // accumulates real seconds for the very-slow shrine energy heal
   const signGlowRef = useRef(new Map<object, HTMLCanvasElement>()); // cached neon-bloom sprites per sign (built once, not per frame)
-  const signSpriteRef = useRef(new Map<object, { c: HTMLCanvasElement; w: number; h: number; s: number }>()); // each sign's panel+text rendered once at device scale, then blitted (no per-frame font switching); rebuilt if the scale changes
+  const signSpriteRef = useRef(new Map<object, { c: HTMLCanvasElement; w: number; h: number; s: number; mx: number; my: number; pw: number; ph: number }>()); // each sign's framed plate (drop shadow + bevel + hardware + text) rendered once at device scale, then blitted (no per-frame font switching); w/h = full canvas incl. shadow, mx/my = plate inset, pw/ph = plate size; rebuilt if the scale changes
   const skyGradRef = useRef<CanvasGradient | null>(null);  // night sky band — built once, alpha modulated per frame
   const sunGradRef = useRef<CanvasGradient | null>(null);  // morning sun rake — same
   const glowSpriteRef = useRef(new Map<string, HTMLCanvasElement>()); // cached radial light sprites (club lights, street lamps) — built once, blitted per frame
@@ -3070,37 +3070,75 @@ const LittleApartmentGame: React.FC = () => {
       // pixel text stays crisp when blitted back at logical size — a 1× sprite
       // upscaled by the canvas transform looked blurry.
       const S = scaleRef.current * RR;
+      // Tint a hex toward white (f>1) or black (f<1) for the bevel ramp; rgba/named
+      // bg colours fall back to a neutral metal plate so wayfinding placards still
+      // read as a solid mounted plate, not floaty translucent UI.
+      const clamp8 = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+      const mixHex = (h: string, f: number) => { const [r, g, b] = hex2rgb(h); return `rgb(${clamp8(r * f)},${clamp8(g * f)},${clamp8(b * f)})`; };
       const sprite = (sg: typeof signs[number]) => {
         let e = signSpriteRef.current.get(sg);
         if (e && e.s === S) return e;
         const size = sg.font ?? 6;
-        const w = sg.vertical ? size + 5 : Math.ceil(measureRun(sg.text, size)) + 5;
-        const h = sg.vertical ? [...sg.text].length * (size + 1) + 4 : size + 4;
+        const tw = sg.vertical ? size : Math.ceil(measureRun(sg.text, size));
+        const pad = 3;                                   // text inset from the plate edge (room for rivets)
+        const pw = sg.vertical ? size + 4 : tw + pad + 3;             // plate width
+        const ph = sg.vertical ? [...sg.text].length * (size + 1) + 5 : size + 5; // plate height
+        const SO = 2;                                    // drop-shadow offset (down-right) — sits the plate ON the wall
+        const mx = 1, my = 1;                            // plate inset inside the canvas (1px for the dark outline frame)
+        const cw = pw + 2 + SO, ch = ph + 2 + SO;        // canvas = plate + 1px outline each side + cast shadow
         const c = document.createElement('canvas');
-        c.width = Math.max(1, Math.ceil(w * S)); c.height = Math.max(1, Math.ceil(h * S));
+        c.width = Math.max(1, Math.ceil(cw * S)); c.height = Math.max(1, Math.ceil(ch * S));
         const g = c.getContext('2d')!;
         g.setTransform(S, 0, 0, S, 0, 0);
         g.textBaseline = 'top';
-        g.fillStyle = sg.bg ?? 'rgba(0,0,0,0.45)';
-        g.fillRect(0, 0, w, h);
-        if (sg.border) { g.strokeStyle = sg.border; g.lineWidth = 1; g.strokeRect(0.5, 0.5, w - 1, h - 1); }
-        g.fillStyle = sg.color;
-        if (sg.vertical) {
-          [...sg.text].forEach((ch, i) => { g.font = charFont(ch, size); g.fillText(ch, 2, 2 + i * (size + 1)); });
-        } else {
-          let cx = 2; for (const ch of sg.text) { g.font = charFont(ch, size); g.fillText(ch, cx, 2); cx += g.measureText(ch).width; }
+        // 1) cast shadow onto the facade so the plate doesn't float
+        g.fillStyle = 'rgba(0,0,0,0.32)'; g.fillRect(mx + SO, my + SO, pw, ph);
+        g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(mx + SO + 1, my + SO + 1, pw, ph);
+        // 2) dark outline frame (the extruded plate edge)
+        const baseHex = sg.bg && sg.bg[0] === '#' ? sg.bg : '#222831';
+        g.fillStyle = mixHex(baseHex, 0.32); g.fillRect(mx - 1, my - 1, pw + 2, ph + 2);
+        // 3) opaque plate fill (+ the intended tint for rgba placards, over the solid base)
+        g.fillStyle = baseHex; g.fillRect(mx, my, pw, ph);
+        if (sg.bg && sg.bg[0] !== '#') { g.fillStyle = sg.bg; g.fillRect(mx, my, pw, ph); }
+        // 4) bevel: warm highlight top-left, shade bottom-right (upper-left light source)
+        g.fillStyle = mixHex(baseHex, 1.45); g.fillRect(mx, my, pw, 1); g.fillRect(mx, my, 1, ph);
+        g.fillStyle = mixHex(baseHex, 0.6); g.fillRect(mx, my + ph - 1, pw, 1); g.fillRect(mx + pw - 1, my, 1, ph);
+        // 5) neon tube: a bright inset frame inside the dark backing box for lit signs
+        if (sg.border) {
+          g.fillStyle = sg.border;
+          g.fillRect(mx + 1, my + 1, pw - 2, 1); g.fillRect(mx + 1, my + ph - 2, pw - 2, 1);
+          g.fillRect(mx + 1, my + 1, 1, ph - 2); g.fillRect(mx + pw - 2, my + 1, 1, ph - 2);
         }
-        e = { c, w, h, s: S };
+        // 6) corner rivets (mounting hardware) on roomier plates
+        if (size >= 7) {
+          const rv = ph >= 13 ? 2 : 1;
+          const rc = mixHex(baseHex, 0.45), rh = mixHex(baseHex, 1.7);
+          for (const [rx, ry] of [[mx + 1, my + 1], [mx + pw - 1 - rv, my + 1], [mx + 1, my + ph - 1 - rv], [mx + pw - 1 - rv, my + ph - 1 - rv]] as const) {
+            g.fillStyle = rc; g.fillRect(rx, ry, rv, rv);
+            g.fillStyle = rh; g.fillRect(rx, ry, 1, 1);
+          }
+        }
+        // 7) text — per-glyph fonts unchanged (kana/kanji Naganoshi, Latin/digits mono)
+        g.fillStyle = sg.color;
+        const tx = sg.vertical ? mx + 2 : mx + pad, ty = my + 2;
+        if (sg.vertical) {
+          [...sg.text].forEach((ch, i) => { g.font = charFont(ch, size); g.fillText(ch, tx, ty + i * (size + 1)); });
+        } else {
+          let cx = tx; for (const ch of sg.text) { g.font = charFont(ch, size); g.fillText(ch, cx, ty); cx += g.measureText(ch).width; }
+        }
+        e = { c, w: cw, h: ch, s: S, mx, my, pw, ph };
         signSpriteRef.current.set(sg, e);
         return e;
       };
-      const dims = (sg: typeof signs[number]) => sprite(sg); // {w,h}, cached
+      const dims = (sg: typeof signs[number]) => sprite(sg); // {mx,my,pw,ph,...}, cached
       const paint = (sg: typeof signs[number]) => {
         const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
         const sp = sprite(sg);
         const blinkOff = sg.blink && !neonOn;
         if (blinkOff) { ctx.save(); ctx.globalAlpha = 0.4; }
-        ctx.drawImage(sp.c, sx - 2, sy - 2, sp.w, sp.h); // blit at logical size (1:1 with the device-scaled bitmap)
+        // anchor the plate top-left at (sx-2, sy-2) — same spot as before; the canvas
+        // now carries the outline/shadow margins, so back off by the plate inset.
+        ctx.drawImage(sp.c, sx - 2 - sp.mx, sy - 2 - sp.my, sp.w, sp.h);
         if (blinkOff) ctx.restore();
       };
       for (const sign of signs) paint(sign);
@@ -3112,11 +3150,11 @@ const LittleApartmentGame: React.FC = () => {
         for (const sg of signs) {
           if (!isLit(sg)) continue;
           const off = sg.blink && !neonOn; // mid-blink: stay dark
-          const { w, h } = dims(sg);
+          const { pw, ph } = dims(sg); // bloom is sized/centred on the plate, not the shadow margins
           const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
-          const cx = sx - 2 + w / 2, cy = sy - 2 + h / 2;
+          const cx = sx - 2 + pw / 2, cy = sy - 2 + ph / 2;
           if (!off) {
-            const r = Math.max(w, h) * 0.85 + 9;
+            const r = Math.max(pw, ph) * 0.85 + 9;
             // Cached glow sprite per sign — built once, then blitted. Rebuilding a
             // radial gradient every frame for every sign was the night FPS sink.
             let glow = signGlowRef.current.get(sg);
