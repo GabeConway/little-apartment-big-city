@@ -208,10 +208,10 @@ export class Input {
     const ax = gp.axes[0] ?? 0, ay = gp.axes[1] ?? 0;
     const btn = (i: number) => Boolean(gp!.buttons[i]?.pressed);
     const cur = {
-      up:    ay < -DZ || btn(12),
-      down:  ay >  DZ || btn(13),
-      left:  ax < -DZ || btn(14),
-      right: ax >  DZ || btn(15),
+      up:    ay <= -DZ || btn(12),
+      down:  ay >=  DZ || btn(13),
+      left:  ax <= -DZ || btn(14),
+      right: ax >=  DZ || btn(15),
       a:   btn(0),                 // A — confirm / interact / reel
       b:   btn(1),                 // B — cancel
       inv: btn(3) || btn(9),       // Y or Start — inventory/menu

@@ -1073,6 +1073,7 @@ const LittleApartmentGame: React.FC = () => {
   const signSpriteRef = useRef(new Map<object, { c: HTMLCanvasElement; w: number; h: number; s: number; mx: number; my: number; pw: number; ph: number }>()); // each sign's framed plate (drop shadow + bevel + hardware + text) rendered once at device scale, then blitted (no per-frame font switching); w/h = full canvas incl. shadow, mx/my = plate inset, pw/ph = plate size; rebuilt if the scale changes
   const skyGradRef = useRef<CanvasGradient | null>(null);  // night sky band — built once, alpha modulated per frame
   const sunGradRef = useRef<CanvasGradient | null>(null);  // morning sun rake — same
+  const mineDarkRef = useRef<{ lr: number; grad: CanvasGradient } | null>(null); // mines flashlight gradient, cached per light-radius (centered at 0,0, translated each frame)
   const glowSpriteRef = useRef(new Map<string, HTMLCanvasElement>()); // cached radial light sprites (club lights, street lamps) — built once, blitted per frame
   const wanderersRef = useRef<Wanderer[]>([]); // live positions of gently-pacing NPCs in the current scene
   const djPickRef = useRef<string | null>(null);
@@ -3722,12 +3723,24 @@ const LittleApartmentGame: React.FC = () => {
       const sv0 = saveRef.current;
       const lr = (sv0.gun || sv0.wand2) ? 124 : sv0.wand ? 104 : 70;
       const flick = 1 + Math.sin(t * 11) * 0.03; // faint lantern flicker
-      const dark = ctx.createRadialGradient(pcx, pcy, lr * 0.34, pcx, pcy, lr * flick);
-      dark.addColorStop(0, 'rgba(6,6,10,0)');
-      dark.addColorStop(0.7, 'rgba(6,6,10,0.55)');
-      dark.addColorStop(1, 'rgba(3,3,7,0.95)');
-      ctx.fillStyle = dark;
-      ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      // The flashlight gradient is centered at (0,0) and translated to the player
+      // each frame, so it caches per light-radius instead of rebuilding every frame
+      // (KB rule: never createRadialGradient in the draw loop). lr only changes when
+      // you gain a wand/gun, so this is effectively built once. Flicker now rides on
+      // globalAlpha (cheap) rather than re-baking the radius.
+      if (!mineDarkRef.current || mineDarkRef.current.lr !== lr) {
+        const g = ctx.createRadialGradient(0, 0, lr * 0.34, 0, 0, lr);
+        g.addColorStop(0, 'rgba(6,6,10,0)');
+        g.addColorStop(0.7, 'rgba(6,6,10,0.55)');
+        g.addColorStop(1, 'rgba(3,3,7,0.95)');
+        mineDarkRef.current = { lr, grad: g };
+      }
+      ctx.save();
+      ctx.globalAlpha = flick; // ~0.97–1.03 lantern pulse (clamped by the stops' own alpha)
+      ctx.translate(pcx, pcy);
+      ctx.fillStyle = mineDarkRef.current.grad;
+      ctx.fillRect(-pcx, -pcy, VIEW_PW, VIEW_PH);
+      ctx.restore();
 
       // Mine HUD: depth, the day's challenge, and your streak — top-left, above the dark.
       const sv1 = saveRef.current;

@@ -671,7 +671,9 @@ export const growGreenhouse = (s: GameSave): void => {
     const plot = g.plots[i];
     if (!plot.crop || plotReady(plot)) continue;
     const crop = CROPS[plot.crop]; if (!crop) continue;
-    const watered = g.sprinkler || plot.wateredDay === s.day - 1; // sprinkler auto-waters; else you watered yesterday
+    // sprinkler auto-waters; else you watered yesterday. Guard day 1 so a fresh
+    // plot's default wateredDay:0 can't read as "watered" when s.day-1 === 0.
+    const watered = g.sprinkler || (s.day > 1 && plot.wateredDay === s.day - 1);
     if (watered) { plot.progress = Math.min(crop.growDays, plot.progress + 1); plot.waterStreak += 1; }
     else { plot.missed += 1; plot.waterStreak = 0; }
   }

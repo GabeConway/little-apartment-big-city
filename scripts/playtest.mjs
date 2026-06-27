@@ -25,14 +25,42 @@ const PORT = Number(process.env.PLAYTEST_PORT || 5179);
 
 // px = tile * 16. Coords below land the player on a walkable tile in each scene
 // (taken from the warp targets in maps.ts), so a teleport never drops you in a wall.
+// Safe spawn tile per scene (px/py = warp-target tile ×16, walkable on arrival).
+// Covers all 19 scenes so `--save <scene>` and the `smoke` command can reach
+// every map. Tiles sourced from the `to:'<scene>'` warp targets in maps.ts.
 const SCENE_SPAWN = {
   apartment: { px: 112, py: 80 },
   city: { px: 96, py: 224 },
-  shore: { px: 352, py: 48 },
   denden: { px: 128, py: 128 },
   konbini: { px: 112, py: 112 },
+  pawn: { px: 96, py: 112 },
+  gacha: { px: 80, py: 96 },
+  greenhouse: { px: 112, py: 128 },
+  shore: { px: 352, py: 48 },
   badtown: { px: 16, py: 80 },
+  shrine: { px: 144, py: 128 },
+  nightclub: { px: 112, py: 128 },
+  garage: { px: 128, py: 112 },
   casino: { px: 112, py: 112 },
+  museum: { px: 112, py: 128 },
+  backrooms: { px: 128, py: 32 },
+  mines: { px: 32, py: 32 },
+  island: { px: 80, py: 112 },
+  deepsea: { px: 128, py: 128 },
+  paris: { px: 128, py: 160 },
+};
+
+// Unlock flags so a teleport into a gated scene is actually usable (the gates
+// only matter for *reaching* a scene by walking; begin() drops you in regardless,
+// but these keep interactables/exits sane).
+const SCENE_EXTRA = {
+  greenhouse: { greenhouseUnlocked: true },
+  backrooms: { backroomsUnlocked: true, wand: true },
+  mines: { backroomsUnlocked: true, wand: true },
+  casino: { gangPaid: true },
+  paris: { backroomsUnlocked: true, parisRevealed: true },
+  island: { vehicles: ['boat'] },
+  deepsea: { vehicles: ['boat'] },
 };
 
 // Partial saves merged over newSave() by loadSave(). Keep them shape-light; the
@@ -50,7 +78,7 @@ const PRESETS = {
   lowenergy: { money: 5000, canFish: true, energy: 4 },
   // teleports (scene + a safe spawn tile)
   ...Object.fromEntries(Object.entries(SCENE_SPAWN).map(([scene, p]) => [
-    scene, { scene, ...p, canFish: true, money: 20000 },
+    scene, { scene, ...p, canFish: true, money: 20000, ...(SCENE_EXTRA[scene] || {}) },
   ])),
 };
 
@@ -149,12 +177,59 @@ async function main() {
       deviceScaleFactor: Number(opts.dpr || 1),
     });
     const page = await context.newPage();
-    page.on('console', (m) => { if (m.type() === 'error') process.stderr.write(`  [page error] ${m.text()}\n`); });
-    page.on('pageerror', (e) => process.stderr.write(`  [pageerror] ${e.message}\n`));
+    // Buffer runtime errors so the `smoke` sweep can attribute them per scene
+    // (and so single runs still echo them to stderr live).
+    const errBuf = [];
+    page.on('console', (m) => { if (m.type() === 'error') { errBuf.push(m.text()); process.stderr.write(`  [page error] ${m.text()}\n`); } });
+    page.on('pageerror', (e) => { errBuf.push(e.message); process.stderr.write(`  [pageerror] ${e.message}\n`); });
 
     // Seed localStorage before the app boots: nav once to set origin, write, reload.
     const url = `${base}/?debug`;
     await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+    // `smoke` — sweep every scene, teleport in, and report any runtime error +
+    // the live overlay. One run covers all 19 maps. Exit 1 if any scene errored.
+    if (cmd === 'smoke') {
+      const only = opts.scene ? String(opts.scene).split(',') : null;
+      const scenes = Object.keys(SCENE_SPAWN).filter((s) => !only || only.includes(s));
+      const rows = [];
+      let bad = 0;
+      for (const scene of scenes) {
+        errBuf.length = 0;
+        const seed = { v: 2, scene, ...SCENE_SPAWN[scene], canFish: true, money: 50000, visited: [scene], ...(SCENE_EXTRA[scene] || {}) };
+        await page.evaluate((s) => localStorage.setItem('lab-save', JSON.stringify(s)), seed);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        let landed = '?', overlay = 'none';
+        try {
+          await page.waitForFunction(() => !!window.__lab, null, { timeout: 10000 });
+          await page.evaluate(() => {
+            const b = [...document.querySelectorAll('button')].find((x) => /^CONTINUE$/i.test(x.textContent.trim()));
+            if (b) b.click();
+          });
+          await page.waitForFunction(() => window.__lab.snapshot().screen === 'playing', null, { timeout: 8000 });
+          // clear any arrival overlay so it can't mask a draw-loop error
+          for (let i = 0; i < 4; i++) {
+            const snap = await page.evaluate(() => window.__lab.snapshot());
+            if (!snap.overlay) break;
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(140);
+          }
+          await page.waitForTimeout(Number(opts.wait || 500));
+          const snap = await page.evaluate(() => window.__lab.snapshot());
+          landed = snap.scene; overlay = snap.overlay || 'none';
+        } catch (e) {
+          errBuf.push(`reach-fail: ${e.message.split('\n')[0]}`);
+        }
+        const errs = [...new Set(errBuf)];
+        if (errs.length || landed !== scene) bad++;
+        rows.push({ scene, landed, overlay, errs });
+        process.stderr.write(`  ${landed === scene && !errs.length ? '✓' : '✗'} ${scene}\n`);
+      }
+      process.stdout.write(JSON.stringify({ ok: bad === 0, total: scenes.length, failed: bad, scenes: rows }, null, 2) + '\n');
+      if (bad) process.exitCode = 1;
+      return;
+    }
+
     const save = await loadSaveArg(opts.save);
     if (opts.scale) await page.evaluate((s) => localStorage.setItem('lab-scale', String(s)), opts.scale);
     if (opts.save !== undefined) {
@@ -184,6 +259,17 @@ async function main() {
       }, startBtn);
       if (!clicked) throw new Error('no start button found on the title screen');
       process.stderr.write(`• clicked ${clicked}\n`);
+      // NEW GAME opens the "what's your vibe?" character picker (still screen:title).
+      // Click its START › so a fresh game actually reaches gameplay.
+      if (/NEW GAME/i.test(clicked)) {
+        const started = await page.evaluate(() => {
+          const btn = [...document.querySelectorAll('button')]
+            .find((b) => /START/i.test(b.textContent.trim()));
+          if (btn) { btn.click(); return true; }
+          return false;
+        });
+        if (started) process.stderr.write('• picked vibe → START\n');
+      }
       // The start transition covers ~1.4s before gameplay is interactive.
       await page.waitForFunction(() => window.__lab.snapshot().screen === 'playing', null, { timeout: 8000 });
       await page.waitForTimeout(400);

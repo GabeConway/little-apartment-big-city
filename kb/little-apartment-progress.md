@@ -8,6 +8,29 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 
 > History below (Parts A–v3.6) = as-built record from `personalsite` era. Part A ("Games section") portfolio-only, no longer applies to standalone repo.
 
+## Session 2026-06-27 — hardcore playtest + review + harness upgrades (on `dev`)
+Full QA sweep: playtested every system, code+perf review (incl. parallel compressed
+subagents), tooling upgrades. No softlocks, dead-ends, or economy exploits found.
+- [x] **Playtest sweep** — all **19 scenes** render with zero runtime errors; all phone
+  apps open (Bag/Messages/ZamaZonk/Trophies/Journal/Skills/Friends/Music/Settings; "Codes"
+  is nested in Settings, not a home app); movement, warps, and the apartment→city door all sound.
+- [x] **Perf fix — mines flashlight gradient cached** (`mineDarkRef`): was `createRadialGradient`
+  **every frame** (the KB-banned pattern). Now built once per light-radius, `translate`d to the
+  player, flicker on `globalAlpha`. Only per-frame radial-gradient regression in the draw loop;
+  rest of the hot path (signs/glows/sky/sun gradients) verified still cached.
+- [x] **Defensive fixes** — greenhouse `growGreenhouse` guards day 1 so a fresh plot's
+  `wateredDay:0` can't read as watered (`s.day > 1 &&`); gamepad analog dead-zone now inclusive
+  (`<=`/`>=`) so exactly ±0.5 registers.
+- [x] **Playtest harness upgrades** (for Claude QA, see [playtesting.md](playtesting.md)):
+  `--new` now clicks through the new "what's your vibe?" picker (was timing out → fresh games
+  unreachable); `SCENE_SPAWN` expanded **6 → all 19 scenes** + `SCENE_EXTRA` unlock flags so
+  any scene is one `--save <scene>` away; new **`smoke`** command sweeps every scene for runtime
+  errors in one run (exit 1 on any failure) — fast post-draw-change regression guard.
+- [x] **Docs** — logged here; mines perf note + Map/fast-travel feature idea added to kb.
+- Verified: `tsc`/`npm test` (113)/`build` clean; `smoke` 19/19 green; mines re-screenshotted.
+- Note: bundle is one 590 KB JS chunk (180 KB gzip). Fine for a Tauri-bundled local app (no
+  network fetch) — Vite's split warning is **not** worth acting on here; left as-is.
+
 ## Session 2026-06-26 — cozy polish + interaction fixes (on `dev`)
 - [x] **Ambient soundscapes** (asset-free WebAudio, `ambientSet` driven from the draw loop): shore surf swell + gull caws, mine drips, rain-on-glass at home; layered over music, honors mute.
 - [x] **Home trophy shelf** — wall plank (`f-shelf`, `SHELF_SLOT`) auto-appears with ≥1 gachapon figure; renders one toy (`fig-0..9`) per owned figure; `trophy-shelf` interact lists the collection.

@@ -32,6 +32,16 @@ scale), `money`, `day`, `energy`, `timeMin`, and full `save` object.
 - `state` — same flow, **no** screenshot; print snapshot only.
 - `title` — stay on title screen (don't click start). Pair with `--click`.
 - `presets` — list built-in save presets.
+- `smoke` — **sweep every scene** for runtime errors. Teleports into all 19 maps
+  (or a `--scene a,b,c` subset), dismisses the arrival overlay, waits, and reports
+  `{ok, total, failed, scenes:[{scene, landed, overlay, errs[]}]}` as JSON. **Exit 1
+  if any scene errors or fails to load** — one command CI-checks that nothing crashes
+  on render. Fast regression guard after touching draw/scene code:
+  `node scripts/playtest.mjs smoke --wait 450`.
+
+> **`--new` now reaches gameplay.** NEW GAME opens a "what's your vibe?" character
+> picker (screen stays `title` until you pick + START). The harness auto-clicks its
+> START › after NEW GAME, so `--new` / `--save new` land in a fresh apartment again.
 
 ## Options
 | flag | meaning |
@@ -43,6 +53,7 @@ scale), `money`, `day`, `energy`, `timeMin`, and full `save` object.
 | `--key-delay <ms>` | gap between `--keys` presses (default 140). |
 | `--click "TEXT"` | click first button whose label contains TEXT (menus, panels, shops). Runs **after** `--keys`, so press E to open a menu then click its button; polls ~2s for the button to mount. **Comma = click SEQUENCE** (`"A,B"` clicks A then B) — a label containing a comma (e.g. `¥6,000`) breaks; match a comma-free substring (`¥6`). |
 | `--keep-overlay` | don't auto-dismiss arrival story letter (cleared by default so it can't eat input). |
+| `--scene <a,b,c>` | (`smoke` only) limit the sweep to these scenes; omit to sweep all 19. |
 | `--scale <auto\|1..6>` | seed `lab-scale` (DISPLAY option). |
 | `--wait <ms>` | settle time before snapshot/screenshot. |
 | `--out <file>` | screenshot path (default `playtest/shot-<ts>.png`, gitignored). |
@@ -53,11 +64,15 @@ scale), `money`, `day`, `energy`, `timeMin`, and full `save` object.
 | `--assert "<expr>"` | eval JS boolean against snapshot (keys `money`/`scene`/`day`/`overlay`/… + full `save` in scope). Exit 1 on fail/error — CI/agent-checkable without parsing JSON. |
 
 ## Save presets (`PRESETS` in script)
-`new`, `rich`, `fisher`, `explorer`, `lowenergy`, plus **teleports**:
-`apartment`, `city`, `shore`, `denden`, `konbini`, `badtown` (each sets `scene`
-+ safe spawn tile from `maps.ts` warp targets, `canFish`, some cash). Add more
-by editing `PRESETS`/`SCENE_SPAWN`. For one-offs use `--save @my.json` or inline
-`--save '{"money":50000,"wand":true}'`.
+`new`, `rich`, `fisher`, `explorer`, `lowenergy`, plus **teleports for all 19
+scenes**: `apartment`, `city`, `denden`, `konbini`, `pawn`, `gacha`, `greenhouse`,
+`shore`, `badtown`, `shrine`, `nightclub`, `garage`, `casino`, `museum`,
+`backrooms`, `mines`, `island`, `deepsea`, `paris` (each sets `scene` + safe spawn
+tile from `maps.ts` warp targets, `canFish`, cash). Gated scenes also seed the
+unlock flags they need via `SCENE_EXTRA` (e.g. `mines`/`backrooms` → `backroomsUnlocked`+`wand`,
+`casino` → `gangPaid`, `paris` → `parisRevealed`, `island`/`deepsea` → boat). Add
+more by editing `SCENE_SPAWN`/`SCENE_EXTRA`. For one-offs use `--save @my.json` or
+inline `--save '{"money":50000,"wand":true}'`.
 
 > Teleport elsewhere: any save with `scene` + `px`/`py` works — `begin()`
 > reads them. Use warp target's `tx,ty` (×16) from `maps.ts` for walkable tile.

@@ -23,6 +23,13 @@ minigame. Add customer types / a second venue shift (café, greenhouse stall) so
 income loop isn't one rhythm. Data-driven off the existing shift model.
 
 ## Smaller charm
+- **Phone "Map" / fast-travel app** 🗺️ — *low-medium*. With 19 scenes the cross-map
+  walk is the main friction in long sessions (surfaced in the 2026-06-27 playtest sweep).
+  Add a Map app to the phone home grid (alongside Bag/Messages/…): a list/grid of
+  **visited** outdoor hubs (`save.visited`) that warps there via the existing
+  `runTransition`/`begin()` path. Gate it behind a cheap unlock (a bus pass, or always-on)
+  and only allow travel from/to outdoor scenes so it can't skip gated content. Reuses
+  the `PhoneApp` tab system + `SCENE_MUSIC`/scene-warp — no new systems.
 - **Pet variety** — more strays beyond David the cat (a shore dog, a shrine fox);
   each a `catRef`-style roamer with its own lines. Reuses the cat entity system.
 - **Physical mail** — letters in a home mailbox alongside phone texts; some quests
