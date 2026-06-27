@@ -2612,10 +2612,14 @@ const buildDecorFood = (atlas: Atlas) => {
 
   // ===== D. Wallpaper tiles (16x16, fill, seamless all directions) ========
   atlas['t-wall-cream'] = tile(ctx => {
-    // warm cream plaster, faint vertical pinstripe (period 4 = seamless).
+    // warm cream plaster, pinstripe (period 4) + a damask sprig on the 8px grid
+    // (both seamless). 16%4 and 16%8 == 0, so the wall tiles cleanly.
     fill(ctx, '#e8e0d0');
-    ctx.fillStyle = '#dcd2bb'; for (let x = 3; x < 16; x += 4) ctx.fillRect(x, 0, 1, 16);
-    ctx.fillStyle = '#f0e9d8'; ctx.fillRect(1, 0, 1, 16);
+    ctx.fillStyle = '#dcd2bb'; for (let x = 3; x < 16; x += 4) ctx.fillRect(x, 0, 1, 16); // shadow pinstripe
+    ctx.fillStyle = '#f0e9d8'; for (let x = 1; x < 16; x += 4) ctx.fillRect(x, 0, 1, 16); // lit pinstripe
+    ctx.fillStyle = '#dccfb0';                                                            // damask sprig (8px grid)
+    for (const [cx, cy] of [[2, 3], [10, 11]]) { ctx.fillRect(cx, cy - 1, 1, 1); ctx.fillRect(cx - 1, cy, 3, 1); ctx.fillRect(cx, cy + 1, 1, 1); }
+    ctx.fillStyle = '#f2ecdc'; ctx.fillRect(2, 3, 1, 1); ctx.fillRect(10, 11, 1, 1);      // sprig highlight
     speckle(ctx, '#ddd3bd', 41, 5);
   });
   atlas['t-wall-wood'] = tile(ctx => {
@@ -2630,25 +2634,31 @@ const buildDecorFood = (atlas: Atlas) => {
     speckle(ctx, '#7a5638', 47, 4);
   });
   atlas['t-wall-mint'] = tile(ctx => {
-    // soft sage with a faint diamond/dot motif on an 8px grid (seamless).
+    // soft sage with a diamond trellis + leaf accents on an 8px grid (seamless).
     fill(ctx, '#aed8c6');
     ctx.fillStyle = '#9cc8b4'; ctx.fillRect(0, 0, 16, 16);
-    ctx.fillStyle = '#aed8c6'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 0, 1, 16);   // subtle lit
-    ctx.fillStyle = '#88b8a4';                                                         // diamond dots
-    ctx.fillRect(4, 3, 1, 1); ctx.fillRect(3, 4, 3, 1); ctx.fillRect(4, 5, 1, 1);      // diamond @ (4,4)
-    ctx.fillRect(12, 11, 1, 1); ctx.fillRect(11, 12, 3, 1); ctx.fillRect(12, 13, 1, 1);// diamond @ (12,12)
-    ctx.fillStyle = '#b8e0ce'; ctx.fillRect(12, 4, 1, 1); ctx.fillRect(4, 12, 1, 1);   // tiny dot highlights
+    ctx.fillStyle = '#a6d2c0'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 0, 1, 16);   // subtle lit
+    ctx.fillStyle = '#88b8a4';                                                         // diamonds @ (4,4),(12,12)
+    for (const [cx, cy] of [[4, 4], [12, 12]]) { ctx.fillRect(cx, cy - 1, 1, 1); ctx.fillRect(cx - 1, cy, 3, 1); ctx.fillRect(cx, cy + 1, 1, 1); }
+    ctx.fillStyle = '#7aa896'; ctx.fillRect(12, 4, 1, 2); ctx.fillRect(4, 12, 1, 2);   // leaf accents (offset)
+    ctx.fillStyle = '#b8e0ce'; ctx.fillRect(12, 3, 1, 1); ctx.fillRect(4, 11, 1, 1);   // dot highlights
+    speckle(ctx, '#a2cebb', 53, 4);
   });
   atlas['t-wall-sakura'] = tile(ctx => {
-    // pale pink with sparse cherry-blossom petals (interior = seamless).
+    // pale pink with full 5-petal cherry blossoms on the 8px grid (seamless).
     fill(ctx, '#f0cfe0');
     ctx.fillStyle = '#f6dcea'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 0, 1, 16);
-    speckle(ctx, '#e8c2d8', 59, 4);
-    ctx.fillStyle = '#e857a8';                                                         // petals (4-pixel blossoms)
-    ctx.fillRect(4, 4, 1, 1); ctx.fillRect(3, 5, 1, 1); ctx.fillRect(5, 5, 1, 1);
-    ctx.fillRect(11, 9, 1, 1); ctx.fillRect(10, 10, 1, 1); ctx.fillRect(12, 10, 1, 1);
-    ctx.fillStyle = '#f6b4dc'; ctx.fillRect(4, 5, 1, 1); ctx.fillRect(11, 10, 1, 1);   // petal centers
-    ctx.fillStyle = '#e857a8'; ctx.fillRect(8, 12, 1, 1);                              // stray petal
+    ctx.fillStyle = '#e6c0d6'; ctx.fillRect(0, 8, 16, 1);                              // faint tonal band
+    speckle(ctx, '#e8c2d8', 59, 5);
+    const bloom = (x: number, y: number) => {                                          // 5 petals + lit center
+      ctx.fillStyle = '#e857a8';
+      ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1); ctx.fillRect(x, y + 1, 1, 1); ctx.fillRect(x - 1, y - 1, 1, 1);
+      ctx.fillStyle = '#f6b4dc'; ctx.fillRect(x, y, 1, 1);
+      ctx.fillStyle = '#ffe9a0'; ctx.fillRect(x + 1, y - 1, 1, 1);                      // stamen fleck
+    };
+    bloom(4, 4); bloom(12, 12);
+    ctx.fillStyle = '#d98ab0'; ctx.fillRect(9, 3, 2, 1); ctx.fillRect(10, 4, 1, 1);    // bud + twig hint
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(0, 12, 1, 1); ctx.fillRect(15, 6, 1, 1);   // stray petals (seamless pair)
   });
   atlas['t-wall-navy'] = tile(ctx => {
     // cosy night-sky wall: deep navy with sparse warm star specks.
@@ -2975,10 +2985,14 @@ const buildFurniture = (atlas: Atlas) => {
   });
   atlas['prop-campfire'] = tile(ctx => {                            // transparent bg — overlays sand
     ctx.fillStyle = '#4a3120'; ctx.fillRect(3, 11, 10, 2); ctx.fillRect(4, 9, 9, 2); // logs
-    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 11, 10, 1);
-    ctx.fillStyle = '#e0552e'; ctx.fillRect(6, 4, 4, 7);            // flame outer
-    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 6, 2, 4);            // flame mid
-    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 8, 1, 2);           // flame core
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 11, 10, 1);          // log lit edge
+    ctx.fillStyle = '#2c1c10'; ctx.fillRect(3, 12, 10, 1);          // log shadow
+    ctx.fillStyle = 'rgba(255,150,60,0.18)'; ctx.fillRect(4, 2, 8, 9); // glow halo
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(6, 5, 4, 6); ctx.fillRect(7, 3, 2, 2); // flame outer (tapered tongue)
+    ctx.fillStyle = '#e0552e'; ctx.fillRect(6, 6, 3, 4); ctx.fillRect(8, 5, 1, 3);  // flame body
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 7, 2, 3);           // flame mid
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 8, 1, 2);          // flame core
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 10, 1, 1); ctx.fillRect(11, 10, 1, 1); // embers
   });
   // ---- Daily street-event props (transparent bg — overlay the sidewalk/grass) ----
   atlas['prop-yatai'] = tile(ctx => {                               // traveling ramen cart
@@ -3023,12 +3037,15 @@ const buildFurniture = (atlas: Atlas) => {
   });
   atlas['prop-ferret'] = tile(ctx => {                             // a lost ferret darting in the grass
     ctx.fillStyle = '#e0d4b8'; ctx.fillRect(4, 9, 7, 3);          // cream body
-    ctx.fillStyle = '#cabd9c'; ctx.fillRect(4, 11, 7, 1);
-    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(10, 8, 3, 2);         // brown head
-    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 9, 3, 2);          // bushy tail
-    ctx.fillStyle = '#5a3c24'; ctx.fillRect(11, 7, 1, 1);         // ear
-    ctx.fillStyle = '#222'; ctx.fillRect(12, 8, 1, 1);            // eye
-    ctx.fillStyle = '#16100a'; ctx.fillRect(13, 9, 1, 1);         // nose
+    ctx.fillStyle = '#f0e8d2'; ctx.fillRect(4, 9, 7, 1);         // back highlight
+    ctx.fillStyle = '#cabd9c'; ctx.fillRect(4, 11, 7, 1);        // belly shade
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(10, 8, 3, 3);       // brown head
+    ctx.fillStyle = '#a3825a'; ctx.fillRect(10, 8, 3, 1);       // head lit
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(2, 8, 3, 3);        // bushy tail
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(2, 8, 1, 3);        // tail tip
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(11, 7, 1, 1);       // ear
+    ctx.fillStyle = '#16181d'; ctx.fillRect(12, 8, 1, 1);       // eye
+    ctx.fillStyle = '#16100a'; ctx.fillRect(13, 9, 1, 1);       // nose
     ctx.fillStyle = '#cabd9c'; ctx.fillRect(5, 12, 1, 1); ctx.fillRect(8, 12, 1, 1); // little legs
   });
   atlas['f-maneki'] = tile(ctx => {
@@ -3281,60 +3298,73 @@ const buildTrophies = (atlas: Atlas) => {
   const R = (ctx: CanvasRenderingContext2D, c: string, x: number, y: number, w: number, h: number) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
 
   atlas['fig-0'] = toy(ctx => { // Salaryman Cat
-    R(ctx, '#8a8e96', 4, 7, 3, 5); R(ctx, '#9aa0a8', 4, 7, 3, 1);       // body
+    R(ctx, '#7a818c', 4, 7, 3, 5); R(ctx, '#9aa0a8', 4, 7, 3, 1); R(ctx, '#5d646e', 6, 7, 1, 5); // suit body ramp
+    R(ctx, '#e8e0d0', 5, 7, 1, 2);                                      // dress shirt
     R(ctx, '#c0392b', 5, 8, 1, 3);                                      // tie
-    R(ctx, '#8a8e96', 3, 2, 5, 5); R(ctx, '#9aa0a8', 3, 2, 5, 1);       // head
+    R(ctx, '#8a8e96', 3, 2, 5, 5); R(ctx, '#9aa0a8', 3, 2, 5, 1); R(ctx, '#767d87', 3, 6, 5, 1); // head ramp
     R(ctx, '#8a8e96', 2, 1, 2, 2); R(ctx, '#8a8e96', 7, 1, 2, 2);       // ears
-    R(ctx, '#e8a0a0', 3, 2, 1, 1); R(ctx, '#e8a0a0', 7, 2, 1, 1);
+    R(ctx, '#e8a0a0', 3, 1, 1, 1); R(ctx, '#e8a0a0', 8, 1, 1, 1);       // inner ears
     R(ctx, '#16181d', 4, 4, 1, 1); R(ctx, '#16181d', 6, 4, 1, 1);       // eyes
+    R(ctx, '#caa27c', 5, 5, 1, 1);                                      // muzzle
   });
   atlas['fig-1'] = toy(ctx => { // Tower Crab
-    R(ctx, '#c0392b', 2, 7, 7, 4); R(ctx, '#e0594b', 2, 7, 7, 1);       // shell
+    R(ctx, '#c0392b', 2, 7, 7, 4); R(ctx, '#e0594b', 2, 7, 7, 1); R(ctx, '#9e3a2e', 2, 10, 7, 1); // shell ramp
+    R(ctx, '#8e2a1e', 4, 8, 3, 1);                                      // shell crease
     R(ctx, '#c0392b', 1, 5, 2, 2); R(ctx, '#c0392b', 8, 5, 2, 2);       // claws
+    R(ctx, '#e0594b', 1, 5, 1, 1); R(ctx, '#e0594b', 8, 5, 1, 1);       // claw highlight
     R(ctx, '#16181d', 3, 4, 1, 2); R(ctx, '#16181d', 7, 4, 1, 2);       // eye stalks
-    R(ctx, '#c0392b', 2, 11, 1, 1); R(ctx, '#c0392b', 5, 11, 1, 1); R(ctx, '#c0392b', 8, 11, 1, 1); // legs
+    R(ctx, '#fff', 3, 4, 1, 1); R(ctx, '#fff', 7, 4, 1, 1);            // eye shine
+    R(ctx, '#9e3a2e', 2, 11, 1, 1); R(ctx, '#9e3a2e', 5, 11, 1, 1); R(ctx, '#9e3a2e', 8, 11, 1, 1); // legs
   });
   atlas['fig-2'] = toy(ctx => { // Drift King (car)
-    R(ctx, '#c9a227', 1, 7, 9, 3); R(ctx, '#e8c84a', 1, 7, 9, 1);       // body
-    R(ctx, '#9fc4e8', 3, 4, 5, 3);                                      // cabin
-    R(ctx, '#222', 2, 10, 3, 2); R(ctx, '#222', 6, 10, 3, 2);          // wheels
+    R(ctx, '#c9a227', 1, 7, 9, 3); R(ctx, '#e8c84a', 1, 7, 9, 1); R(ctx, '#a8841c', 1, 9, 9, 1); // body ramp
+    R(ctx, '#9fc4e8', 3, 4, 5, 3); R(ctx, '#c7e0f4', 3, 4, 2, 1);       // cabin + shine
+    R(ctx, '#3a4250', 3, 4, 1, 3);                                      // A-pillar
+    R(ctx, '#ffe9a0', 9, 7, 1, 1);                                      // headlight
+    R(ctx, '#16181d', 2, 10, 3, 2); R(ctx, '#16181d', 6, 10, 3, 2);    // wheels
+    R(ctx, '#6e7682', 3, 10, 1, 1); R(ctx, '#6e7682', 7, 10, 1, 1);    // hubs
   });
   atlas['fig-3'] = toy(ctx => { // Melon Soda-kun (bottle)
-    R(ctx, '#3dbf6a', 3, 4, 4, 8); R(ctx, '#5ad88a', 3, 4, 1, 8);       // body + shine
+    R(ctx, '#3dbf6a', 3, 4, 4, 8); R(ctx, '#5ad88a', 3, 4, 1, 8); R(ctx, '#2e9a52', 6, 4, 1, 8); // body ramp
     R(ctx, '#3dbf6a', 4, 2, 2, 2);                                      // neck
     R(ctx, '#c0392b', 4, 1, 2, 1);                                      // cap
     R(ctx, '#fff', 4, 7, 2, 2);                                         // label
+    R(ctx, '#aef0c4', 4, 5, 1, 1); R(ctx, '#aef0c4', 5, 9, 1, 1);      // bubbles
   });
   atlas['fig-4'] = toy(ctx => { // Pixel Gabe
-    R(ctx, '#e0b48a', 4, 2, 3, 3);                                      // head
-    R(ctx, '#4a3120', 4, 1, 3, 1);                                      // hair
+    R(ctx, '#e0b48a', 4, 2, 3, 3); R(ctx, '#f0c8a0', 4, 2, 3, 1); R(ctx, '#caa27c', 4, 4, 3, 1); // head ramp
+    R(ctx, '#4a3120', 4, 1, 3, 1); R(ctx, '#3a2716', 4, 1, 1, 2);       // hair
     R(ctx, '#16181d', 4, 3, 1, 1); R(ctx, '#16181d', 6, 3, 1, 1);       // eyes
-    R(ctx, '#3a6ea5', 3, 5, 5, 5); R(ctx, '#4a7eb5', 3, 5, 5, 1);       // shirt
+    R(ctx, '#3a6ea5', 3, 5, 5, 5); R(ctx, '#4a7eb5', 3, 5, 5, 1); R(ctx, '#2e5685', 3, 9, 5, 1); // shirt ramp
+    R(ctx, '#caa27c', 3, 6, 1, 2); R(ctx, '#caa27c', 7, 6, 1, 2);       // arms
     R(ctx, '#2c3038', 3, 10, 2, 2); R(ctx, '#2c3038', 6, 10, 2, 2);     // legs
   });
   atlas['fig-5'] = toy(ctx => { // Konbini Ghost
-    R(ctx, '#eef0f4', 3, 3, 5, 7); R(ctx, '#fff', 3, 3, 5, 1);          // body
+    R(ctx, '#eef0f4', 3, 3, 5, 7); R(ctx, '#fff', 3, 3, 5, 1); R(ctx, '#d4d8e0', 3, 9, 5, 1); // body ramp
     R(ctx, '#3a4452', 4, 5, 1, 2); R(ctx, '#3a4452', 6, 5, 1, 2);       // eyes
+    R(ctx, '#9fb0c4', 5, 7, 1, 1);                                      // tiny mouth
     R(ctx, '#eef0f4', 3, 10, 1, 1); R(ctx, '#eef0f4', 5, 10, 1, 1); R(ctx, '#eef0f4', 7, 10, 1, 1); // tail
   });
   atlas['fig-6'] = toy(ctx => { // Mini Golden Carp
-    R(ctx, '#ffd24a', 3, 4, 4, 7); R(ctx, '#ffe9a0', 3, 4, 4, 1);       // body
-    R(ctx, '#e0a000', 2, 9, 6, 2);                                      // tail fan
+    R(ctx, '#ffd24a', 3, 4, 4, 7); R(ctx, '#ffe9a0', 3, 4, 4, 1); R(ctx, '#e0a000', 3, 9, 4, 1); // body ramp
+    R(ctx, '#e0a000', 2, 9, 6, 2); R(ctx, '#ffd24a', 3, 10, 2, 1);      // tail fan + highlight
+    R(ctx, '#c98a00', 4, 7, 2, 1);                                      // scale shade
     R(ctx, '#16181d', 4, 5, 1, 1);                                      // eye
   });
   atlas['fig-7'] = toy(ctx => { // Robot Vacuum
-    R(ctx, '#2c3038', 1, 8, 9, 3); R(ctx, '#3a4250', 1, 8, 9, 1);       // disc
-    R(ctx, '#5ad8d0', 4, 9, 2, 1);                                      // sensor light
-    R(ctx, '#16181d', 1, 11, 9, 1);                                     // base shade
+    R(ctx, '#3a4250', 1, 8, 9, 3); R(ctx, '#4a5666', 1, 8, 9, 1); R(ctx, '#16181d', 1, 10, 9, 1); // disc ramp
+    R(ctx, '#5ad8d0', 4, 9, 3, 1); R(ctx, '#aef4f0', 4, 9, 1, 1);      // sensor light + glint
+    R(ctx, '#2c3038', 1, 8, 1, 3); R(ctx, '#2c3038', 9, 8, 1, 3);      // bumper edges
   });
   atlas['fig-8'] = toy(ctx => { // Bonsai Buddy
-    R(ctx, '#a0673a', 3, 9, 5, 3); R(ctx, '#b87a48', 3, 9, 5, 1);       // pot
+    R(ctx, '#a0673a', 3, 9, 5, 3); R(ctx, '#b87a48', 3, 9, 5, 1); R(ctx, '#7a4e2a', 3, 11, 5, 1); // pot ramp
     R(ctx, '#5a3a24', 5, 6, 1, 3);                                      // trunk
-    R(ctx, '#3d8a4a', 2, 3, 7, 4); R(ctx, '#56a85e', 2, 3, 7, 1);       // canopy
+    R(ctx, '#3d8a4a', 2, 3, 7, 4); R(ctx, '#56a85e', 2, 3, 7, 1); R(ctx, '#2e6e38', 2, 6, 7, 1); // canopy ramp
+    R(ctx, '#6fc070', 3, 3, 2, 1); R(ctx, '#6fc070', 6, 4, 2, 1);      // sun-lit leaves
   });
   atlas['fig-9'] = toy(ctx => { // UFO Catcher
-    R(ctx, '#8a96a0', 1, 6, 9, 3); R(ctx, '#aab4bc', 1, 6, 9, 1);       // saucer
-    R(ctx, '#9fc4e8', 3, 3, 5, 3);                                      // dome
+    R(ctx, '#8a96a0', 1, 6, 9, 3); R(ctx, '#aab4bc', 1, 6, 9, 1); R(ctx, '#6e7882', 1, 8, 9, 1); // saucer ramp
+    R(ctx, '#9fc4e8', 3, 3, 5, 3); R(ctx, '#c7e0f4', 3, 3, 2, 1);       // dome + shine
     R(ctx, '#ffd24a', 2, 9, 1, 1); R(ctx, '#ffd24a', 5, 9, 1, 1); R(ctx, '#ffd24a', 8, 9, 1, 1); // lights
     R(ctx, '#8a96a0', 5, 9, 1, 3);                                      // claw stem
   });
