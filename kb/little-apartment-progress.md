@@ -8,6 +8,20 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 
 > History below (Parts A–v3.6) = as-built record from `personalsite` era. Part A ("Games section") portfolio-only, no longer applies to standalone repo.
 
+## Session 2026-06-26 — cozy polish + interaction fixes (on `dev`)
+- [x] **Ambient soundscapes** (asset-free WebAudio, `ambientSet` driven from the draw loop): shore surf swell + gull caws, mine drips, rain-on-glass at home; layered over music, honors mute.
+- [x] **Home trophy shelf** — wall plank (`f-shelf`, `SHELF_SLOT`) auto-appears with ≥1 gachapon figure; renders one toy (`fig-0..9`) per owned figure; `trophy-shelf` interact lists the collection.
+- [x] **Jukebox gated** — Music phone app hidden until you buy the Home Jukebox from DJ Tanuki (`JUKEBOX_PRICE` ¥8k, `save.jukeboxUnlocked`); old saves with a `homeTrack` grandfathered.
+- [x] **Rainy days → rare fish** — `isRainyDay` adds a +0.8 bite boost to value≥500 fish (stacks with shrine/rod/skill).
+- [x] **Cat redrawn** — David is now a side-profile sitting cat + 2-frame walk (was a front-facing blob).
+- [x] **Talk-first interaction** — removed the TALK/GIFT chooser (`npcchoice` gone); E always talks, and the final dialog line offers a trailing **🎁 Give a gift** action (and Done). **Done is the default-focused button** so a normal press ends the chat; move over to gift. E activates the focused button for keyboard/pointer (gamepad via `useUiNav`).
+- [x] **Tex sells directly** — removed his hat ShopFrame (`shop:'hat'` gone from `ShopId`); buys via a `Buy · ¥6,700` dialog action.
+- [x] **Merchant gifting restored** — Genji/Lulu/Manager (shop-on-E friends) get a 🎁 button inside their stalls (regression fix from the talk-first change).
+- [x] **Fluid greenhouse watering** — one-press water when facing a dry planted bed (no menu) + a `💧 Water all` button (`waterAllPlots`).
+- [x] **Respectful Yoshi** — shrine pass-out rescue dialog reworked for genuine Shinto tone (kami, harae, care for a guest).
+- [x] **Signs mounted in-world** — cached sign sprites now framed beveled plates with drop shadows + corner rivets + lit-neon boxes (no per-frame glyph walking; Naganoshi/Latin handling preserved).
+- All verified: `tsc`/`npm test` (113)/`build` clean + playtest screenshots. Built partly via parallel worktree subagents (cat, signs) cherry-picked in.
+
 ## Feature pass (2026-06-23) — buildings, dialogue, fishing, art
 - [x] **Nakatomi Apartments** rename (Die Hard nod): facade `t-apt-wall` + gold tile sign `t-nakatomi-l/r` (in-tile FONT3x5 micro-font) + planters; removed the old overlapping `MAISON KAWA` SCENE_SIGNS entry.
 - [x] **Torii** slimmed (thinner posts/base); **shrine grounds** glow-up (sakura/maple/toro lanterns/komainu/stone path/upgraded offering box); **water** depth (layered bands + shimmer/foam); **grass** depth (extra speckle + `t-grass-v2` clover/daisy).
@@ -24,7 +38,7 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 - [x] **Konbini shift minigame** — "Register Rush": replaces the time-skip with a SCAN→BAG→CHANGE QTE over 6 customers; combo tips, fumble loses the tip, pay capped ~¥2400 (`shiftRef`, module model in the component).
 - [x] **Polish**: museum moved from the ugly bottom-left block to a proper far-right Downtown storefront (dark facade + gold marquee, walk-up door; badtown widened to 38 cols); odd-jobs board grass base added (killed the black-edge tile).
 - [x] **Greenhouse rework + polish pass**: one Granny Soto (wanders the city, gives the greenhouse via a fish errand with a **GIVE/KEEP prompt**); greenhouse is a gated **walk-in** (no E), how-to poster inside, no signs; errands gated to reachable items + a give-prompt (quest items are never auto-taken); shore finds now bob + sparkle so they're obviously grabbable; dialogue types with a faint click-clack (`sfxType`); shrine sign removed (just "Shrine"), miko named **Yoshi**, lanterns softly glow at night; README refreshed + hero screenshots regenerated.
-- [ ] **Future**: museum collectible items (wire `donateToMuseum`); more greenhouse crops; portraits for more NPCs; more shift-minigame variety/customers.
+- [x] **Done since**: museum collectibles now LIVE (12, earned multiple ways); greenhouse 2.0 added many crops (`CROPS`); portraits added for Genji/Manager/Jean-Pierre/Yoshi/David/Charlie. Still open → more shift-minigame variety (moved to [kb/future-ideas.md](future-ideas.md)).
 
 ## Part A — Games section (done earlier, unchanged)
 - [x] Navbar Games tab, `/games` hub (hash views), `/about-me` redirect, GabeOsDesk extraction, link repoints, InterestsPage deleted
@@ -62,10 +76,9 @@ Hub logo · placement flow (box→place→put away) · v2 migration guard · fre
 See "Hard rules" in kb/games.md. Plus: injected test saves need `v:2` and relevant `storySeen` or queued story letter eats input.
 
 ## Future adds (documented, not built)
-- [ ] Badtown street + gacha-hall… gacha now own track; badtown street still default — dedicated badtown theme welcome
+- [x] Badtown has its own theme (`badside.mp3`); gacha its own track.
 - [ ] Real-device touch pass (D-pad rendered on coarse pointers; desktop-verified only)
 - [ ] Cosmetic: city path north of apartment building dead-ends
-- [ ] Commit + PR (user drives)
 
 ## v3 wave (2026-06-12, late)
 - [x] Shrine = own grounds scene + miko; island = tiki bar + 3 coconut palms (collect/eat/sell); deepsea = sail bay, cast anywhere
