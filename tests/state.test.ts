@@ -9,7 +9,7 @@ import {
   mineChallengeFor, enterMineStreak, crackGeode, lootVault, isVaultFloor, VAULT_MIN_FLOOR,
   unlockGameAch, dayEventFor, shoreForageFor,
   isRainyDay, foggyDay, meteorNight,
-  plantCrop, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
+  plantCrop, clearPlot, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
   streetEventFor, streetEventDoneToday,
   timeBlock, routineTargetFor, ROUTINES, type RoutineBlock,
 } from '../src/game/state';
@@ -435,6 +435,15 @@ describe('greenhouse', () => {
     expect(plotReady(s.greenhouse.plots[0])).toBe(false);
     // can't double-plant an occupied plot
     expect(plantCrop(s, 0, 'sunflower')).toBe(false);
+
+    // uproot clears the bed (no refund) so it can be replanted
+    expect(clearPlot(s, 0)).toBe(true);
+    expect(s.greenhouse.plots[0].crop).toBeNull();
+    expect(clearPlot(s, 0)).toBe(false); // nothing to clear now
+    expect(plantCrop(s, 0, 'sunflower')).toBe(true); // bed free again
+    expect(s.greenhouse.plots[0].crop).toBe('sunflower');
+    clearPlot(s, 0); // reset for the rest of the flow
+    s.greenhouse.seeds.sunflower = 2; plantCrop(s, 0, 'sunflower');
 
     // no sprinkler + not watered → a new morning stalls growth
     const day0 = s.day;

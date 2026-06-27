@@ -58,7 +58,7 @@ import {
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay, foggyDay, meteorNight, dayEventFor, DAY_EVENT_LABEL, type DayEvent, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
-  plotStage, waterPlot, waterAllPlots, applyFertilizer, sellShipping, buySeed, buySprinkler,
+  plotStage, waterPlot, clearPlot, applyFertilizer, sellShipping, buySeed, buySprinkler,
   buyFertilizer, expandBeds, upgradeGreenhouse, grantMoonSeed, seedShopFor, activeRequest,
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
@@ -160,32 +160,12 @@ const engineSet = (target: number, dt: number) => {
 };
 
 // ---- Ambient soundscape (WebAudio, asset-free) -----------------------------
-// A looping filtered-noise bed + scheduled one-shot accents, swapped by scene +
-// weather (shore waves & gulls / mine drips / rain-on-glass at home). Driven each
-// frame from the draw loop via `ambientSet`, like the rain loop. Honors mute.
+// Occasional one-shot ambient accents, swapped by scene (gull caws at the coast,
+// water drips in the mines). Driven each frame from the draw loop via `ambientSet`.
+// NOTE: the old continuous filtered-noise BED was removed — it was a long droning
+// layer that muddled the music. Only the short SFX accents remain. Honors mute.
 type AmbientKind = 'shore' | 'mine' | 'rainhome';
-let ambient:
-  | { kind: AmbientKind; src: AudioBufferSourceNode; filt: BiquadFilterNode; gain: GainNode; swell: number; accent: number }
-  | null = null;
-let noiseBuf: AudioBuffer | null = null;
-const ambientNoise = (ctx: AudioContext): AudioBuffer => {
-  if (noiseBuf) return noiseBuf;
-  const len = ctx.sampleRate * 2;
-  noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
-  const d = noiseBuf.getChannelData(0);
-  let last = 0;
-  for (let i = 0; i < len; i++) { // brown-ish noise — smoother/warmer than white
-    const w = Math.random() * 2 - 1;
-    last = (last + 0.02 * w) / 1.02;
-    d[i] = last * 3.2;
-  }
-  return noiseBuf;
-};
-const AMBIENT_CFG: Record<AmbientKind, { freq: number; q: number; vol: number }> = {
-  shore: { freq: 520, q: 0.7, vol: 0.05 },     // low surf wash, swells in `ambientSet`
-  mine: { freq: 300, q: 0.4, vol: 0.016 },     // faint cave air + occasional drip
-  rainhome: { freq: 1500, q: 0.4, vol: 0.045 }, // rain pattering on the window glass
-};
+let ambient: { kind: AmbientKind; accent: number } | null = null;
 // distant gull — two quick downward caws
 const sfxGull = () => {
   if (readMuted() || !audioCtx) return;
@@ -220,47 +200,19 @@ const sfxDrip = () => {
     osc.start(t); osc.stop(t + 0.18);
   } catch { /* no audio */ }
 };
-const ambientStop = () => {
-  if (!ambient || !audioCtx) { ambient = null; return; }
-  const a = ambient; ambient = null;
-  try {
-    a.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.3);
-    a.src.stop(audioCtx.currentTime + 0.7);
-  } catch { /* already stopped */ }
-};
-// Set the active ambient bed (or null = silence). No-ops while the kind is
-// unchanged except to advance the swell/accent timers. `dt` = seconds since the
-// last call (clamped by the caller).
+const ambientStop = () => { ambient = null; };
+// Schedule occasional one-shot ambient accents for the scene (no continuous bed).
+// `dt` = seconds since the last call (clamped by the caller). Only `shore` (gulls)
+// and `mine` (drips) have accents; everything else is silent.
 const ambientSet = (kind: AmbientKind | null, dt: number) => {
-  if (readMuted() || !kind) { ambientStop(); return; }
-  try {
-    audioCtx = audioCtx || new AudioContext();
-    const ctx = audioCtx;
-    if (ambient && ambient.kind !== kind) ambientStop();
-    const cfg = AMBIENT_CFG[kind];
-    if (!ambient) {
-      const src = ctx.createBufferSource(); src.buffer = ambientNoise(ctx); src.loop = true;
-      const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = cfg.freq; filt.Q.value = cfg.q;
-      const gain = ctx.createGain(); gain.gain.value = 0;
-      src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
-      src.start();
-      gain.gain.setTargetAtTime(cfg.vol, ctx.currentTime, 0.8);
-      ambient = { kind, src, filt, gain, swell: 0, accent: 1.5 + Math.random() * 3 };
-    }
-    const a = ambient;
-    if (kind === 'shore') { // slow surf swell — volume + brightness breathe together
-      a.swell += dt * 0.45;
-      const s = Math.sin(a.swell) * 0.5 + 0.5;
-      a.gain.gain.setTargetAtTime(cfg.vol * (0.5 + 0.5 * s), ctx.currentTime, 0.2);
-      a.filt.frequency.setTargetAtTime(cfg.freq * (0.8 + 0.45 * s), ctx.currentTime, 0.2);
-    }
-    a.accent -= dt;
-    if (a.accent <= 0) {
-      if (kind === 'shore') { a.accent = 5 + Math.random() * 8; sfxGull(); }
-      else if (kind === 'mine') { a.accent = 3 + Math.random() * 7; sfxDrip(); }
-      else a.accent = 1e9; // rainhome: bed only, no accents
-    }
-  } catch { /* no audio */ }
+  if (readMuted() || !kind || (kind !== 'shore' && kind !== 'mine')) { ambientStop(); return; }
+  if (!ambient || ambient.kind !== kind) { ambient = { kind, accent: 2.5 + Math.random() * 4 }; return; }
+  const a = ambient;
+  a.accent -= dt;
+  if (a.accent <= 0) {
+    if (kind === 'shore') { a.accent = 7 + Math.random() * 10; sfxGull(); } // sparse gull caws
+    else { a.accent = 4 + Math.random() * 8; sfxDrip(); }                   // sparse mine drips
+  }
 };
 
 // One-shot sampled SFX (mp3). Cached + rewound so they can re-fire rapidly.
@@ -5317,12 +5269,9 @@ const LittleApartmentGame: React.FC = () => {
   const ghTick = () => { persistSave(saveRef.current); refreshHud(); setShopTick(v => v + 1); };
   const doPlantCrop = (cropId: string) => { if (plantCrop(saveRef.current, ghPlotRef.current, cropId)) { sfxBuy(); ghTick(); } };
   const doWaterPlot = () => { if (waterPlot(saveRef.current, ghPlotRef.current)) { sfxCoin(); ghTick(); } };
-  // Water every dry bed at once (free). Skips sprinkler-covered beds; one sfx + toast.
-  const doWaterAll = () => {
-    const n = waterAllPlots(saveRef.current);
-    if (n > 0) { sfxCoin(); ghTick(); showToast('💧 Watered every bed', `${n} bed${n > 1 ? 's' : ''} got a drink — they'll grow by morning.`); }
-  };
   const doFertilizePlot = () => { if (applyFertilizer(saveRef.current, ghPlotRef.current)) { sfxBuy(); ghTick(); } };
+  // Pull up a planted crop (no refund) so a bed can be replanted.
+  const doClearPlot = () => { if (clearPlot(saveRef.current, ghPlotRef.current)) { sfxCoin(); ghTick(); } };
   const doHarvestPlot = (keep = false) => {
     const s = saveRef.current;
     const res = harvestCrop(s, ghPlotRef.current, keep);
@@ -5851,6 +5800,14 @@ const LittleApartmentGame: React.FC = () => {
       // thread list, newest first
       <div className="py-1">
         {s.messages.length === 0 && <p className="px-3 py-6 text-center text-base opacity-50">No messages yet.<br/>Get out there and meet the city.</p>}
+        {unread > 0 && (
+          <div className="flex justify-end px-3 pb-1">
+            <button
+              className="font-pixel text-xs px-2.5 py-1 rounded-full border border-[#3da26b]/60 text-[#7ce8a0] hover:bg-[#3da26b] hover:text-black transition-colors"
+              onClick={() => { const sv = saveRef.current; for (const m of sv.messages) m.read = true; persistSave(sv); refreshHud(); setShopTick(v => v + 1); }}
+            >Clear all ({unread})</button>
+          </div>
+        )}
         {[...s.messages].reverse().map(m => (
           <button
             key={m.id}
@@ -6635,14 +6592,9 @@ const LittleApartmentGame: React.FC = () => {
                 {!s.greenhouse.sprinkler && <button className={`${btnCls} flex-grow`} disabled={wateredToday} onClick={doWaterPlot}>{wateredToday ? 'WATERED ✓' : '💧 WATER'}</button>}
                 <button className={`${btnCls} flex-grow`} disabled={plot.fertilized || s.greenhouse.fertilizer <= 0} onClick={doFertilizePlot}>{plot.fertilized ? 'FERTILIZED ✓' : `FERTILIZE (×${s.greenhouse.fertilizer})`}</button>
               </div>
+              <button className={`${btnCls} w-full mt-2 text-sm opacity-80`} onClick={doClearPlot}>🪏 Uproot (clear this bed)</button>
             </div>
           )}
-          {!s.greenhouse.sprinkler && (() => {
-            const dry = s.greenhouse.plots.slice(0, s.greenhouse.beds).filter(p => p.crop && !plotReady(p) && p.wateredDay !== s.day).length;
-            return dry > 1 ? (
-              <button className={`${btnCls} w-full mt-3`} onClick={doWaterAll}>💧 WATER ALL BEDS ({dry})</button>
-            ) : null;
-          })()}
         </ShopFrame>
       );
     }
@@ -6672,15 +6624,6 @@ const LittleApartmentGame: React.FC = () => {
           ))}
           {g.moonSeed && <p className="text-xs opacity-60 py-1">🌙 Moonflower seed — a gift of the shrine (have ×{g.seeds.moonflower ?? 0})</p>}
           <p className="text-sm text-[#7ce8a0]/80 mt-2">SUPPLIES</p>
-          {!g.sprinkler && (() => {
-            const dry = g.plots.slice(0, g.beds).filter(p => p.crop && !plotReady(p) && p.wateredDay !== s.day).length;
-            return (
-              <div className="flex items-center gap-2 py-1 border-b border-white/10">
-                <div className="flex-grow"><p className="text-sm">Water all beds <span className="text-xs opacity-50">{dry} dry</span></p><p className="text-xs opacity-50">give every thirsty bed a drink — free</p></div>
-                <button className={`${btnCls} text-sm`} disabled={dry === 0} onClick={doWaterAll}>💧 WATER</button>
-              </div>
-            );
-          })()}
           <div className="flex items-center gap-2 py-1 border-b border-white/10">
             <div className="flex-grow"><p className="text-sm">Fertilizer <span className="text-xs opacity-50">have ×{g.fertilizer}</span></p><p className="text-xs opacity-50">apply to a bed for a quality boost</p></div>
             <button className={`${btnCls} text-sm`} disabled={s.money < FERTILIZER_COST} onClick={buyGhFertilizer}>¥{FERTILIZER_COST}</button>
