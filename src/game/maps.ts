@@ -550,10 +550,11 @@ const garage: SceneDef = {
     'P': T('t-lift', true),
     'Y': T('t-tires', true),
     'Z': T('t-hazard'),
+    'B': T('t-dispatch', true),
   },
   grid: [
     '##################',
-    '#MMMMMMMM....TTTT#',
+    '#MMMMMMMM.B..TTTT#',
     '#PP......Y......Y#',
     '#PP..o...........#',
     '#............o...#',
@@ -566,7 +567,10 @@ const garage: SceneDef = {
     { x: 8, y: 8, to: 'badtown', tx: 8, ty: 3, dir: 'down' },
     { x: 9, y: 8, to: 'badtown', tx: 9, ty: 3, dir: 'down' },
   ],
-  interactables: [{ id: 'shop-garage', x: 5, y: 5, w: 3, h: 1, label: 'Vehicles' }],
+  interactables: [
+    { id: 'shop-garage', x: 5, y: 5, w: 3, h: 1, label: 'Vehicles' },
+    { id: 'job-dispatch', x: 10, y: 1, label: 'Delivery Job' },
+  ],
   npcs: [{ id: 'mechanic', x: 6, y: 4, sprite: 'npc-mechanic', dir: 'down' }],
 };
 

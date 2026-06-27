@@ -256,6 +256,10 @@ export class Input {
   currentDir(): Dir | null {
     return this.order.length ? this.order[this.order.length - 1] : null;
   }
+  // Is a specific direction currently held? (currentDir only reports the most
+  // recent one — driving needs throttle + steer at the same time.) Works for
+  // keyboard, touch d-pad, and gamepad since all funnel through `held`.
+  isHeld(dir: Dir): boolean { return this.held.has(dir); }
   consumeInteract(): boolean {
     const v = this.interactQueued; this.interactQueued = false; return v;
   }

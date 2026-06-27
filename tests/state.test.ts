@@ -1013,3 +1013,51 @@ describe('NPC daily routines', () => {
     }
   });
 });
+
+import { drivePayout, deliveryDoneToday, DELIVERY_TIME_LIMIT, DELIVERY_BASE } from '../src/game/state';
+
+describe('Kojima Motors delivery race', () => {
+  it('gates to once per day via deliveryDay', () => {
+    const s = newSave();
+    expect(deliveryDoneToday(s)).toBe(false); // fresh save: deliveryDay 0, day 1
+    s.deliveryDay = s.day;
+    expect(deliveryDoneToday(s)).toBe(true);
+    s.day += 1; // next morning
+    expect(deliveryDoneToday(s)).toBe(false);
+  });
+
+  it('defaults are save-safe (deliveryDay/deliveryBest start at 0)', () => {
+    const s = newSave();
+    expect(s.deliveryDay).toBe(0);
+    expect(s.deliveryBest).toBe(0);
+  });
+
+  it('on-time delivery pays base + a time bonus + a clean bonus', () => {
+    const fast = drivePayout(20, 0);
+    expect(fast.onTime).toBe(true);
+    expect(fast.base).toBe(DELIVERY_BASE);
+    expect(fast.timeBonus).toBeGreaterThan(0);
+    expect(fast.cleanBonus).toBe(450); // 0 grass = full clean bonus
+    expect(fast.total).toBe(fast.base + fast.timeBonus + fast.cleanBonus);
+  });
+
+  it('faster runs earn a strictly bigger time bonus (capped)', () => {
+    const a = drivePayout(40, 0), b = drivePayout(20, 0);
+    expect(b.timeBonus).toBeGreaterThan(a.timeBonus);
+    expect(drivePayout(1, 0).timeBonus).toBeLessThanOrEqual(2000); // bonus is capped
+  });
+
+  it('off-track time erodes (and can zero out) the clean bonus', () => {
+    expect(drivePayout(30, 4).cleanBonus).toBeLessThan(drivePayout(30, 0).cleanBonus);
+    expect(drivePayout(30, 20).cleanBonus).toBe(0); // lots of grass = no clean bonus
+  });
+
+  it('a late delivery still pays a small flat fee, no bonuses', () => {
+    const late = drivePayout(DELIVERY_TIME_LIMIT + 5, 0);
+    expect(late.onTime).toBe(false);
+    expect(late.timeBonus).toBe(0);
+    expect(late.cleanBonus).toBe(0);
+    expect(late.total).toBe(Math.round(DELIVERY_BASE * 0.4));
+    expect(late.total).toBeGreaterThan(0); // cozy: never zero
+  });
+});

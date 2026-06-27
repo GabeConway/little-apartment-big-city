@@ -87,6 +87,8 @@ export interface GameSave {
   forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
   foragedSpots: number[];       // indices of today's shore finds already grabbed
   errandDay: number;            // last day the odd-jobs board errand was completed (0 = none); one per day
+  deliveryDay: number;          // last day the Kojima Motors delivery race was run (0 = never); one per day
+  deliveryBest: number;         // best delivery time in seconds (0 = none yet); lower is better
   streetEventDay: number;       // last day the daily random street event was completed (0 = none); one per day
   greenhouseUnlocked: boolean;  // Granny Soto handed over the greenhouse key (after the fish errand)
   ended: boolean;               // ending seen (free play continues)
@@ -259,6 +261,8 @@ export const newSave = (): GameSave => ({
   forageDay: 0,
   foragedSpots: [],
   errandDay: 0,
+  deliveryDay: 0,
+  deliveryBest: 0,
   streetEventDay: 0,
   greenhouseUnlocked: false,
   ended: false,
@@ -580,6 +584,33 @@ export const errandFor = (s: GameSave): Errand => {
   return list[Math.floor(mulberry32(s.day * 374761393 + 31)() * list.length)];
 };
 export const errandDoneToday = (s: GameSave): boolean => s.errandDay === s.day;
+
+// ---- Kojima Motors delivery race ---------------------------------------------
+// A once-a-day dirt-rally side job started from the dispatch clipboard at the
+// garage (save.deliveryDay gates it). Reach every checkpoint and deliver before
+// the clock runs out; the faster + cleaner the run, the bigger the same-day cash.
+// The minigame physics/draw live in LittleApartmentGame.tsx (driveRef, like the
+// shift game) — only the daily gate + the payout math live here so they're unit-
+// testable and default-safe across saves.
+export const DELIVERY_TIME_LIMIT = 60;      // seconds — deliver under this for the full bonus
+export const DELIVERY_BASE = 900;           // flat fee for a completed delivery
+export const DELIVERY_ACE_TIME = 34;        // deliver under this (seconds) → the "ace driver" achievement
+export const deliveryDoneToday = (s: GameSave): boolean => s.deliveryDay === s.day;
+export interface DrivePayout { total: number; base: number; timeBonus: number; cleanBonus: number; onTime: boolean }
+// elapsedSec = run time; grassSec = seconds spent off the dirt (the clean-driving penalty).
+// On-time runs earn base + a big time bonus (faster is more, capped) + a clean bonus.
+// A late delivery still pays — just a smaller flat "late" fee (cozy: never fail-hard).
+export const drivePayout = (elapsedSec: number, grassSec: number): DrivePayout => {
+  const onTime = elapsedSec <= DELIVERY_TIME_LIMIT;
+  if (!onTime) {
+    const late = Math.round(DELIVERY_BASE * 0.4);
+    return { total: late, base: late, timeBonus: 0, cleanBonus: 0, onTime: false };
+  }
+  const base = DELIVERY_BASE;
+  const timeBonus = Math.min(2000, Math.round(Math.max(0, DELIVERY_TIME_LIMIT - elapsedSec) * 42));
+  const cleanBonus = Math.round(Math.max(0, 1 - grassSec / 8) * 450);
+  return { total: base + timeBonus + cleanBonus, base, timeBonus, cleanBonus, onTime: true };
+};
 
 // ---- Random daily street event ----------------------------------------------
 // Roughly one charming one-off city vignette per day. Seeded per `day` (mulberry32,

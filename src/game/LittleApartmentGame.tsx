@@ -62,6 +62,7 @@ import {
   buyFertilizer, expandBeds, upgradeGreenhouse, grantMoonSeed, seedShopFor, activeRequest,
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
+  deliveryDoneToday, drivePayout, DELIVERY_ACE_TIME, DELIVERY_TIME_LIMIT,
   canCook, canCookHere, cook, eatDish, ingredientCount, buyGrocery, keepProduce,
   buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend, meetFriend,
   friendFlavorLine, allFriendsMet, pendingHangout, pendingHomeVisit, homeVisitFlag,
@@ -516,6 +517,83 @@ const makeShiftGame = (): ShiftGame => {
   const cust = makeShiftCustomer(0);
   const t = shiftTimerFor(0, cust);
   return { idx: 0, phase: 'scan', cust, timer: t, maxTimer: t, combo: 0, served: 0, earned: 0, flash: 0, flashGood: false, flashText: '', lastDir: null };
+};
+
+// ---- Kojima Motors delivery race: "Special Delivery" ------------------------
+// A driveRef ref-mode minigame (mirrors shiftRef): driven in the update loop,
+// drawn FULL-SCREEN in the draw loop in its own world-space, freezing normal
+// world movement. Top-down dirt rally with real momentum + a satisfying drift —
+// reach each checkpoint in order, then the delivery point, before the clock.
+// The winding course lives in module space so it's never re-allocated; the car +
+// particles are mutated in place (no per-frame array/gradient churn in draw).
+//
+// World units (NOT tile pixels) — a ~1300×1000 course. DRIVE_CAM maps world→screen.
+const DRIVE_TRACK: { x: number; y: number }[] = [
+  { x: 200, y: 840 },   // 0 — start / depot
+  { x: 560, y: 880 },   // 1
+  { x: 920, y: 840 },   // 2 ◆ checkpoint
+  { x: 1150, y: 660 },  // 3
+  { x: 1200, y: 405 },  // 4 ◆
+  { x: 1010, y: 215 },  // 5
+  { x: 680, y: 190 },   // 6 ◆
+  { x: 430, y: 300 },   // 7
+  { x: 300, y: 560 },   // 8 ◆
+  { x: 470, y: 775 },   // 9
+  { x: 720, y: 650 },   // 10 ✦ delivery
+];
+const DRIVE_CHECKPOINTS = [2, 4, 6, 8, 10]; // indices into DRIVE_TRACK, in order; last = delivery
+const DRIVE_TRACK_HALF = 66;   // dirt road half-width (world units); beyond it = grass
+const DRIVE_CP_RADIUS = 74;    // how close you must pass a checkpoint
+const DRIVE_CAM = 0.62;        // world→screen zoom
+const DRIVE_MAX_DIRT = 305;    // top speed on dirt (world u/s)
+const DRIVE_MAX_GRASS = 132;   // grass caps you slow (cozy — off-track just bogs you down)
+
+interface DriveParticle { x: number; y: number; vx: number; vy: number; life: number; max: number; r: number }
+interface DriveGame {
+  x: number; y: number;        // car position (world)
+  vx: number; vy: number;      // velocity (world u/s)
+  angle: number;               // heading (radians; 0 = +x)
+  cp: number;                  // next index into DRIVE_CHECKPOINTS
+  elapsed: number;             // run time (s)
+  grassT: number;              // seconds off the dirt (the clean-driving penalty)
+  onGrass: boolean;            // off-track this frame?
+  drift: number;               // |lateral speed| (for skid/dust + speed-line cues)
+  done: boolean;               // delivered (settled in update, then ref nulled)
+  best: number;                // daily best at run start (HUD compare)
+  flash: number;               // checkpoint-pass flash
+  emit: number;                // dust emit countdown
+  dust: DriveParticle[];       // tyre dust (capped, mutated in place)
+  skids: { x: number; y: number }[]; // drift skid-marks on the dirt (capped)
+  camX: number; camY: number;  // smoothed camera (world)
+}
+const makeDriveGame = (best: number): DriveGame => {
+  const a = DRIVE_TRACK[0], b = DRIVE_TRACK[1];
+  return {
+    x: a.x, y: a.y, vx: 0, vy: 0,
+    angle: Math.atan2(b.y - a.y, b.x - a.x),
+    cp: 0, elapsed: 0, grassT: 0, onGrass: false, drift: 0, done: false,
+    best, flash: 0, emit: 0, dust: [], skids: [], camX: a.x, camY: a.y,
+  };
+};
+// Squared distance from point to segment — no allocation (hot path).
+const distToSeg2 = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy || 1;
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const cx = ax + t * dx, cy = ay + t * dy;
+  const ex = px - cx, ey = py - cy;
+  return ex * ex + ey * ey;
+};
+// Nearest distance from the car to the dirt centerline polyline (world units).
+const driveTrackDist = (x: number, y: number): number => {
+  let best = Infinity;
+  for (let i = 0; i < DRIVE_TRACK.length - 1; i++) {
+    const a = DRIVE_TRACK[i], b = DRIVE_TRACK[i + 1];
+    const d2 = distToSeg2(x, y, a.x, a.y, b.x, b.y);
+    if (d2 < best) best = d2;
+  }
+  return Math.sqrt(best);
 };
 
 interface Projectile { x: number; y: number; dx: number; dy: number; t: number; pierce?: boolean; dmg?: number; gun?: boolean }
@@ -1070,6 +1148,8 @@ const LittleApartmentGame: React.FC = () => {
   const overlayRef = useRef<Overlay | null>(null);
   const fishModeRef = useRef<FishMode | null>(null);
   const shiftRef = useRef<ShiftGame | null>(null);
+  const driveRef = useRef<DriveGame | null>(null);
+  const driveIntroSeenRef = useRef(false); // show Kojima's how-to-drive briefing only once per session
   const pendingBeatsRef = useRef<StoryBeat[]>([]);
   const sleepTimerRef = useRef<number | null>(null);
   const oreNodesRef = useRef<OreNode[]>([]);
@@ -2546,6 +2626,7 @@ const LittleApartmentGame: React.FC = () => {
         break;
       case 'shop-pawn': setOverlayBoth({ type: 'shop', shop: 'pawn' }); break;
       case 'shop-garage': setOverlayBoth({ type: 'shop', shop: 'garage' }); break;
+      case 'job-dispatch': startDelivery(); break;
       case 'boat': setOverlayBoth({ type: 'shop', shop: 'boat' }); break;
       case 'boat-island': setOverlayBoth({ type: 'shop', shop: 'boat-island' }); break;
       case 'coconut': {
@@ -3087,6 +3168,131 @@ const LittleApartmentGame: React.FC = () => {
           } else fumble();
         }
       }
+      return;
+    }
+
+    // Kojima Motors delivery race: top-down dirt rally (driveRef ref-mode).
+    const dg = driveRef.current;
+    if (dg) {
+      input.consumeInteract(); input.consumeInventory();
+      if (input.consumeCancel()) { // bail out — free retry, the daily gate isn't burned
+        driveRef.current = null; engineStop();
+        showDialog(['You pull over and hand back the keys. "No shame," Kojima says. "The box will keep till you\'re ready."'], 'Kojima');
+        return;
+      }
+      dg.elapsed += dt;
+      if (dg.flash > 0) dg.flash -= dt;
+
+      // --- inputs: throttle + steer at once (isHeld), action button also accelerates
+      const up = input.isHeld('up'), down = input.isHeld('down');
+      const steer = (input.isHeld('right') ? 1 : 0) - (input.isHeld('left') ? 1 : 0);
+      const fx = Math.cos(dg.angle), fy = Math.sin(dg.angle);
+      let fwd = dg.vx * fx + dg.vy * fy; // signed forward speed
+
+      // steering: turn-rate scales with speed (can't pivot when parked); flips in reverse
+      const speed0 = Math.hypot(dg.vx, dg.vy);
+      const turn = 2.9 * Math.min(1, speed0 / 85);
+      dg.angle += steer * turn * dt * (fwd < -6 ? -1 : 1);
+
+      // throttle / brake / reverse along the (possibly newly-rotated) heading
+      const hx = Math.cos(dg.angle), hy = Math.sin(dg.angle);
+      const ACCEL = 365, BRAKE = 430, REVERSE = 195;
+      if (up || input.actionHeld) { dg.vx += hx * ACCEL * dt; dg.vy += hy * ACCEL * dt; }
+      if (down) {
+        if (fwd > 12) { dg.vx -= hx * BRAKE * dt; dg.vy -= hy * BRAKE * dt; }
+        else { dg.vx -= hx * REVERSE * dt; dg.vy -= hy * REVERSE * dt; }
+      }
+
+      // off-track? grass bogs you down (cosy — never a hard crash)
+      const tdist = driveTrackDist(dg.x, dg.y);
+      const onGrass = tdist > DRIVE_TRACK_HALF;
+      dg.onGrass = onGrass;
+      if (onGrass) dg.grassT += dt;
+
+      // grip / drift: split velocity into forward (heading) + lateral (perp), then
+      // bleed off the lateral part. Less grip at speed mid-turn = a satisfying slide.
+      const lx = -hy, ly = hx; // lateral unit
+      fwd = dg.vx * hx + dg.vy * hy;
+      const lat = dg.vx * lx + dg.vy * ly;
+      const grip = onGrass ? 2.8 : (speed0 > 165 && steer !== 0 ? 4.4 : 8.2);
+      const newLat = lat * Math.max(0, 1 - grip * dt);
+      dg.drift = Math.abs(newLat);
+      dg.vx = hx * fwd + lx * newLat;
+      dg.vy = hy * fwd + ly * newLat;
+
+      // drag + speed cap (grass is both draggier and slower-capped)
+      const drag = onGrass ? 2.6 : 0.55;
+      const keep = Math.max(0, 1 - drag * dt);
+      dg.vx *= keep; dg.vy *= keep;
+      let sp = Math.hypot(dg.vx, dg.vy);
+      const cap = onGrass ? DRIVE_MAX_GRASS : DRIVE_MAX_DIRT;
+      if (sp > cap) { const k = cap / sp; dg.vx *= k; dg.vy *= k; sp = cap; }
+
+      // integrate
+      dg.x += dg.vx * dt; dg.y += dg.vy * dt;
+
+      // motor pitch rises with speed (honors mute inside engineSet)
+      engineSet(Math.min(1, sp / DRIVE_MAX_DIRT), dt);
+
+      // dust + skid-marks off the rear axle (created here in UPDATE, never in draw)
+      const drifting = dg.drift > 30;
+      dg.emit -= dt;
+      if (sp > 46 && dg.emit <= 0 && dg.dust.length < 90) {
+        dg.emit = onGrass || drifting ? 0.018 : 0.05;
+        for (const side of [-1, 1]) {
+          const wx = dg.x - hx * 13 + lx * side * 5, wy = dg.y - hy * 13 + ly * side * 5;
+          dg.dust.push({
+            x: wx, y: wy,
+            vx: (Math.random() - 0.5) * 24 - dg.vx * 0.04,
+            vy: (Math.random() - 0.5) * 24 - dg.vy * 0.04,
+            life: 0, max: 0.45 + Math.random() * 0.3, r: 2.5 + Math.random() * 2.5,
+          });
+        }
+      }
+      if (!onGrass && dg.drift > 46 && sp > 70) {
+        for (const side of [-1, 1]) dg.skids.push({ x: dg.x - hx * 11 + lx * side * 5, y: dg.y - hy * 11 + ly * side * 5 });
+        while (dg.skids.length > 240) dg.skids.shift();
+      }
+      for (let i = dg.dust.length - 1; i >= 0; i--) {
+        const p = dg.dust[i]; p.life += dt;
+        if (p.life >= p.max) { dg.dust.splice(i, 1); continue; }
+        p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; p.r += dt * 7;
+      }
+
+      // smoothed camera follows the car
+      dg.camX += (dg.x - dg.camX) * Math.min(1, dt * 6);
+      dg.camY += (dg.y - dg.camY) * Math.min(1, dt * 6);
+
+      // checkpoints (in order) → final one is the delivery point
+      const cpPt = DRIVE_TRACK[DRIVE_CHECKPOINTS[dg.cp]];
+      if (Math.hypot(dg.x - cpPt.x, dg.y - cpPt.y) < DRIVE_CP_RADIUS) {
+        dg.cp += 1; dg.flash = 0.7;
+        if (dg.cp >= DRIVE_CHECKPOINTS.length) {
+          // delivered — settle pay (gate consumed now, so a bail is a free retry)
+          const sv = saveRef.current;
+          const pay = drivePayout(dg.elapsed, dg.grassT);
+          sv.money += pay.total; sv.deliveryDay = sv.day;
+          const isBest = pay.onTime && (sv.deliveryBest === 0 || dg.elapsed < sv.deliveryBest);
+          if (isBest) sv.deliveryBest = Math.round(dg.elapsed * 10) / 10;
+          driveRef.current = null; engineStop();
+          sfxCoin(); award('first-delivery');
+          if (pay.onTime && dg.elapsed < DELIVERY_ACE_TIME) award('ace-driver');
+          persistSave(sv); refreshHud();
+          const lines = pay.onTime
+            ? [
+                `Delivered! ${dg.elapsed.toFixed(1)}s on the clock.${isBest ? ' A new daily best!' : ''}`,
+                `Base ¥${pay.base.toLocaleString()} + time ¥${pay.timeBonus.toLocaleString()} + clean ¥${pay.cleanBonus.toLocaleString()} = ¥${pay.total.toLocaleString()}. Kojima counts it out without looking up.`,
+              ]
+            : [
+                'Cut it fine — the package is late, but it got there in one piece.',
+                `Kojima shrugs and peels off ¥${pay.total.toLocaleString()}. "Tomorrow, faster."`,
+              ];
+          showDialog(lines, 'Kojima');
+          return;
+        }
+        sfxBite(); // checkpoint chime
+      }
+      movingRef.current = false;
       return;
     }
 
@@ -4453,6 +4659,149 @@ const LittleApartmentGame: React.FC = () => {
       ctx.fillText('[E] scan · [↓] bag · arrows = change · Esc clocks out', VIEW_PW / 2, VIEW_PH - 6);
       ctx.restore();
     }
+
+    // Kojima Motors delivery race — full-screen dirt rally, drawn in its own
+    // world-space (camera follows the car). No per-frame gradients/array allocs:
+    // the track is a stroked module-constant polyline; particles/skids are reused.
+    const dg = driveRef.current;
+    if (dg) {
+      ctx.save();
+      const cx = VIEW_PW / 2, cy = VIEW_PH / 2;
+      const sx = (wx: number) => (wx - dg.camX) * DRIVE_CAM + cx;
+      const sy = (wy: number) => (wy - dg.camY) * DRIVE_CAM + cy;
+      const sp = Math.hypot(dg.vx, dg.vy);
+
+      // grass field + deterministic tufts (coarse world grid, no allocation)
+      ctx.fillStyle = '#4e7c42'; ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      ctx.fillStyle = '#447038';
+      const g0x = Math.floor((dg.camX - 340) / 44) * 44, g0y = Math.floor((dg.camY - 220) / 44) * 44;
+      for (let wx = g0x; wx < dg.camX + 340; wx += 44) {
+        for (let wy = g0y; wy < dg.camY + 220; wy += 44) {
+          const j = ((wx * 13 + wy * 7) % 31);
+          ctx.fillRect(Math.round(sx(wx + (j % 11))), Math.round(sy(wy + (j % 9))), 2, 2);
+        }
+      }
+
+      // dirt track: a dark shoulder stroke under a lighter dirt stroke, then a faint rut.
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx(DRIVE_TRACK[0].x), sy(DRIVE_TRACK[0].y));
+      for (let i = 1; i < DRIVE_TRACK.length; i++) ctx.lineTo(sx(DRIVE_TRACK[i].x), sy(DRIVE_TRACK[i].y));
+      ctx.strokeStyle = '#6e4a2a'; ctx.lineWidth = (DRIVE_TRACK_HALF + 6) * 2 * DRIVE_CAM; ctx.stroke();
+      ctx.strokeStyle = '#a06a3a'; ctx.lineWidth = DRIVE_TRACK_HALF * 2 * DRIVE_CAM; ctx.stroke();
+      ctx.strokeStyle = '#8a5b30'; ctx.lineWidth = 3; ctx.globalAlpha = 0.5; ctx.stroke(); ctx.globalAlpha = 1;
+
+      // skid-marks on the dirt (dark scuffs)
+      ctx.fillStyle = '#3a2a1c';
+      for (let i = 0; i < dg.skids.length; i++) {
+        const k = dg.skids[i], px = sx(k.x), py = sy(k.y);
+        if (px < -4 || px > VIEW_PW + 4 || py < -4 || py > VIEW_PH + 4) continue;
+        ctx.fillRect(px - 1, py - 1, 2, 2);
+      }
+
+      // checkpoints + the delivery depot (last)
+      for (let i = 0; i < DRIVE_CHECKPOINTS.length; i++) {
+        const p = DRIVE_TRACK[DRIVE_CHECKPOINTS[i]];
+        const px = sx(p.x), py = sy(p.y);
+        const last = i === DRIVE_CHECKPOINTS.length - 1;
+        const passed = i < dg.cp, next = i === dg.cp;
+        if (last) {
+          // delivery depot: a glowing pad + ✦
+          ctx.globalAlpha = next ? 0.5 + Math.sin(t * 6) * 0.25 : 0.4;
+          ctx.fillStyle = next ? '#ffd24a' : '#9a8a6a';
+          ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = next ? '#fff3c4' : '#c9b890'; ctx.fillText('✦', px, py + 6);
+        } else {
+          // checkpoint flag (pole + pennant); next one pulses
+          const a = next ? 0.7 + Math.sin(t * 8) * 0.3 : passed ? 0.3 : 0.85;
+          ctx.globalAlpha = a;
+          ctx.fillStyle = '#e8e0d0'; ctx.fillRect(px - 1, py - 13, 2, 16);            // pole
+          ctx.fillStyle = passed ? '#5a7a52' : next ? '#ff5a5a' : '#ffd24a';
+          ctx.beginPath(); ctx.moveTo(px + 1, py - 13); ctx.lineTo(px + 11, py - 9); ctx.lineTo(px + 1, py - 5); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // tyre dust (fading tan puffs)
+      for (let i = 0; i < dg.dust.length; i++) {
+        const p = dg.dust[i], px = sx(p.x), py = sy(p.y);
+        ctx.globalAlpha = Math.max(0, 0.5 * (1 - p.life / p.max));
+        ctx.fillStyle = dg.onGrass ? '#6f9a5a' : '#caa06a';
+        ctx.beginPath(); ctx.arc(px, py, p.r * DRIVE_CAM + 1, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // the car — a small top-down kei truck that rotates with the heading
+      ctx.save();
+      ctx.translate(Math.round(sx(dg.x)), Math.round(sy(dg.y)));
+      ctx.rotate(dg.angle);
+      ctx.fillStyle = '#16181d'; ctx.fillRect(-12, -7, 24, 14);                       // tyres/shadow base
+      ctx.fillStyle = '#c9a227'; ctx.fillRect(-11, -5, 22, 10);                       // body
+      ctx.fillStyle = '#e8c84a'; ctx.fillRect(-11, -5, 22, 2);                        // top highlight
+      ctx.fillStyle = '#9fc4e8'; ctx.fillRect(3, -4, 6, 8);                           // windshield (front = +x)
+      ctx.fillStyle = '#7a5a16'; ctx.fillRect(-10, -5, 8, 10);                        // flatbed
+      ctx.fillStyle = '#ffd24a'; ctx.fillRect(10, -4, 2, 2); ctx.fillRect(10, 2, 2, 2); // headlights
+      ctx.fillStyle = '#222'; ctx.fillRect(-9, -7, 5, 2); ctx.fillRect(4, -7, 5, 2); ctx.fillRect(-9, 5, 5, 2); ctx.fillRect(4, 5, 5, 2); // wheels
+      ctx.restore();
+
+      // speed lines at the screen edges when flying
+      if (sp > DRIVE_MAX_DIRT * 0.62) {
+        ctx.globalAlpha = Math.min(0.5, (sp - DRIVE_MAX_DIRT * 0.62) / DRIVE_MAX_DIRT);
+        ctx.strokeStyle = '#f4eede'; ctx.lineWidth = 1;
+        for (let i = 0; i < 7; i++) {
+          const ang = (i / 7) * Math.PI * 2 + t;
+          const ox = Math.cos(ang), oy = Math.sin(ang);
+          ctx.beginPath();
+          ctx.moveTo(cx + ox * 120, cy + oy * 80);
+          ctx.lineTo(cx + ox * 165, cy + oy * 110);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // --- HUD ----------------------------------------------------------------
+      const remain = Math.max(0, DELIVERY_TIME_LIMIT - dg.elapsed);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(8,10,14,0.62)'; ctx.fillRect(4, 4, 132, 30);
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = remain < 10 ? (Math.floor(t * 6) % 2 ? '#ff5a5a' : '#ffb24a') : '#ffd24a';
+      ctx.fillText(`${remain.toFixed(1)}s`, 9, 18);
+      ctx.font = 'bold 7px monospace'; ctx.fillStyle = '#9fc4e8';
+      ctx.fillText(`CHECKPOINT ${Math.min(dg.cp + 1, DRIVE_CHECKPOINTS.length)}/${DRIVE_CHECKPOINTS.length}`, 9, 29);
+      if (dg.best > 0) { ctx.fillStyle = '#7ce8a0'; ctx.fillText(`BEST ${dg.best.toFixed(1)}s`, 86, 29); }
+
+      // timer pressure bar
+      ctx.fillStyle = '#2a3340'; ctx.fillRect(4, 36, 132, 3);
+      const frac = remain / DELIVERY_TIME_LIMIT;
+      ctx.fillStyle = frac > 0.4 ? '#7ce8a0' : frac > 0.18 ? '#ffb24a' : '#ff5a5a';
+      ctx.fillRect(4, 36, Math.round(132 * frac), 3);
+
+      // minimap (bottom-right): track + checkpoints + car
+      const mmW = 70, mmH = 50, mmX = VIEW_PW - mmW - 5, mmY = VIEW_PH - mmH - 5;
+      const bxMin = 170, byMin = 160, bxMax = 1230, byMax = 910;
+      const mscale = Math.min((mmW - 6) / (bxMax - bxMin), (mmH - 6) / (byMax - byMin));
+      const mx = (wx: number) => mmX + 3 + (wx - bxMin) * mscale;
+      const my = (wy: number) => mmY + 3 + (wy - byMin) * mscale;
+      ctx.fillStyle = 'rgba(8,10,14,0.62)'; ctx.fillRect(mmX, mmY, mmW, mmH);
+      ctx.strokeStyle = '#a06a3a'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(mx(DRIVE_TRACK[0].x), my(DRIVE_TRACK[0].y));
+      for (let i = 1; i < DRIVE_TRACK.length; i++) ctx.lineTo(mx(DRIVE_TRACK[i].x), my(DRIVE_TRACK[i].y));
+      ctx.stroke();
+      for (let i = 0; i < DRIVE_CHECKPOINTS.length; i++) {
+        const p = DRIVE_TRACK[DRIVE_CHECKPOINTS[i]];
+        ctx.fillStyle = i < dg.cp ? '#5a7a52' : i === dg.cp ? '#ff5a5a' : '#ffd24a';
+        ctx.fillRect(mx(p.x) - 1, my(p.y) - 1, 3, 3);
+      }
+      ctx.fillStyle = '#9fc4e8'; ctx.fillRect(mx(dg.x) - 1, my(dg.y) - 1, 3, 3);
+
+      ctx.font = 'bold 6px monospace'; ctx.globalAlpha = 0.55; ctx.fillStyle = '#e8e0d0';
+      ctx.textAlign = 'center';
+      ctx.fillText('↑ gas · ↓ brake · ←/→ steer · Esc bail', VIEW_PW / 2, VIEW_PH - 4);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
   }, []);
 
   // ---- lifecycle --------------------------------------------------------------
@@ -4721,6 +5070,21 @@ const LittleApartmentGame: React.FC = () => {
           tx: Math.round(w.x / TILE), ty: Math.round(w.y / TILE),
           dir: w.dir, moving: w.moving, stuck: w.stuck,
         })),
+        // Delivery race runtime (the minigame is canvas-drawn off driveRef, not in
+        // the normal snapshot) — exposed so the playtest harness can drive + verify.
+        drive: driveRef.current ? {
+          active: true,
+          elapsed: Math.round(driveRef.current.elapsed * 10) / 10,
+          cp: driveRef.current.cp,
+          cpTotal: DRIVE_CHECKPOINTS.length,
+          x: Math.round(driveRef.current.x),
+          y: Math.round(driveRef.current.y),
+          angle: Math.round(driveRef.current.angle * 1000) / 1000,
+          speed: Math.round(Math.hypot(driveRef.current.vx, driveRef.current.vy)),
+          onGrass: driveRef.current.onGrass,
+          grassT: Math.round(driveRef.current.grassT * 10) / 10,
+          done: driveRef.current.done,
+        } : { active: false, deliveryDay: saveRef.current.deliveryDay, deliveryBest: saveRef.current.deliveryBest },
         save: saveRef.current,
       }),
     };
@@ -5168,6 +5532,34 @@ const LittleApartmentGame: React.FC = () => {
     const sg = makeShiftGame();
     sg.lastDir = inputRef.current.currentDir(); // ignore a direction already held on clock-in
     shiftRef.current = sg;
+  };
+
+  // Take the dispatch clipboard at Kojima Motors → start the delivery race. The
+  // daily gate (deliveryDay) is only consumed on an actual delivery, so bailing
+  // out (Esc) is a free retry — cosy. Pay is settled at delivery in the update loop.
+  const startDelivery = () => {
+    const s = saveRef.current;
+    if (deliveryDoneToday(s)) {
+      showDialog([
+        '"Already ran today\'s route — package is delivered, books are square." Kojima waves you off with an oily rag.',
+        '"Come back in the morning. There\'s always another box that needs to be somewhere yesterday."',
+      ], 'Kojima');
+      return;
+    }
+    if (!driveIntroSeenRef.current) {
+      driveIntroSeenRef.current = true;
+      showDialog([
+        'Kojima jerks a thumb at the kei truck out back. "Dirt route. Hit every checkpoint, drop the package at the depot. Clock\'s running the second you turn the key."',
+        '"She slides on the loose stuff — use it. Off the track just bogs you down, won\'t hurt you. Faster and cleaner means a fatter envelope."',
+        '(↑ accelerate · ↓ brake/reverse · ←/→ steer · Esc to bail. Reach the checkpoints in order, then the ✦ depot, before the clock.)',
+      ], 'Kojima', [{ label: 'Take the keys →', onPick: beginDriveRun }]);
+      return;
+    }
+    beginDriveRun();
+  };
+  const beginDriveRun = () => {
+    setOverlayBoth(null);
+    driveRef.current = makeDriveGame(saveRef.current.deliveryBest);
   };
 
   // Pay off the yakuza: they stay put while the screen blacks out, then they're

@@ -261,6 +261,8 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'vault', title: 'X Marks the Floor', desc: 'Cracked open a treasure vault deep in the mines.', hint: 'Some floors down there glow gold. Bring it home.' },
   { id: 'heart2heart', title: 'Heart to Heart', desc: 'Shared a deeper, one-of-a-kind moment with a friend.', hint: 'Keep someone close. Some conversations only open once you truly know each other.' },
   { id: 'housewarming', title: 'Housewarming', desc: 'A friend felt close enough to drop by your apartment.', hint: 'Grow a friendship deep enough that someone wants to see where you live.' },
+  { id: 'first-delivery', title: 'Special Delivery', desc: 'Ran your first delivery for Kojima Motors.', hint: "There's a dispatch clipboard at the garage. Kojima needs a driver." },
+  { id: 'ace-driver', title: 'Drift King', desc: 'Delivered the package in under 34 seconds.', hint: 'Cut the corners. Trust the slide. Beat the clock.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------

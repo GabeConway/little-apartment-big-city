@@ -1028,6 +1028,17 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#2c3038'; ctx.fillRect(5, 4, 6, 1); ctx.fillRect(5, 9, 6, 1) ; ctx.fillRect(4, 12, 8, 1);
     ctx.fillStyle = '#3c424a'; ctx.fillRect(7, 5, 2, 2); ctx.fillRect(7, 10, 2, 2);
   });
+  // Dispatch board: a clipboard of delivery jobs bolted to the garage wall.
+  atlas['t-dispatch'] = tile(ctx => {
+    fill(ctx, '#7a828e');                                                              // metal wall behind
+    ctx.fillStyle = '#69707c'; for (let y = 1; y < 16; y += 3) ctx.fillRect(0, y, 16, 1);
+    ctx.fillStyle = '#3a2f24'; ctx.fillRect(2, 1, 12, 14);                              // clipboard board
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(2, 1, 12, 1); ctx.fillRect(2, 1, 1, 14);    // bright bevel (top/left)
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 4, 8, 9);                                // paper
+    ctx.fillStyle = '#9aa0a8'; ctx.fillRect(6, 1, 4, 2);                                // clip
+    ctx.fillStyle = '#5a626e'; ctx.fillRect(5, 6, 6, 1); ctx.fillRect(5, 8, 6, 1); ctx.fillRect(5, 10, 4, 1); // job lines
+    ctx.fillStyle = '#d05050'; ctx.fillRect(4, 4, 2, 1);                                // red "URGENT" tab
+  });
   atlas['t-hazard'] = tile(ctx => {
     fill(ctx, '#9a9aa0');
     for (let i = -2; i < 5; i++) {
