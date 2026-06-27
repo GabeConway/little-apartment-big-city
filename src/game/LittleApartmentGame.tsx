@@ -3277,6 +3277,7 @@ const LittleApartmentGame: React.FC = () => {
         if (!def) continue;
         let key = def.sprite;
         if (key === 't-water-0' && waterAlt) key = 't-water-1';
+        else if (key === 't-foam-0' && waterAlt) key = 't-foam-1'; // tide foam laps gently
         // Dance floor: cycle 4 color frames by tile position so colors ripple
         // across the floor (a real disco wave) instead of flipping in unison.
         else if (key === 't-dance-0') key = `t-dance-${(tx + ty * 2 + Math.floor(t * 5)) & 3}`;
@@ -3665,7 +3666,7 @@ const LittleApartmentGame: React.FC = () => {
       }
       const bob = Math.round(Math.sin(t * 1.5) * 1.5);
       if (scene.id === 'shore' && s.vehicles.includes('boat')) {
-        ctx.drawImage(atlas['v-boat'], 2 * TILE - cam.x, 9 * TILE - cam.y + bob);
+        ctx.drawImage(atlas['v-boat'], 2 * TILE - cam.x, 13 * TILE - cam.y + bob); // moored at the pier head
       }
       if (scene.id === 'island') {
         ctx.drawImage(atlas['v-boat'], 0 * TILE - cam.x, 7 * TILE - cam.y + bob); // moored at the west dock

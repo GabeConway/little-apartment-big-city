@@ -364,38 +364,63 @@ const pawn: SceneDef = {
 const shore: SceneDef = {
   id: 'shore',
   name: 'Sumikawa Shore',
-  legend: { ...OUTDOOR, 'U': T('t-parasol', true), 'J': T('t-crate', true) },
+  // A real coastline reading back→front: a dune/pine back edge with a vendor stand
+  // and a boardwalk in from the city, a deep beach of dry then wet sand (rocks,
+  // tide pools, driftwood), an animated tide-foam line, a little pier, and the sea.
+  // Scrolls vertically (24×16). 'd'/'v' dune, 'P' pine, 'k' boardwalk, 's'/'S' dry/
+  // wet sand, 'f' foam, 'o' beach rock, 't' tide pool, 'L' driftwood, 'D' pier.
+  legend: {
+    'g': T('t-grass'),
+    'd': T('t-dune'),
+    'v': T('t-dunegrass'),
+    'P': T('t-pine', true),
+    'k': T('t-boardwalk'),
+    's': T('t-sand'),
+    'S': T('t-sand-wet'),
+    'f': T('t-foam-0'),
+    'o': T('t-beachrock', true),
+    't': T('t-tidepool'),
+    'L': T('t-driftwood', true),
+    'D': T('t-dock'),
+    '~': T('t-water-0', true),
+    'b': T('t-buoy', true),
+    'U': T('t-parasol', true),
+    'J': T('t-crate', true),
+  },
   outdoor: true,
   grid: [
-    'gggggggggggggggggggggggg',
-    'gggggggggggggggggggggggg',
-    'gggggggggggggggggggggggg',
-    'ggggggUJggggggggggggwwww',
-    'ggggggggggggggggggggwwww',
-    'ssssssssssssssssssssssss',
-    'ssssssssssssssssssssssss',
-    'ssssssssssssssssssssssss',
-    'ssssssssssssssssssssssss',
-    '~~~~~~~~~~~~~~~~~~~~~~~~',
-    '~~~~~~~~~~~~~~~~~~~~~~~~',
-    '~~~~~~~~~~~~~~~~~~~~~~~~',
+    'PgdvggPddvggdPvdggPdvggP',
+    'gdvddvgddvddgddvvddvgddv',
+    'vddvUdJddvddvddvdvddPddd',
+    'ddsddsdsddsssddssdsddkkk',
+    'sssossssssUsssssLsssssss',
+    'sssssstssssssssssstsssss',
+    'sssstsssssssssssssssssss',
+    'sssssssssssssssssssstsss',
+    'SSSSSSSSSSSSSSSSSSSSSSSS',
+    'SSSSSSStSoSSStSLSSSSooSS',
+    'ffDfffffffffffffffffooff',
+    '~~D~~~~~~~~~~~~~~~~~~o~~',
+    '~~D~~~~~~~~~~~~~~~~~~~~~',
+    '~~~~~~~~b~~~~~~~~~~~~~~~',
+    '~~~~~~~~~~~~~~~~~b~~~~~~',
     '~~~~~~~~~~~~~~~~~~~~~~~~',
   ],
   warps: [
     { x: 23, y: 3, to: 'city', tx: 1, ty: 15, dir: 'right' },
     { x: 23, y: 4, to: 'city', tx: 1, ty: 16, dir: 'right' },
   ],
-  // The whole waterline is fishable: stand on the sand, face the water.
-  // Deep spot (needs the skiff) listed first so it wins the overlap.
+  // The whole waterline is fishable: stand on the foam/sand edge, face the water.
+  // Deep spot (needs the skiff, moored off the pier) listed first so it wins overlap.
   interactables: [
-    { id: 'boat', x: 2, y: 9, w: 2, h: 1, label: 'The skiff' },
-    { id: 'fish-spot', x: 0, y: 9, w: 24, h: 1, label: 'Fish' },
+    { id: 'boat', x: 2, y: 13, w: 1, h: 1, label: 'The skiff' },
+    { id: 'fish-spot', x: 0, y: 11, w: 24, h: 1, label: 'Fish' },
     // A quiet stargazing spot up on the dune grass — only rewards a look after dark (see handler).
     { id: 'stargaze', x: 10, y: 1, w: 3, h: 1, label: 'Look up at the stars' },
   ],
   npcs: [
     { id: 'old-man', x: 4, y: 7, sprite: 'npc-oldman', dir: 'down' },
-    { id: 'tex', x: 6, y: 4, sprite: 'npc-hatvendor', dir: 'down' },
+    { id: 'tex', x: 5, y: 3, sprite: 'npc-hatvendor', dir: 'up' },
     // David + his campfire only appear on even-numbered nights (gated in code).
     { id: 'campfire', x: 13, y: 6, sprite: 'prop-campfire', dir: 'down' },
     { id: 'david', x: 14, y: 6, sprite: 'npc-vampire', dir: 'left' },

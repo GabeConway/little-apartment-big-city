@@ -1703,6 +1703,85 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 4, 10, 1);
   });
 
+  // ---- Sumikawa Shore — coastline detail tiles -------------------------------
+  // Wet/dry sand bands, an animated tide-foam line, dune grass, coastal pines,
+  // beach rocks + tide pools, driftwood and a weathered boardwalk. Authored at
+  // neutral daytime (engine tints day/night). Reuses t-dock (pier), t-buoy,
+  // t-parasol, t-crate, t-water-0 already defined above.
+  atlas['t-sand-wet'] = tile(ctx => {                        // darker, sheened sand near the tide
+    fill(ctx, '#a8916a'); speckle(ctx, '#988059', 29, 9); speckle(ctx, '#b6a47c', 17, 5);
+    ctx.fillStyle = '#b8b29c'; ctx.fillRect(2, 4, 5, 1); ctx.fillRect(9, 10, 5, 1); // cool wet sheen streaks
+    ctx.fillStyle = '#937c57'; ctx.fillRect(0, 15, 16, 1);   // damp seam toward the water
+  });
+  // Tide foam — two frames, swapped by the water-alt timer in the draw loop so the
+  // wash gently laps. Walkable wet sand up top, foamy crest where it meets the sea.
+  const foamTile = (yo: number) => tile(ctx => {
+    fill(ctx, '#9a8568'); speckle(ctx, '#8a7860', 23, 8);    // wet sand
+    ctx.fillStyle = '#b0a07e'; ctx.fillRect(0, 0, 16, 3);    // drier sand band (joins wet sand above)
+    ctx.fillStyle = '#7fa0a8'; ctx.fillRect(0, 13, 16, 3);   // shallow water at the foot
+    ctx.fillStyle = '#cfe0e4'; ctx.fillRect(0, 8 + yo, 16, 4); // foam shadow wash
+    ctx.fillStyle = '#f4efe6';                                // bright scalloped foam crest
+    ctx.fillRect(1, 7 + yo, 4, 2); ctx.fillRect(7, 8 + yo, 4, 2); ctx.fillRect(12, 7 + yo, 3, 2);
+    ctx.fillRect(0, 9 + yo, 16, 2);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(3, 7 + yo, 1, 1); ctx.fillRect(9, 8 + yo, 1, 1); ctx.fillRect(14, 7 + yo, 1, 1); // bubbles
+  });
+  atlas['t-foam-0'] = foamTile(0);
+  atlas['t-foam-1'] = foamTile(1);
+  atlas['t-dune'] = tile(ctx => {                            // sandy back-of-beach dune (grass + sand blend)
+    fill(ctx, '#7e9460'); speckle(ctx, '#8fa46e', 31, 8); speckle(ctx, '#cdbb8e', 19, 6); // sand showing through
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(3, 5, 1, 2); ctx.fillRect(11, 9, 1, 2); ctx.fillRect(7, 3, 1, 2); // short blades
+    ctx.fillStyle = '#caa27c'; ctx.fillRect(13, 12, 2, 1);   // bare sand patch
+  });
+  atlas['t-dunegrass'] = tile(ctx => {                       // dune with tall marram-grass tufts (walkable detail)
+    fill(ctx, '#7e9460'); speckle(ctx, '#8fa46e', 41, 6); speckle(ctx, '#cdbb8e', 23, 5);
+    ctx.fillStyle = '#9fb46e'; ctx.fillRect(4, 6, 1, 7); ctx.fillRect(6, 4, 1, 9); ctx.fillRect(8, 7, 1, 6); // tall straw blades
+    ctx.fillStyle = '#c4c078'; ctx.fillRect(5, 3, 1, 4); ctx.fillRect(7, 5, 1, 3);                          // sun-bleached tips
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(11, 8, 1, 5); ctx.fillRect(13, 9, 1, 4);                        // second tuft
+  });
+  atlas['t-pine'] = tile(ctx => {                            // windswept coastal black pine (solid)
+    fill(ctx, '#7e9460'); speckle(ctx, '#8fa46e', 37, 5);    // dune ground behind the trunk
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 9, 2, 6);     // trunk
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(7, 9, 1, 6);     // lit trunk edge
+    ctx.fillStyle = '#2e4a2c';                                // dark needle tiers (windswept, leaning right)
+    ctx.fillRect(2, 6, 11, 3); ctx.fillRect(3, 3, 10, 3); ctx.fillRect(5, 1, 8, 2);
+    ctx.fillStyle = '#3e5c33'; ctx.fillRect(3, 6, 5, 2); ctx.fillRect(4, 3, 4, 2); ctx.fillRect(6, 1, 4, 1); // upper-left lit foliage
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 4, 2, 1); ctx.fillRect(5, 6, 2, 1);                           // highlights
+    ctx.fillStyle = '#1f3320'; ctx.fillRect(9, 7, 4, 1); ctx.fillRect(10, 4, 3, 1);                          // shaded right underside
+  });
+  atlas['t-beachrock'] = tile(ctx => {                       // sandy-grey boulder on the beach (solid)
+    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 19, 6);    // sand base
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(3, 6, 10, 8);    // boulder body
+    ctx.fillStyle = '#a6b0b8'; ctx.fillRect(4, 5, 6, 4);     // sunlit top-left
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(9, 9, 4, 5);     // shaded right
+    ctx.fillStyle = '#5a626c'; ctx.fillRect(3, 13, 10, 2);   // ground contact shadow
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 13, 2, 1); ctx.fillRect(11, 11, 1, 1); // bit of seaweed
+  });
+  atlas['t-tidepool'] = tile(ctx => {                        // rocky pool with a starfish (walkable detail)
+    fill(ctx, '#a8916a'); speckle(ctx, '#988059', 53, 6);    // wet sand
+    ctx.fillStyle = '#7e8890'; ctx.fillRect(2, 3, 12, 10);   // ring of rock
+    ctx.fillStyle = '#5fc6c0'; ctx.fillRect(4, 5, 8, 6);     // pool water
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(4, 5, 8, 1); ctx.fillRect(4, 5, 1, 6); // lit water edge
+    ctx.fillStyle = '#bdf4ee'; ctx.fillRect(5, 6, 2, 1); ctx.fillRect(9, 9, 2, 1); // glints
+    ctx.fillStyle = '#e0885a'; ctx.fillRect(8, 7, 3, 1); ctx.fillRect(9, 6, 1, 3); ctx.fillRect(8, 8, 1, 1); ctx.fillRect(10, 8, 1, 1); // little starfish
+  });
+  atlas['t-driftwood'] = tile(ctx => {                       // bleached driftwood log on the sand (solid)
+    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 31, 6);    // sand base
+    ctx.fillStyle = '#5a4d42'; ctx.fillRect(1, 12, 14, 2);   // contact shadow
+    ctx.fillStyle = '#a89a82'; ctx.fillRect(1, 5, 14, 7);    // weathered log body
+    ctx.fillStyle = '#c8bca2'; ctx.fillRect(1, 5, 14, 2);    // sun-bleached top
+    ctx.fillStyle = '#8a7e6a'; ctx.fillRect(1, 10, 14, 2);   // underside shadow
+    ctx.fillStyle = '#6e6354'; ctx.fillRect(4, 7, 1, 1); ctx.fillRect(10, 8, 1, 1); // knot holes
+    ctx.fillStyle = '#766a58'; ctx.fillRect(1, 7, 14, 1);    // grain line
+  });
+  atlas['t-boardwalk'] = tile(ctx => {                       // weathered promenade planks (walkable)
+    fill(ctx, '#9a8668');
+    ctx.fillStyle = '#a8957a'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1);  // lit plank tops
+    ctx.fillStyle = '#6e5e48'; ctx.fillRect(0, 7, 16, 1); ctx.fillRect(0, 15, 16, 1); // plank seams
+    ctx.fillStyle = '#7e6e54'; ctx.fillRect(4, 0, 1, 16); ctx.fillRect(11, 0, 1, 16); // board joins
+    ctx.fillStyle = '#5a4d3a'; ctx.fillRect(2, 3, 1, 1); ctx.fillRect(9, 11, 1, 1);   // nail heads
+    speckle(ctx, '#8c7a5e', 67, 5);                                                    // grain
+  });
+
   // ---- Paris (the secret arc) ------------------------------------------------
   // Cobblestone, Haussmann facades, café/boulangerie fronts, the Seine, and a
   // multi-tile Eiffel Tower. Authored at neutral daytime; engine tints day/night.
