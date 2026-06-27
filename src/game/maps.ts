@@ -150,7 +150,7 @@ const city: SceneDef = {
     'E': T('t-gh-front', true),    // community greenhouse glass facade (east of home)
     'R': T('t-gh-roof', true),     // greenhouse pitched glass roof (over the facade)
     'G': T('t-gh-door'),           // greenhouse glass door (walk-in warp, gated)
-    'J': T('t-board', true),       // odd-jobs notice board (errand giver)
+    'J': T('t-terminal', true),    // courier gig terminal (deposit-kiosk errand giver)
   },
   outdoor: true,
   grid: [
@@ -200,7 +200,7 @@ const city: SceneDef = {
   interactables: [
     { id: 'vending', x: 8, y: 4, label: 'Vending machine' },
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
-    { id: 'errand-board', x: 11, y: 13, label: 'Odd-jobs board' },
+    { id: 'gig-terminal', x: 11, y: 13, label: 'Courier terminal' },
     { id: 'landlord', x: 9, y: 13, label: 'Lease office' },
   ],
   npcs: [

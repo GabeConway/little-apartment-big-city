@@ -829,16 +829,37 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#fff4c4'; ctx.fillRect(6, 10, 1, 1); ctx.fillRect(9, 11, 1, 1);
   });
 
-  // Odd-jobs notice board — corkboard on two posts, pinned papers. Solid; faced.
-  atlas['t-board'] = tile(ctx => {
+  // Courier gig terminal — a public delivery kiosk on a post: dark casing, a
+  // glowing teal screen (parcel logo + request lines + scanlines), a status LED,
+  // and a bright-rimmed deposit slot you drop the wanted item into. Solid; faced.
+  // Authored neutral-daytime (engine tints night; a soft screen glow is added in
+  // the city draw block). Replaces the old odd-jobs corkboard.
+  atlas['t-terminal'] = tile(ctx => {
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 51, 6); speckle(ctx, '#4d7440', 23, 4); // grass base (no black edges)
-    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 12, 2, 4); ctx.fillRect(12, 12, 2, 4); // posts
-    ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 1, 14, 11);                            // frame
-    ctx.fillStyle = '#c79a5a'; ctx.fillRect(2, 2, 12, 9);                             // cork
-    ctx.fillStyle = '#f4efe2'; ctx.fillRect(3, 3, 4, 4); ctx.fillRect(9, 3, 4, 5);    // papers
-    ctx.fillStyle = '#e8e0cc'; ctx.fillRect(4, 8, 4, 2);
-    ctx.fillStyle = '#9a9488'; ctx.fillRect(4, 4, 2, 1); ctx.fillRect(10, 4, 2, 1); ctx.fillRect(10, 6, 2, 1); // text lines
-    ctx.fillStyle = '#d05050'; ctx.fillRect(4, 3, 1, 1); ctx.fillRect(11, 3, 1, 1);   // pins
+    // brushed-metal pedestal post + foot (light from upper-left)
+    ctx.fillStyle = '#6a7079'; ctx.fillRect(6, 11, 4, 4);
+    ctx.fillStyle = '#878d96'; ctx.fillRect(6, 11, 1, 4);                              // post highlight
+    ctx.fillStyle = '#4d525a'; ctx.fillRect(9, 11, 1, 4);                              // post shade
+    ctx.fillStyle = '#787e87'; ctx.fillRect(4, 14, 8, 1);                              // splayed foot
+    ctx.fillStyle = '#3a3f48'; ctx.fillRect(4, 15, 8, 1);                              // foot shadow
+    // kiosk casing (dark, beveled)
+    ctx.fillStyle = '#2b2f3a'; ctx.fillRect(1, 1, 14, 11);
+    ctx.fillStyle = '#3a3f4c'; ctx.fillRect(1, 1, 14, 1);                              // top bevel highlight
+    ctx.fillStyle = '#1d2028'; ctx.fillRect(1, 10, 14, 2);                             // casing shade under screen
+    ctx.fillStyle = '#7ef06a'; ctx.fillRect(12, 1, 1, 1);                             // "online" status LED
+    // glowing screen
+    ctx.fillStyle = '#123c44'; ctx.fillRect(2, 2, 12, 7);                              // screen base (dark teal)
+    ctx.fillStyle = '#1d6b76'; ctx.fillRect(2, 2, 12, 1);                              // top glow band
+    ctx.fillStyle = '#0e3138'; ctx.fillRect(2, 4, 12, 1); ctx.fillRect(2, 6, 12, 1); ctx.fillRect(2, 8, 12, 1); // scanlines
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 3, 2, 2);                               // little gold parcel logo
+    ctx.fillStyle = '#caa23a'; ctx.fillRect(3, 4, 2, 1);
+    ctx.fillStyle = '#5fe6d2'; ctx.fillRect(6, 3, 7, 1); ctx.fillRect(6, 5, 5, 1); ctx.fillRect(3, 7, 8, 1); // request UI lines
+    ctx.fillStyle = '#9af4e6'; ctx.fillRect(6, 3, 3, 1);                               // brighter glyph
+    ctx.fillStyle = '#ffe08a'; ctx.fillRect(12, 7, 1, 1);                             // reward chip
+    // bright-rimmed deposit slot
+    ctx.fillStyle = '#5fe6d2'; ctx.fillRect(4, 9, 8, 1);                               // glowing slot rim
+    ctx.fillStyle = '#9af4e6'; ctx.fillRect(5, 9, 2, 1);                               // rim highlight
+    ctx.fillStyle = '#10131a'; ctx.fillRect(4, 10, 8, 1);                              // slot mouth
   });
 
   // Shop interiors

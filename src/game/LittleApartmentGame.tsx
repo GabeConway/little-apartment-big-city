@@ -2305,14 +2305,15 @@ const LittleApartmentGame: React.FC = () => {
         setOverlayBoth({ type: 'shop', shop: 'landlord' });
         break;
       case 'vending': useVending(); break;
-      case 'errand-board': {
-        if (errandDoneToday(s)) { showDialog(["ODD JOBS — today's job is handled. Come back in the morning; there's always something."]); break; }
+      case 'gig-terminal': {
+        if (errandDoneToday(s)) { showDialog(['The terminal blinks: "NO OPEN GIGS — you cleared today\'s request. New one posts in the morning."']); break; }
         const e = errandFor(s);
         const have = e.kind === 'peepis' ? s.peepis > 0
           : e.kind === 'soda' ? (s.sodas[e.want!] ?? 0) > 0
           : e.kind === 'fish' ? s.fishInv.length > 0
           : s.coconuts > 0;
-        // Have the goods → ask before handing them over; else just read the ask.
+        // Carrying the goods → the kiosk offers the deposit slot; else the screen
+        // just shows the request (what's wanted + where to get it).
         if (have) setOverlayBoth({ type: 'shop', shop: 'errand' });
         else showDialog([e.ask], e.giver);
         break;
@@ -4037,6 +4038,25 @@ const LittleApartmentGame: React.FC = () => {
       }
       return c;
     };
+
+    // City courier terminal ('J'): its screen casts a soft teal glow that gently
+    // pulses — always on (it's a lit display), reusing the cached glow() sprite.
+    if (scene.id === 'city') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const screen = glow('95,230,210');
+      for (let ty = ty0; ty <= ty1; ty++) {
+        const row = scene.grid[ty];
+        for (let tx = tx0; tx <= tx1; tx++) {
+          if (row[tx] !== 'J') continue;
+          const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 4;
+          ctx.globalAlpha = 0.16 + 0.05 * Math.sin(t * 1.8 + tx); // soft display flicker
+          ctx.drawImage(screen, gx - 18, gy - 18, 36, 36);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
 
     // Downtown street lamps cast a soft warm glow from each lamp head.
     if (scene.id === 'badtown') {
@@ -6502,12 +6522,12 @@ const LittleApartmentGame: React.FC = () => {
     if (ov.shop === 'errand') {
       const e = errandFor(s);
       return (
-        <ShopFrame title={e.giver.toUpperCase()} subtitle="Odd job" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        <ShopFrame title="COURIER TERMINAL" subtitle={`Gig from ${e.giver}`} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
           <p className="text-lg opacity-85 py-1 leading-snug">{e.ask}</p>
-          <p className="text-base opacity-60 py-1">Hand it over now for ¥{e.reward.toLocaleString()}?</p>
+          <p className="text-base opacity-60 py-1">Drop it in the slot — the terminal dispenses ¥{e.reward.toLocaleString()} on deposit.</p>
           <div className="flex items-center gap-3 mt-3">
-            <button className={`${btnCls} flex-grow`} onClick={deliverErrand}>GIVE · +¥{e.reward.toLocaleString()}</button>
-            <button className={btnCls} onClick={close}>KEEP IT</button>
+            <button className={`${btnCls} flex-grow`} onClick={deliverErrand}>DEPOSIT ITEM · +¥{e.reward.toLocaleString()}</button>
+            <button className={btnCls} onClick={close}>NOT YET</button>
           </div>
         </ShopFrame>
       );

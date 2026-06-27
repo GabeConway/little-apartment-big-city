@@ -434,10 +434,12 @@ export const FORAGE: ForageKind[] = [
 ];
 export const forageById = (id: string): ForageKind => FORAGE.find(f => f.id === id) ?? FORAGE[0];
 
-// ---- Odd jobs (errand board) ------------------------------------------------
-// Phase 2 of early money, layered on foraging: the notice board by home posts ONE
-// daily fetch job (seeded per day in state.ts → errandFor). Bring the wanted item
-// and the giver pays a premium — e.g. a ¥150 vending soda turned in for ¥450.
+// ---- Gig / courier terminal (errands) ---------------------------------------
+// Phase 2 of early money, layered on foraging: the courier gig terminal by home
+// posts ONE daily delivery request (seeded per day in state.ts → errandFor).
+// Deposit the wanted item into the kiosk and it dispenses a premium reward —
+// e.g. a ¥150 vending soda deposited for ¥450. The `ask` text reads as the
+// client's request shown on the terminal screen.
 // `kind` picks which pocket to consume from; `want` is the item id for 'soda'.
 // One completion per day (save.errandDay). Extend by adding rows here.
 export interface Errand {
@@ -457,9 +459,9 @@ export const ERRANDS: Errand[] = [
   { id: 'fish-fry', giver: 'Konbini Cook', kind: 'fish', reward: 700,
     ask: "Today's lunch special needs a fresh catch and my supplier flaked. Bring me ANY fish and ¥700 is yours.",
     thanks: 'Beautiful. The noon crowd will never know how close we came. Take the cash.' },
-  { id: 'coconut-run', giver: 'Lulu, by note', kind: 'coconut', reward: 550,
-    ask: 'A note pinned to the board, smelling faintly of rum: "Darling — the tiki bar is dry on coconuts. Bring me one from Kiwami Island? ¥550. — L"',
-    thanks: 'The note vanishes; ¥550 appears in its place, still warm. Lulu pays her debts.' },
+  { id: 'coconut-run', giver: 'Lulu (remote gig)', kind: 'coconut', reward: 550,
+    ask: 'A gig pings in, the message faintly scented with rum: "Darling — the tiki bar is dry on coconuts. Courier me one from Kiwami Island? ¥550. — L"',
+    thanks: 'The slot clunks; ¥550 dispenses, still warm. Lulu pays her debts.' },
 ];
 export const errandById = (id: string): Errand => ERRANDS.find(e => e.id === id) ?? ERRANDS[0];
 
