@@ -8,14 +8,14 @@ import {
   FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
   itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, cropStage, CROP_QUALITY_MULT,
-  CROP_REQUESTS, NON_MANAGER_RARES, FORAGE, ERRANDS,
+  CROP_REQUESTS, NON_MANAGER_RARES, FORAGE, ERRANDS, STREET_EVENTS,
   RECIPES, recipeById, STARTER_RECIPES, GIFT_POINTS, HEART_POINTS, MAX_HEARTS,
   friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
   FRIENDS, FRIEND_HEART_LINES,
 } from './data';
 import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind } from './data';
 import type { CropRequest } from './data';
-import type { Errand } from './data';
+import type { Errand, StreetEvent } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
 import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
 
@@ -85,6 +85,7 @@ export interface GameSave {
   forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
   foragedSpots: number[];       // indices of today's shore finds already grabbed
   errandDay: number;            // last day the odd-jobs board errand was completed (0 = none); one per day
+  streetEventDay: number;       // last day the daily random street event was completed (0 = none); one per day
   greenhouseUnlocked: boolean;  // Granny Soto handed over the greenhouse key (after the fish errand)
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
@@ -254,6 +255,7 @@ export const newSave = (): GameSave => ({
   forageDay: 0,
   foragedSpots: [],
   errandDay: 0,
+  streetEventDay: 0,
   greenhouseUnlocked: false,
   ended: false,
   today: freshDayLog(3000),
@@ -500,6 +502,21 @@ export const errandFor = (s: GameSave): Errand => {
   return list[Math.floor(mulberry32(s.day * 374761393 + 31)() * list.length)];
 };
 export const errandDoneToday = (s: GameSave): boolean => s.errandDay === s.day;
+
+// ---- Random daily street event ----------------------------------------------
+// Roughly one charming one-off city vignette per day. Seeded per `day` (mulberry32,
+// stable across reloads, like the Market/Lucky/rain/forage rolls) so the same day
+// always shows the same event; varies day to day. NEVER on day 1 (the player is
+// still settling in). Some days are quiet (returns null) so it stays a surprise.
+// Pure read — does not mutate the save. Completion is gated separately by
+// save.streetEventDay (one per day). The actor only exists in the CITY.
+export const streetEventFor = (s: GameSave): StreetEvent | null => {
+  if (s.day <= 1) return null;
+  const rand = mulberry32(s.day * 2654435761 + 101);
+  if (rand() < 0.25) return null;                    // ~1 in 4 days nothing turns up
+  return STREET_EVENTS[Math.floor(rand() * STREET_EVENTS.length)];
+};
+export const streetEventDoneToday = (s: GameSave): boolean => s.streetEventDay === s.day;
 
 export const buyFurniture = (s: GameSave, itemId: string, price: number): boolean => {
   if (s.owned.includes(itemId) || s.money < price) return false;

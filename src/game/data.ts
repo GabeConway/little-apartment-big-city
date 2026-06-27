@@ -460,6 +460,58 @@ export const ERRANDS: Errand[] = [
 ];
 export const errandById = (id: string): Errand => ERRANDS.find(e => e.id === id) ?? ERRANDS[0];
 
+// ---- Random daily street events ---------------------------------------------
+// One-off CITY vignettes, seeded per day (state.ts → streetEventFor): roughly one
+// a day after day 1, varying day to day. Each spawns a TEMPORARY actor in the city
+// hub that exists only on its day — never baked into the static map. Completing
+// it is once per day (save.streetEventDay). Each is a self-contained, unique
+// charmer: NOT a reskin of an existing shop/NPC, and it never references or
+// unlocks any other (locked) part of the game — fortunes stay pure atmosphere.
+// Placement is a free, walkable city tile (verified against maps.ts). The actual
+// dialog/effect lives in the interact handler, keyed by id (cf. how shops branch).
+// `sprite` prefix decides how it's drawn: 'npc-*' = a 4-direction character built
+// from the accessory system; 'prop-*' = a single static prop tile.
+export interface StreetEvent {
+  id: string;
+  sprite: string;                         // atlas key ('npc-*' character | 'prop-*' prop)
+  x: number; y: number;                   // city tile coords (single tile, made solid for the day)
+  dir: 'up' | 'down' | 'left' | 'right';  // facing (characters only)
+  label: string;                          // short name (debug / parity with other tables)
+  cost: number;                           // yen the interaction asks for (0 = free)
+}
+export const STREET_EVENTS: StreetEvent[] = [
+  // A traveling ramen yatai: buy the one-day special → a big, cozy hot meal that
+  // tops you off past full (a warm "stuffed" overfill that burns down through the day).
+  { id: 'ramen-yatai', sprite: 'prop-yatai', x: 14, y: 9, dir: 'down', label: 'Ramen yatai', cost: 650 },
+  // A street magician working the sidewalk: watch the card trick (free) → a
+  // flourish and a coin produced "from behind your ear".
+  { id: 'magician', sprite: 'npc-magician', x: 10, y: 9, dir: 'down', label: 'Street magician', cost: 0 },
+  // A coin-op claw machine wheeled out front: pay a little for a weighted random
+  // small prize (a can, a souvenir, your money back, or — rarely — a jackpot).
+  { id: 'claw-machine', sprite: 'prop-claw', x: 18, y: 9, dir: 'down', label: 'Claw machine', cost: 300 },
+  // A pop-up festival stall: a paper tray of fresh takoyaki → a tasty snack that
+  // restores a chunk of energy (with one extra "for luck").
+  { id: 'takoyaki', sprite: 'prop-takoyaki', x: 22, y: 9, dir: 'down', label: 'Takoyaki stall', cost: 250 },
+  // A fortune teller under a paper lantern: pay → a cryptic, atmospheric reading.
+  // PURE FLAVOR — no mechanics, no spoilers, no hints at locked content.
+  { id: 'fortune', sprite: 'npc-fortune', x: 26, y: 9, dir: 'down', label: 'Fortune teller', cost: 300 },
+  // A lost pet ferret darting in the grass: help catch it (free) → a grateful
+  // owner's reward (cash + a cold can for your trouble).
+  { id: 'lost-ferret', sprite: 'prop-ferret', x: 20, y: 10, dir: 'down', label: 'Lost ferret', cost: 0 },
+];
+export const streetEventById = (id: string): StreetEvent | undefined => STREET_EVENTS.find(e => e.id === id);
+// Cryptic fortunes — atmospheric only, deliberately vague, no concrete spoilers.
+export const FORTUNES: string[] = [
+  '"A small kindness you have already forgotten will find its way back to your door."',
+  '"The sea keeps what it is given, and returns it polished. Be patient with still water."',
+  '"You are building something one quiet evening at a time. The walls do not see it yet. They will."',
+  '"Beware the day that feels too easy. Beware more the one that feels too hard. Both pass."',
+  '"A stranger you pass tomorrow is carrying the same worry as you. Smile anyway."',
+  '"Money is a river, not a pond. Stop trying to hold it still and let it carry you somewhere."',
+  '"Three lights burn for you tonight: one at home, one over water, one you have not lit yet."',
+  '"The cat knows. The cat is not telling. Buy the cat nothing and it will respect you more."',
+];
+
 export const fishById = (id: string): Fish =>
   (FISH.find(f => f.id === id) ?? DEEP_FISH.find(f => f.id === id) ?? TROPICAL_FISH.find(f => f.id === id))!;
 

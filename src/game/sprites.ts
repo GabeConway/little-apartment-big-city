@@ -222,6 +222,13 @@ const ACC = {
     up: ['.....cccccc.....', '....cccccccc....', '....bbbbbbbb....', 'cccccccccccccccc', '.cc..........cc.'],
     left: ['.....cccccc.....', '....cccccccc....', '....bbbbbbbb....', 'cccccccccccccccc', '.cc..........cc.'],
   }),
+  // Magician's top hat — tall crown + brim, a coloured band. Sits over the head.
+  tophat: (c: string, band: string): Accessory => ({
+    pal: { c, b: band },
+    down: ['.....cccc.....', '.....cccc.....', '.....cccc.....', '....bbbbbb....', '..cccccccccc..'],
+    up: ['.....cccc.....', '.....cccc.....', '.....cccc.....', '....bbbbbb....', '..cccccccccc..'],
+    left: ['.....cccc.....', '.....cccc.....', '.....cccc.....', '....bbbbbb....', '..cccccccccc..'],
+  }),
   // Full beard + mustache framing the lower face (mouth gap kept open).
   beard: (c: string): Accessory => ({
     dy: 5, pal: { b: c },
@@ -367,6 +374,15 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
   'npc-stranger': { // the midnight stranger — a hooded indigo figure, pale lavender skin, eyes like two cold lights. Only out in the small hours.
     pal: { h: '#241a33', k: '#160f22', s: '#d6d2e2', e: '#aef4ee', t: '#2a2140', u: '#1a1430', p: '#15101f', b: '#0d0a14' },
     acc: [ACC.hood('#2e2350', '#1c1638')],
+  },
+  // ---- Daily street-event actors (only spawned by streetEventFor) ----
+  'npc-magician': { // street magician — black tailcoat, top hat, crimson bowtie
+    pal: { h: '#15151a', k: '#0a0a0d', s: '#e8c098', e: '#222', t: '#16161c', u: '#0b0b0f', p: '#26262e', b: '#0d0d10' },
+    acc: [ACC.tophat('#15151a', '#c0392b'), ACC.bowtie('#c0392b')],
+  },
+  'npc-fortune': { // fortune teller — deep-purple hooded robe, you never quite see her face
+    pal: { h: '#2a1d3a', k: '#1a1226', s: '#dcb48c', e: '#222', t: '#3a2a5a', u: '#281c40', p: '#241a36', b: '#16101f' },
+    acc: [ACC.hood('#4a3470', '#2a1d44')],
   },
 };
 
@@ -2759,6 +2775,57 @@ const buildFurniture = (atlas: Atlas) => {
     ctx.fillStyle = '#e0552e'; ctx.fillRect(6, 4, 4, 7);            // flame outer
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 6, 2, 4);            // flame mid
     ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 8, 1, 2);           // flame core
+  });
+  // ---- Daily street-event props (transparent bg — overlay the sidewalk/grass) ----
+  atlas['prop-yatai'] = tile(ctx => {                               // traveling ramen cart
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(1, 1, 14, 3);          // red awning
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(3, 1, 2, 3); ctx.fillRect(7, 1, 2, 3); ctx.fillRect(11, 1, 2, 3); // awning stripes
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(2, 4, 1, 4); ctx.fillRect(13, 4, 1, 4); // posts
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 8, 12, 6);          // cart body
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(2, 8, 12, 2);          // counter top
+    ctx.fillStyle = '#4a3120'; ctx.fillRect(3, 8, 1, 6); ctx.fillRect(12, 8, 1, 6); ctx.fillRect(7, 8, 1, 6); // planks
+    ctx.fillStyle = '#222'; ctx.fillRect(3, 14, 3, 2); ctx.fillRect(10, 14, 3, 2); // wheels
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(5, 9, 4, 2);           // ramen bowl
+    ctx.fillStyle = '#c97a3a'; ctx.fillRect(6, 9, 2, 1);           // broth
+    ctx.fillStyle = '#d05050'; ctx.fillRect(11, 4, 3, 4);         // hanging lantern
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(12, 5, 1, 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(6, 6, 1, 2); ctx.fillRect(8, 5, 1, 2); // steam
+  });
+  atlas['prop-claw'] = tile(ctx => {                               // coin-op claw machine
+    ctx.fillStyle = '#d05050'; ctx.fillRect(2, 0, 12, 16);        // red cabinet
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(2, 0, 12, 1); ctx.fillRect(2, 10, 12, 1);
+    ctx.fillStyle = '#16181d'; ctx.fillRect(3, 1, 10, 9);         // glass
+    ctx.fillStyle = '#3a4a5a'; ctx.fillRect(4, 2, 7, 1);          // glass shine
+    ctx.fillStyle = '#c4c4c4'; ctx.fillRect(7, 1, 2, 2);          // claw rail
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(7, 3, 1, 2); ctx.fillRect(8, 3, 1, 2); // claw
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 7, 2, 2);          // prizes
+    ctx.fillStyle = '#50c878'; ctx.fillRect(7, 8, 2, 1);
+    ctx.fillStyle = '#5aa0e8'; ctx.fillRect(10, 7, 2, 2);
+    ctx.fillStyle = '#7a2c2c'; ctx.fillRect(3, 11, 10, 4);        // control panel
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 12, 2, 2);        // joystick/button
+    ctx.fillStyle = '#16181d'; ctx.fillRect(4, 12, 2, 1);        // coin slot
+  });
+  atlas['prop-takoyaki'] = tile(ctx => {                           // pop-up takoyaki stall
+    ctx.fillStyle = '#2c7a4f'; ctx.fillRect(1, 1, 14, 3);         // green banner
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 0, 1, 1); ctx.fillRect(7, 0, 1, 1); ctx.fillRect(12, 0, 1, 1); // bulbs
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(2, 4, 1, 4); ctx.fillRect(13, 4, 1, 4); // posts
+    ctx.fillStyle = '#6b6b6b'; ctx.fillRect(2, 8, 12, 6);         // griddle stand
+    ctx.fillStyle = '#3a3a3a'; ctx.fillRect(2, 8, 12, 2);         // hot plate
+    ctx.fillStyle = '#c08038'; ctx.fillRect(3, 8, 2, 2); ctx.fillRect(6, 8, 2, 2); ctx.fillRect(9, 8, 2, 2); // takoyaki
+    ctx.fillStyle = '#a8662a'; ctx.fillRect(3, 9, 2, 1); ctx.fillRect(6, 9, 2, 1); ctx.fillRect(9, 9, 2, 1);
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(11, 8, 2, 1);         // aonori garnish
+    ctx.fillStyle = '#4a3120'; ctx.fillRect(3, 14, 2, 2); ctx.fillRect(11, 14, 2, 2); // legs
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(5, 6, 1, 2); ctx.fillRect(9, 6, 1, 2); // steam
+  });
+  atlas['prop-ferret'] = tile(ctx => {                             // a lost ferret darting in the grass
+    ctx.fillStyle = '#e0d4b8'; ctx.fillRect(4, 9, 7, 3);          // cream body
+    ctx.fillStyle = '#cabd9c'; ctx.fillRect(4, 11, 7, 1);
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(10, 8, 3, 2);         // brown head
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 9, 3, 2);          // bushy tail
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(11, 7, 1, 1);         // ear
+    ctx.fillStyle = '#222'; ctx.fillRect(12, 8, 1, 1);            // eye
+    ctx.fillStyle = '#16100a'; ctx.fillRect(13, 9, 1, 1);         // nose
+    ctx.fillStyle = '#cabd9c'; ctx.fillRect(5, 12, 1, 1); ctx.fillRect(8, 12, 1, 1); // little legs
   });
   atlas['f-maneki'] = tile(ctx => {
     // maneki-neko lucky cat: cream body, raised waving paw, red collar + bell, gold koban.

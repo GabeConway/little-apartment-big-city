@@ -9,8 +9,9 @@ import {
   mineChallengeFor, enterMineStreak, crackGeode, dayEventFor, shoreForageFor,
   isRainyDay, foggyDay, meteorNight,
   plantCrop, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
+  streetEventFor, streetEventDoneToday,
 } from '../src/game/state';
-import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, SKETCHY_DISCOUNT, PAWN_DISCOUNT, GACHA_FIGURES, CROPS } from '../src/game/data';
+import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, SKETCHY_DISCOUNT, PAWN_DISCOUNT, GACHA_FIGURES, CROPS, STREET_EVENTS } from '../src/game/data';
 import {
   canCookHere, canCook, cook, eatDish, ingredientCount, buyGrocery, learnRecipe,
   buffActive, friendHearts, giftTo, canGiftToday, applyFriendPerks,
@@ -756,5 +757,58 @@ describe('apartment room + jukebox save fields', () => {
     expect(s.roomUnlocked).toBe(false);
     expect(s.homeTrack).toBeNull();
     expect(ROOM_PRICE).toBeGreaterThan(0);
+  });
+});
+
+describe('streetEventFor', () => {
+  const at = (day: number) => streetEventFor({ ...newSave(), day });
+  it('never spawns an event on day 1', () => {
+    expect(at(1)).toBeNull();
+  });
+  it('is deterministic for a given day (stable across calls/reloads)', () => {
+    for (const day of [2, 3, 5, 7, 13, 21, 40]) {
+      const a = at(day);
+      const b = at(day);
+      expect(a?.id ?? null).toBe(b?.id ?? null);
+    }
+  });
+  it('only ever returns events from the STREET_EVENTS table', () => {
+    const ids = new Set(STREET_EVENTS.map(e => e.id));
+    for (let day = 2; day <= 200; day++) {
+      const ev = at(day);
+      if (ev) expect(ids.has(ev.id)).toBe(true);
+    }
+  });
+  it('places every event on a distinct, in-bounds city tile', () => {
+    const seen = new Set<string>();
+    for (const e of STREET_EVENTS) {
+      expect(e.x).toBeGreaterThanOrEqual(0);
+      expect(e.y).toBeGreaterThanOrEqual(0);
+      const key = `${e.x},${e.y}`;
+      expect(seen.has(key)).toBe(false); // no two events share a tile
+      seen.add(key);
+    }
+  });
+  it('reaches every event across a reasonable day range, and has some quiet days', () => {
+    const got = new Set<string>();
+    let quiet = 0;
+    for (let day = 2; day <= 120; day++) {
+      const ev = at(day);
+      if (ev) got.add(ev.id); else quiet++;
+    }
+    expect(got.size).toBe(STREET_EVENTS.length); // all events are reachable
+    expect(quiet).toBeGreaterThan(0);            // some days are deliberately empty
+  });
+});
+
+describe('streetEventDoneToday', () => {
+  it('is false until completed this day, true once streetEventDay matches', () => {
+    const s = newSave();
+    s.day = 5;
+    expect(streetEventDoneToday(s)).toBe(false);
+    s.streetEventDay = 5;
+    expect(streetEventDoneToday(s)).toBe(true);
+    s.day = 6; // a new day resets the gate
+    expect(streetEventDoneToday(s)).toBe(false);
   });
 });

@@ -43,8 +43,9 @@ import {
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
   itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, CROP_QUALITY, FORAGE, forageById,
   RECIPES, recipeById, GROCERIES, groceryById, BUFFS, FRIENDS, friendById, DECOR, decorById, MAX_HEARTS,
+  FORTUNES,
 } from './data';
-import type { BingusFetch, GiftKind, GiftTier, IngredientKind, DecorItem } from './data';
+import type { BingusFetch, GiftKind, GiftTier, IngredientKind, DecorItem, StreetEvent } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
   newSave, loadSave, persistSave, clearSave,
@@ -65,6 +66,7 @@ import {
   friendFlavorLine, allFriendsMet,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
   ROOM_PRICE, JUKEBOX_PRICE, skillLevel, skillProgress, addSkillXp,
+  streetEventFor, streetEventDoneToday,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe, SkillId } from './state';
@@ -365,7 +367,7 @@ const HACK_LINES = [
 
 type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji' | 'landlord'
   | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch'
-  | 'greenhouse-plot' | 'greenhouse-supply';
+  | 'greenhouse-plot' | 'greenhouse-supply' | 'street';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
 // bag for energy (Peepis can also be fed to The Manager; a Conk goes to Max).
@@ -841,6 +843,53 @@ const bingusHeldFetch = (s: GameSave): BingusFetch | null =>
   BINGUS_FETCHES.find(f => bingusPending(s, f) && bingusHasKind(s, f.kind)) ?? null;
 const bingusNextAsk = (s: GameSave): BingusFetch | null =>
   BINGUS_FETCHES.find(f => bingusPending(s, f)) ?? null;
+// ---- Daily street-event presentation ----------------------------------------
+// The shop-frame copy for each event (the actual effects live in runStreetEvent).
+const STREET_UI: Record<string, { title: string; subtitle: string; body: string; action: string; no: string; priceLabel: string }> = {
+  'ramen-yatai': {
+    title: 'RAMEN YATAI', subtitle: 'A traveling cart, red lantern swinging',
+    body: 'A little ramen cart has pulled up on the corner, steam curling from under a red awning. "One bowl left of today\'s special, friend — tonkotsu, soft egg, the works. Care to warm up?"',
+    action: 'BUY THE SPECIAL', no: 'MAYBE LATER', priceLabel: "Tonight's special —",
+  },
+  'magician': {
+    title: 'STREET MAGICIAN', subtitle: 'Top hat, suspiciously empty sleeves',
+    body: 'A magician in a worn tailcoat fans a deck of cards with a flourish. "You there! Care to witness something that should not be possible? No charge — only your astonishment."',
+    action: 'WATCH THE TRICK', no: 'NOT NOW', priceLabel: '',
+  },
+  'claw-machine': {
+    title: 'CLAW MACHINE', subtitle: 'Glowing, humming, hungry for coins',
+    body: 'A coin-op claw machine has appeared on the sidewalk, crammed with plush toys and the odd cold can. The claw looks weak and the prizes look heavy. You know exactly how this ends. You want to play anyway.',
+    action: 'PLAY', no: 'WALK PAST', priceLabel: 'One go —',
+  },
+  'takoyaki': {
+    title: 'TAKOYAKI STALL', subtitle: 'Festival lights, a sizzling griddle',
+    body: 'A pop-up stall is flipping takoyaki on a cast-iron griddle, the air thick with sauce and dancing bonito. "Fresh batch coming off now! Octopus heaven, eight to a tray — eat \'em quick!"',
+    action: 'BUY A TRAY', no: 'JUST LOOKING', priceLabel: 'A fresh tray —',
+  },
+  'fortune': {
+    title: 'FORTUNE TELLER', subtitle: 'A small table, a single candle',
+    body: 'A fortune teller sits beneath a paper lantern, cards laid on a velvet cloth. She does not look up. "You have questions you have not said aloud. Sit. The cards are patient. I am not."',
+    action: 'HAVE MY FORTUNE READ', no: 'NOT TODAY', priceLabel: 'A reading —',
+  },
+  'lost-ferret': {
+    title: 'LOST FERRET', subtitle: 'Something is loose in the grass',
+    body: 'A long cream-and-brown ferret is zipping through the grass, a tiny leash trailing, clearly having the time of its life. Nearby, a worried voice keeps calling a name. Help catch the little fugitive?',
+    action: 'HELP CATCH IT', no: 'LEAVE IT BE', priceLabel: '',
+  },
+};
+// What the event actor says if you come back after finishing it today.
+const streetEventDoneLines = (id: string): string[] => {
+  switch (id) {
+    case 'ramen-yatai': return ['The yatai chef wipes the counter and grins. "Sold clean out of the special, friend. Roll back through tomorrow."'];
+    case 'magician': return ['The magician tips his hat. "One wonder per customer per day — house rules. Magician\'s honour."'];
+    case 'claw-machine': return ['The claw machine hums to itself, smug and well-fed. You\'ve given it quite enough for one day.'];
+    case 'takoyaki': return ['"All out of batter — sorry, sorry!" The stall-keeper bows. "Fresh round tomorrow, come hungry!"'];
+    case 'fortune': return ['The fortune teller shakes her head, eyes shut. "The cards have said their piece for today. Return when the sun has turned."'];
+    case 'lost-ferret': return ['The ferret is home safe in its owner\'s coat now, watching you over her arm with two bright little eyes.'];
+    default: return ['Nothing more to do here today.'];
+  }
+};
+
 type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: number; homeY: number; dir: Dir; moving: boolean; stepT: number };
 const makeWanderers = (scene: SceneDef): Wanderer[] =>
   scene.npcs.filter(n => WANDER_IDS.has(n.id)).map(n => ({
@@ -1037,6 +1086,9 @@ const LittleApartmentGame: React.FC = () => {
   // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
   const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; timer: number } | null>(null);
   const ghPlotRef = useRef(0); // which greenhouse plot index the open plot menu is acting on
+  // Today's random street event (or null), spawned ONLY in the city for that day.
+  // Set on every scene entry (enterScene / begin); never baked into the static map.
+  const streetEventRef = useRef<StreetEvent | null>(null);
   const inputRef = useRef(new Input());
   const solidsRef = useRef(new Set<string>());
   const overlayRef = useRef<Overlay | null>(null);
@@ -1289,6 +1341,11 @@ const LittleApartmentGame: React.FC = () => {
       set.add(`${s.carPos.x},${s.carPos.y}`);
       set.add(`${s.carPos.x + 1},${s.carPos.y}`);
     }
+    // Today's street-event actor blocks its tile so you bump into it to interact.
+    if (scene.id === 'city' && streetEventRef.current) {
+      const ev = streetEventRef.current;
+      set.add(`${ev.x},${ev.y}`);
+    }
     solidsRef.current = set;
   }, []);
 
@@ -1311,6 +1368,8 @@ const LittleApartmentGame: React.FC = () => {
       s.leftKonbiniAt = s.day * 1440 + s.timeMin;
     }
     sceneRef.current = SCENES[id];
+    // Today's one-off street event lives only in the city — re-resolve on entry.
+    streetEventRef.current = id === 'city' ? streetEventFor(s) : null;
     wanderersRef.current = makeWanderers(SCENES[id]);
     posRef.current = { x: tx * TILE, y: ty * TILE - 4 };
     dirRef.current = dir;
@@ -1912,6 +1971,16 @@ const LittleApartmentGame: React.FC = () => {
         persistSave(s); refreshHud();
         return;
       }
+    }
+
+    // Today's street event (city only): bump into its actor to interact. Once a
+    // day (save.streetEventDay); afterwards it just gives a little "done" line.
+    if (scene.id === 'city' && streetEventRef.current
+      && faced.x === streetEventRef.current.x && faced.y === streetEventRef.current.y) {
+      const ev = streetEventRef.current;
+      if (streetEventDoneToday(s)) { showDialog(streetEventDoneLines(ev.id)); return; }
+      setOverlayBoth({ type: 'shop', shop: 'street' });
+      return;
     }
 
     // Prefer a wanderer at the faced tile (they move; their static tile is stale).
@@ -3637,6 +3706,21 @@ const LittleApartmentGame: React.FC = () => {
         },
       });
     }
+    // Today's street event — a temporary actor that only exists in the city for
+    // this day (npc-* = a character, prop-* = a static stall/machine/critter).
+    if (scene.id === 'city' && streetEventRef.current) {
+      const ev = streetEventRef.current;
+      const isNpc = ev.sprite.startsWith('npc-');
+      ents.push({
+        y: ev.y * TILE,
+        draw: () => {
+          const ex = ev.x * TILE - cam.x, ey = ev.y * TILE - cam.y;
+          ctx.drawImage(atlas['m-shadow'], ex, ey + 2);
+          if (isNpc) ctx.drawImage(atlas[`${ev.sprite}-${ev.dir}-0`], ex, ey);
+          else ctx.drawImage(atlas[ev.sprite], ex, ey);
+        },
+      });
+    }
     const p = posRef.current;
     const moving = movingRef.current;
     // In-code 16px player art (buildAtlas). True 4-direction (up/down/left art,
@@ -4086,6 +4170,10 @@ const LittleApartmentGame: React.FC = () => {
         if (onCar(faced) || onCar(feet)) label = 'Drive';
       }
       if (it?.id === 'boat' && !sv.vehicles.includes('boat')) label = 'Fish';
+      if (scene.id === 'city' && streetEventRef.current
+        && faced.x === streetEventRef.current.x && faced.y === streetEventRef.current.y) {
+        label = streetEventDoneToday(sv) ? 'Look' : 'Check it out';
+      }
       if (it?.id === 'gh-supply') label = 'Supplies';
       if (it?.id === 'gh-shipbox') label = sv.greenhouse.shipped.length > 0 ? `Shipping (${sv.greenhouse.shipped.length})` : 'Shipping box';
       if (it?.id === 'gh-plot') {
@@ -4243,6 +4331,7 @@ const LittleApartmentGame: React.FC = () => {
     saveRef.current = s;
     applyApartmentSize(s.roomUnlocked); // pick the one/two-room apartment before the scene is read
     sceneRef.current = SCENES[s.scene] ?? SCENES.apartment;
+    streetEventRef.current = sceneRef.current.id === 'city' ? streetEventFor(s) : null;
     wanderersRef.current = makeWanderers(sceneRef.current);
     posRef.current = { x: s.px, y: s.py };
     dirRef.current = s.dir;
@@ -5000,6 +5089,102 @@ const LittleApartmentGame: React.FC = () => {
         ? 'And — that is the LAST one. The Kawamachi Museum is COMPLETE. Bingus presses a thick envelope into your hands. (+¥10,000)'
         : `(${s.museum.donated.length}/${MUSEUM_SLOTS.length} displays filled.)`,
     ], 'Bingus Doofelsmurt');
+  };
+
+  // ---- Daily street-event actions --------------------------------------------
+  // Run the chosen street event's effect, mark it done for the day, and report
+  // the outcome via the dialog box. One per day (save.streetEventDay). Never
+  // touches or hints at locked content — these are self-contained vignettes.
+  const finishStreet = (lines: string[], speaker?: string) => {
+    const s = saveRef.current;
+    s.streetEventDay = s.day;
+    persistSave(s); refreshHud();
+    setOverlayBoth(null);
+    showDialog(lines, speaker);
+  };
+  const runStreetEvent = (id: string) => {
+    const s = saveRef.current;
+    if (streetEventDoneToday(s)) { setOverlayBoth(null); return; }
+    switch (id) {
+      case 'ramen-yatai': {
+        if (s.money < 650) { setOverlayBoth(null); return; }
+        s.money -= 650;
+        s.energy = maxEnergy(s) + 30; // a hot bowl tops you PAST full — a cozy overfill that burns down through the day
+        sfxCatch();
+        finishStreet([
+          'The chef ladles broth over fresh noodles, lays on egg, pork, and a fan of scallion, and slides the bowl across the little counter.',
+          'You eat it standing up under the red lantern while the whole city goes by. It is, briefly, the warmest you have felt all week. (Energy filled — and then some.)',
+        ], 'Yatai Chef');
+        break;
+      }
+      case 'magician': {
+        s.money += 150;
+        sfxCoin();
+        finishStreet([
+          '"Pick a card — no, don\'t show me." You aren\'t holding a card. He produces one anyway; it is, somehow, the very one you were thinking of.',
+          'He bows, reaches behind your ear, and plucks out a ¥100 coin. Then a ¥50. "For your kind patronage." (+¥150)',
+        ], 'Street Magician');
+        break;
+      }
+      case 'claw-machine': {
+        if (s.money < 300) { setOverlayBoth(null); return; }
+        s.money -= 300;
+        const r = Math.random();
+        let lines: string[];
+        if (r < 0.18) {
+          lines = ['The claw descends with theatrical confidence, closes on a plush rabbit... and lets it flop free at the last possible second.', '(No prize. The machine is, you are now certain, evil.)'];
+        } else if (r < 0.50) {
+          s.peepis += 1;
+          lines = ['The claw snags a chilled can wedged among the toys and — astonishingly — delivers it to the chute. A Diet Doctor Peepis! (+1 can)'];
+        } else if (r < 0.72) {
+          s.sodas['conk'] = (s.sodas['conk'] ?? 0) + 1;
+          lines = ['Clunk. A frosty Conk drops into the tray. You didn\'t know this machine sold Conk. Neither, by the look of it, did the machine. (+1 Conk)'];
+        } else if (r < 0.90) {
+          const w = 200 + Math.floor(Math.random() * 3) * 100;
+          s.money += w; sfxCoin();
+          lines = [`The prize is a little capsule. Inside: a neat fold of yen and a slip that just reads "nice". (+¥${w.toLocaleString()})`];
+        } else {
+          s.money += 1500; sfxCatch();
+          lines = ['The claw seizes the GIANT plush at the very back — the one nobody ever wins — and the cabinet lights up screaming. A tiny crowd applauds.', 'The flustered attendant quietly buys it back off you to restock it. (+¥1,500!)'];
+        }
+        finishStreet(lines, 'Claw Machine');
+        break;
+      }
+      case 'takoyaki': {
+        if (s.money < 250) { setOverlayBoth(null); return; }
+        s.money -= 250;
+        s.energy = Math.min(maxEnergy(s), s.energy + 40);
+        sfxCatch();
+        finishStreet([
+          'Eight golden takoyaki, blistered and steaming, drowned in sauce and dancing bonito flakes. "Careful — molten! Here, a ninth, on the house, for luck."',
+          'You burn your mouth immediately and regret nothing whatsoever. (+40 energy)',
+        ], 'Takoyaki Stall');
+        break;
+      }
+      case 'fortune': {
+        if (s.money < 300) { setOverlayBoth(null); return; }
+        s.money -= 300;
+        const f = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+        finishStreet([
+          'The fortune teller turns three cards face up, studies them an uncomfortably long while, then looks straight through you.',
+          f,
+          'She gathers the cards before you can read them yourself. "That is three hundred yen. The future, alas, is not free."',
+        ], 'Fortune Teller');
+        break;
+      }
+      case 'lost-ferret': {
+        s.money += 700;
+        s.peepis += 1;
+        sfxCatch();
+        finishStreet([
+          'The ferret leads you a merry dance — under a bench, around a planter, between your own legs — before flopping over, delighted, to be scooped up.',
+          'Its owner comes pelting up, breathless. "MOCHI! You absolute menace —" She gathers the wriggling thing to her chest and sags with relief.',
+          '"Thank you, truly. Here, take this, I insist." She presses some yen and a cold can into your hands before you can refuse. (+¥700, +1 Peepis)',
+        ], 'Ferret Owner');
+        break;
+      }
+      default: setOverlayBoth(null);
+    }
   };
 
   // ---- Greenhouse actions (plot menu + supply counter) -----------------------
@@ -6194,6 +6379,25 @@ const LittleApartmentGame: React.FC = () => {
           <div className="flex items-center gap-3 mt-3">
             <button className={`${btnCls} flex-grow`} onClick={giveBingusFetch}>GIVE IT TO BINGUS</button>
             <button className={btnCls} onClick={close}>KEEP IT</button>
+          </div>
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'street') {
+      const ev = streetEventRef.current;
+      if (!ev) { close(); return null; }
+      const cfg = STREET_UI[ev.id];
+      const afford = ev.cost === 0 || s.money >= ev.cost;
+      return (
+        <ShopFrame title={cfg.title} subtitle={cfg.subtitle} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">{cfg.body}</p>
+          {ev.cost > 0 && <p className="text-base opacity-60 py-1">{cfg.priceLabel} ¥{ev.cost.toLocaleString()}</p>}
+          <div className="flex items-center gap-3 mt-3">
+            <button className={`${btnCls} flex-grow`} disabled={!afford} onClick={() => runStreetEvent(ev.id)}>
+              {afford ? cfg.action : "CAN'T AFFORD"}
+            </button>
+            <button className={btnCls} onClick={close}>{cfg.no}</button>
           </div>
         </ShopFrame>
       );
