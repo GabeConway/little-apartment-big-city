@@ -507,14 +507,6 @@ export const STORY_BEATS: StoryBeat[] = [
     ],
   },
   {
-    id: 'first-item', title: 'A Start', from: 'your journal',
-    when: owned => owned.length >= 1,
-    lines: [
-      'Bought my first real thing for the apartment today. Carried it home through the evening crowd like a trophy.',
-      'The room looks different with something in it. Less like a storage unit, more like a beginning.',
-    ],
-  },
-  {
     id: 'bed', title: 'Letter from Grandma', from: 'Grandma',
     when: owned => owned.includes('bed'),
     lines: [
@@ -523,15 +515,6 @@ export const STORY_BEATS: StoryBeat[] = [
       'A person who sleeps well can do anything. A person who sleeps on the floor only does laundry late.',
       'Eat real vegetables. Not the convenience store kind.',
       '— Grandma',
-    ],
-  },
-  {
-    id: 'almost', title: 'Almost There', from: 'your journal',
-    when: owned => owned.length >= 9,
-    lines: [
-      'One empty corner left. I know exactly what goes there.',
-      'Funny — when I moved in, the apartment felt like a box I was hiding in. Now it feels like a place that was waiting for me.',
-      'The city outside is still enormous. But it is MY enormous city now.',
     ],
   },
 ];
@@ -623,15 +606,6 @@ export const MESSAGES: MessageDef[] = [
     ],
   },
   {
-    id: 'dokidoki-promo', from: 'Doki Doki Discount 🛒', avatar: '🛒', company: true,
-    when: c => c.metStores.includes('denden'),
-    body: [
-      '♥ DOKI DOKI DISCOUNT ♥ — your home electronics superstore!',
-      'TV, fridge, AC, microwave — everything to make 19 sqm feel like 20. New stock weekly.',
-      'Show this text for... well, the same prices as everyone else. But we appreciate you. 🧡',
-    ],
-  },
-  {
     id: 'konbini-job', from: 'Konbini 24h 🏪', avatar: '🏪', company: true,
     // Fires ~1 in-game hour after you first leave the konbini; unlocks the shift.
     when: c => c.leftKonbiniAt != null && c.day * 1440 + c.timeMin >= c.leftKonbiniAt + 60,
@@ -639,15 +613,6 @@ export const MESSAGES: MessageDef[] = [
       'Hey {name} — thanks for stopping by KONBINI 24H earlier.',
       'We\'re always short a pair of hands on shift. Want work? Come to the counter and pick up a SHIFT — one a day, paid same-day in cash.',
       'Charlie out front vouched for you. Sort of. He said "that one\'s got main-character energy." Good enough for us. 🏪',
-    ],
-  },
-  {
-    id: 'konbini-coupon', from: 'Konbini 24h 🏪', avatar: '🏪', company: true,
-    when: c => c.metStores.includes('konbini'),
-    body: [
-      'Thanks for stopping by KONBINI 24H!',
-      'Reminder: we buy fresh fish at the counter, and the back freezer is staff-only. Do not mind the humming.',
-      'Try a cold "Diet Doctor Peepis" — now with 0% more doctor. 🥤',
     ],
   },
 ];

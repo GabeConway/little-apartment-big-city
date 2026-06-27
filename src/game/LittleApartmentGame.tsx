@@ -36,7 +36,7 @@ const applyApartmentSize = (unlocked: boolean) => {
 };
 import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
-  fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS, ENDING,
+  fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS,
   RODS, rodInfo,
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
@@ -61,7 +61,7 @@ import {
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
   canCook, canCookHere, cook, eatDish, ingredientCount, buyGrocery, keepProduce,
-  buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend,
+  buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend, meetFriend,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
   ROOM_PRICE, JUKEBOX_PRICE, skillLevel, skillProgress, addSkillXp,
 } from './state';
@@ -484,9 +484,9 @@ type Overlay =
   | { type: 'sleep'; day: number; collapsed?: boolean; awaitClick?: boolean }
   | { type: 'endday'; recap: DayRecap }
   | { type: 'menu'; tab: PhoneApp; thread?: string }
+  // (no 'ending' — the game is endless; furnishing is a quiet milestone instead)
   | { type: 'cook' }                          // home kitchen — cook known recipes
-  | { type: 'gift'; npcId: string }           // pick a held item to gift an NPC
-  | { type: 'ending' };
+  | { type: 'gift'; npcId: string };          // pick a held item to gift an NPC
 
 type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills';
 
@@ -1093,7 +1093,7 @@ const LittleApartmentGame: React.FC = () => {
     setOverlay(o);
   }, []);
 
-  const [achToast, setAchToast] = useState<{ title: string; desc: string } | null>(null);
+  const [achToast, setAchToast] = useState<{ title: string; desc: string; icon?: string } | null>(null);
   const achTimerRef = useRef<number | null>(null);
   const [geodePop, setGeodePop] = useState<{ text: string; color: string } | null>(null);
   const geodeTimerRef = useRef<number | null>(null);
@@ -1152,11 +1152,25 @@ const LittleApartmentGame: React.FC = () => {
   }, []);
 
   // A transient banner that reuses the achievement-toast UI (food buffs, perks, etc).
-  const showToast = useCallback((title: string, desc = '') => {
-    setAchToast({ title, desc });
+  // Pass an icon to override the default 🏆 (e.g. 💛 for a new contact).
+  const showToast = useCallback((title: string, desc = '', icon?: string) => {
+    setAchToast({ title, desc, icon });
     if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
     achTimerRef.current = window.setTimeout(() => setAchToast(null), 3500);
   }, []);
+
+  // First time you meet a befriendable NPC → drop them into the Friends app and
+  // buzz a one-time "new contact" notification. No-op for non-friends / repeat talks.
+  const meetFriendNotify = useCallback((friendId?: string) => {
+    if (!friendId) return;
+    const f = friendById(friendId);
+    if (!f) return;
+    const s = saveRef.current;
+    if (meetFriend(s, friendId)) {
+      persistSave(s);
+      showToast(`${f.name} — new contact`, 'Saved to your phone’s Friends app.', '💛');
+    }
+  }, [showToast]);
 
   // Award gathering XP; toast on a level-up.
   const SKILL_NAME: Record<SkillId, string> = { fish: 'Fishing', mine: 'Mining', farm: 'Farming' };
@@ -1875,6 +1889,7 @@ const LittleApartmentGame: React.FC = () => {
       // converse with get a trailing "🎁 Give a gift" button on their last line
       // (see giftActionFor); merchants open their stalls.
       const friendId = FRIEND_OF_NPC[npc.id];
+      meetFriendNotify(friendId); // first contact → into the Friends app + a buzz
       const giftAct = giftActionFor(friendId);
       if (npc.id === 'yakuza') {
         if (s.gangPaid) return; // already paid; he's on his way out
@@ -2143,8 +2158,10 @@ const LittleApartmentGame: React.FC = () => {
         if (!s.cat.found) {
           s.cat.found = true;
           s.cat.name = 'David';
+          meetFriend(s, 'david'); // the cat enters your Friends app on first meet
           sfxCatch();
           persistSave(s); refreshHud();
+          showToast('David — new contact', 'Saved to your phone’s Friends app.', '💛');
           showDialog([
             'Something shifts in the dumpster. Two eyes, like old coins, blink open in the dark.',
             'A black cat unfolds itself onto the lip of the bin and regards you with ancient patience.',
@@ -2769,8 +2786,15 @@ const LittleApartmentGame: React.FC = () => {
     }
 
     const s = saveRef.current;
+    // Endless game — there is no ending. Furnishing the whole apartment is a quiet
+    // milestone (a cosy one-time line + the achievement), then life goes on; the
+    // real draw is everything still hidden out in the city. (`s.ended` reused as a
+    // "milestone seen" flag so it only fires once.)
     if (sceneRef.current.id === 'apartment' && allFurnished(s) && !s.ended) {
-      setOverlayBoth({ type: 'ending' });
+      s.ended = true;
+      persistSave(s);
+      award('furnished');
+      showDialog(['The last piece slides into place. The apartment isn’t a box you’re hiding in anymore — it’s home.', 'Out the window the city goes on forever, and somewhere out there are doors you still haven’t opened. Plenty of evening left.']);
       return;
     }
 
@@ -4762,14 +4786,6 @@ const LittleApartmentGame: React.FC = () => {
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
   };
 
-  const finishEnding = () => {
-    const s = saveRef.current;
-    s.ended = true;
-    persistSave(s);
-    award('furnished');
-    refreshHud();
-    setOverlayBoth(null);
-  };
 
   // ---- menu (inventory + achievements + cheats) ----------------------------------
 
@@ -5394,13 +5410,16 @@ const LittleApartmentGame: React.FC = () => {
       const fishCount = Object.values(s.fishLog).reduce((a, b) => a + b, 0);
       const museumDone = s.museum.donated.length, museumTotal = MUSEUM_SLOTS.length;
       // GOALS: concrete, trackable progress only (with a count/checkbox). No spelling
-      // out *how* — that's discovery. Hand-holdy "go talk to X" lines were cut.
+      // out *how* — that's discovery. Hand-holdy "go talk to X" lines were cut. There's
+      // no ending: the real pull is everything still hidden out there, so the discovery
+      // threads lead and "making the apartment a home" sits at the bottom as a cosy
+      // optional, not THE objective.
       const goals: { text: string; done: boolean }[] = [];
-      goals.push({ text: `Furnish the apartment — ${placedBase}/${FURNITURE.length} placed`, done: placedBase >= FURNITURE.length });
       if (museumDone > 0 || s.backroomsUnlocked || fishCount > 8) goals.push({ text: `Fill the Kawamachi Museum — ${museumDone}/${museumTotal} displays`, done: museumDone >= museumTotal });
       if (s.canFish && !s.fishLog['golden']) goals.push({ text: 'Land the legendary Golden Carp', done: false });
       if (s.greenhouseUnlocked) goals.push({ text: 'Tend the greenhouse — plant, water, harvest', done: false });
       if (s.backroomsUnlocked && s.deepestFloor < 10) goals.push({ text: `Plumb the mines — deepest floor reached: ${s.deepestFloor}`, done: false });
+      goals.push({ text: `Make the apartment a home — ${placedBase}/${FURNITURE.length} furnished`, done: placedBase >= FURNITURE.length });
       // LEADS: vaguer nudges. Cryptic on purpose — point a lost player roughly the
       // right way without handing them the answer.
       const leads: string[] = [];
@@ -5417,6 +5436,7 @@ const LittleApartmentGame: React.FC = () => {
       const todayEvent = dayEventFor(s);
       return (
         <div className="px-3 py-2">
+          <p className="text-xs opacity-50 mb-2 leading-snug italic">No finish line — just a big city keeping its secrets. Wander, talk to strangers, and see what you turn up.</p>
           {todayEvent && (
             <div className={`flex items-start gap-2 rounded-md px-2 py-1.5 mb-2 ${todayEvent === 'lucky' ? 'bg-[#ffd24a]/15 text-[#ffe9a0]' : 'bg-[#e857a8]/15 text-[#f6b4dc]'}`}>
               <span className="shrink-0 font-bold">{DAY_EVENT_LABEL[todayEvent]}</span>
@@ -7210,7 +7230,7 @@ const LittleApartmentGame: React.FC = () => {
         {achToast && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
             <div className="animate-toast-in bg-[#16181d]/95 border-2 border-[#ffd24a] px-4 py-2 font-pixel text-center">
-              <p className="text-[#ffd24a] text-lg leading-tight">🏆 {achToast.title}</p>
+              <p className="text-[#ffd24a] text-lg leading-tight">{achToast.icon ?? '🏆'} {achToast.title}</p>
               <p className="text-[#e8e0d0]/70 text-sm leading-tight">{achToast.desc}</p>
             </div>
           </div>
@@ -7337,19 +7357,6 @@ const LittleApartmentGame: React.FC = () => {
             </div>
           );
         })()}
-
-        {/* ending */}
-        {overlay?.type === 'ending' && (
-          <div className="absolute inset-0 bg-black/95 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-            <div className="max-w-lg text-center font-pixel">
-              <h3 className="font-retro text-[#ffd24a] text-lg sm:text-2xl leading-relaxed mb-5">{ENDING.title}</h3>
-              {ENDING.lines.map((line, i) => (
-                <p key={i} className="text-[#e8e0d0] text-lg sm:text-xl leading-snug mb-3 opacity-90">{line}</p>
-              ))}
-              <button className={`${btnCls} mt-2 text-xl`} onClick={finishEnding}>STAY A WHILE</button>
-            </div>
-          </div>
-        )}
 
         {/* mid-play portrait nudge */}
         {screen === 'playing' && isCoarse && isPortrait && (

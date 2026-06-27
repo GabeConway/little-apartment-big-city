@@ -1089,6 +1089,14 @@ export const friendHearts = (s: GameSave, id: string): number =>
   Math.max(0, Math.min(MAX_HEARTS, Math.floor(friendPts(s, id) / HEART_POINTS)));
 export const canGiftToday = (s: GameSave, id: string): boolean => (s.friends[id]?.giftDay ?? -1) !== s.day;
 export const metFriend = (s: GameSave, id: string): boolean => id in s.friends;
+// First contact: the moment you actually talk to (or shop with) a befriendable
+// NPC, they enter your Friends app at 0 pts. Returns true the first time only, so
+// the caller can fire a one-time "new contact" notification.
+export const meetFriend = (s: GameSave, id: string): boolean => {
+  if (id in s.friends) return false;
+  s.friends[id] = { pts: 0, giftDay: -1 };
+  return true;
+};
 export const giftTier = (npcId: string, kind: GiftKind): GiftTier => {
   const f = friendById(npcId);
   if (!f) return 'neutral';
