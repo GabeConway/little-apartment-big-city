@@ -488,7 +488,7 @@ type Overlay =
   | { type: 'cook' }                          // home kitchen — cook known recipes
   | { type: 'gift'; npcId: string };          // pick a held item to gift an NPC
 
-type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills';
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills' | 'fishopedia';
 
 // Friendly label for each cooking ingredient kind (shown in the recipe list).
 const INGREDIENT_LABEL: Record<IngredientKind, string> = {
@@ -5634,6 +5634,81 @@ const LittleApartmentGame: React.FC = () => {
       );
     })();
 
+    // Fishopedia: a collection log of every fish species. NO-SPOILER: a species you
+    // haven't caught shows as a locked 🔒 ??? row — never its name, value, or sprite.
+    // Once caught, it unlocks (sprite + name + tally + value + a cosy blurb).
+    const fishopediaApp = (() => {
+      // One row per species, deduped across the three water tables (squid/eel/koi/
+      // golden overlap them) — a fish shows under the FIRST water it appears in, so
+      // the list reads shallow → deep → tropical with no repeats.
+      const WATERS: { label: string; table: Fish[] }[] = [
+        { label: 'SUMIKAWA SHORE', table: FISH },
+        { label: 'SUMIKAWA BAY · DEEP', table: DEEP_FISH },
+        { label: 'KIWAMI WATERS', table: TROPICAL_FISH },
+      ];
+      // Cosy one-liners kept here (no data.ts change) — flavor for caught fish.
+      const BLURBS: Record<string, string> = {
+        minnow: 'A silver thumbnail of a fish. Everyone catches one first.',
+        mackerel: 'Stripes like the bay at dusk. The konbini grills these.',
+        bream: 'Sea bream — a fish for a good day, or a small feast.',
+        squid: 'More arms than sense. Surprisingly strong on the line.',
+        eel: 'Slips off the hook if you blink. Worth the wrestle.',
+        puffer: 'Puffs up indignant. Handle with respect (and gloves).',
+        koi: 'A garden koi, somehow lost to open water. Beautiful and sad.',
+        golden: 'The legend Genji chased for forty years. You found it.',
+        tuna: 'Bluefin — pure muscle. The deep water hides the big ones.',
+        angler: 'A little lantern in the black. It found you first.',
+        parrot: 'Painted like the reef it grazes. A tropical jewel.',
+        marlin: "A blue spear of the open sea. Kiwami's grandest catch.",
+      };
+      const seen = new Set<string>();
+      const waters = WATERS.map(w => ({
+        label: w.label,
+        species: w.table.filter(f => (seen.has(f.id) ? false : (seen.add(f.id), true))),
+      })).filter(w => w.species.length > 0);
+      const all = waters.flatMap(w => w.species);
+      const found = all.filter(f => (s.fishLog[f.id] || 0) > 0).length;
+      return (
+        <div className="px-3 py-2">
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">FISHOPEDIA</p>
+          <p className="text-xs opacity-50 mb-2 leading-snug">Every fish you've landed, logged. <span className="text-[#7ce8a0]">{found}</span> / {all.length} discovered — the rest are still out there.</p>
+          {waters.map(w => (
+            <div key={w.label}>
+              <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3 mb-1">{w.label}</p>
+              {w.species.map(f => {
+                const count = s.fishLog[f.id] || 0;
+                if (count <= 0) {
+                  // locked: no name, no sprite, no value — just a silhouette.
+                  return (
+                    <div key={f.id} className="w-full flex items-center gap-3 py-2 border-b border-white/10 opacity-50">
+                      <span className="text-2xl shrink-0 grayscale">🐟</span>
+                      <div className="flex-grow min-w-0">
+                        <p className="text-base leading-tight tracking-widest">🔒 ???</p>
+                        <p className="text-xs opacity-55 leading-tight">Not yet caught.</p>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={f.id} className="w-full flex items-center gap-3 py-2 border-b border-white/10">
+                    <span className="shrink-0"><SpriteIcon atlas={atlasRef.current} sprite={f.sprite} size={26} /></span>
+                    <div className="flex-grow min-w-0">
+                      <p className="text-base leading-tight">{f.name}</p>
+                      <p className="text-xs opacity-55 leading-tight">{BLURBS[f.id] ?? ''}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm text-[#ffd24a] leading-tight">¥{f.value.toLocaleString()}</p>
+                      <p className="text-xs opacity-55 leading-tight">caught ×{count}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      );
+    })();
+
     // ---- app icon grid (home screen) -----------------------------------------
     const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: React.ReactNode; label: string; bg: string; badge?: number; onClick: () => void }) => (
       <button onClick={onClick} className="flex flex-col items-center gap-1 group">
@@ -5650,7 +5725,7 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
-      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends', music: 'Music', skills: 'Skills',
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends', music: 'Music', skills: 'Skills', fishopedia: 'Fishopedia',
     };
 
     return (
@@ -5692,6 +5767,9 @@ const LittleApartmentGame: React.FC = () => {
                 <AppIcon icon="🎵" label="Music" bg="linear-gradient(160deg,#7a4fd0,#3a2a8a)" onClick={() => open('music')} />
               )}
               <AppIcon icon="📈" label="Skills" bg="linear-gradient(160deg,#3da26b,#1f6e45)" onClick={() => open('skills')} />
+              {s.canFish && (
+                <AppIcon icon="🐟" label="Fishopedia" bg="linear-gradient(160deg,#2f8fc9,#1f5a8a)" onClick={() => open('fishopedia')} />
+              )}
               {s.zamazonkApp && (
                 <AppIcon
                   icon={<img src={ZAMAZONK_LOGO} alt="" className="w-full h-full object-contain p-0.5" />}
@@ -5724,6 +5802,7 @@ const LittleApartmentGame: React.FC = () => {
               {ov.tab === 'friends' && friendsApp}
               {ov.tab === 'music' && musicApp}
               {ov.tab === 'skills' && skillsApp}
+              {ov.tab === 'fishopedia' && fishopediaApp}
               {ov.tab === 'messages' && messagesApp}
               {ov.tab === 'zamazonk' && zamazonkApp}
               {ov.tab === 'achievements' && trophiesApp}
