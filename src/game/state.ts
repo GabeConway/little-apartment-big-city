@@ -440,6 +440,77 @@ export const morningT = (s: GameSave): number => {
   return 1 - (h - 7) / 2.5;
 };
 
+// ---- NPC daily routines ------------------------------------------------------
+// Key townsfolk amble to a different scene-local spot depending on the time of
+// day, so the world feels lived-in instead of randomly drifting. The monolith's
+// wander loop steers each routine NPC toward its current block's tile (reusing
+// the home-leash + anti-stick movement), then lets it idle nearby once arrived.
+export type RoutineBlock = 'morning' | 'midday' | 'evening' | 'night';
+
+// Which block the clock is in. The in-game clock is linear within a day: it runs
+// 7:00 (wake) straight through to 26:00 (2 AM collapse) without wrapping, so the
+// small hours read as 24–26 and stay in "night".
+export const timeBlock = (timeMin: number): RoutineBlock => {
+  const h = timeMin / 60;
+  if (h < 11) return 'morning';   // wake → late morning
+  if (h < 16) return 'midday';    // lunch → afternoon
+  if (h < 20) return 'evening';   // dusk
+  return 'night';                  // after 8 PM (incl. the post-midnight 24–26 hours)
+};
+
+export interface RoutineStop { block: RoutineBlock; tile: { x: number; y: number } }
+
+// Scene-local tiles (verified walkable + reachable against maps.ts). Each NPC id
+// matches its `npcs[]` entry in maps.ts. Cover folk with a clear scene + role:
+//   granny  — city: greenhouse in the morning, the torii-garden pond by midday
+//   charlie — city: loiters by the konbini, drifts west then down to the garden
+//   miko    — shrine: works the forecourt around the honden, gate, and lanterns
+//   tex     — shore: dune grass up top, then down to the waterline and along it
+//   old-man — shore: Genji the angler hugs the waterline, rests up on the sand
+export const ROUTINES: Record<string, RoutineStop[]> = {
+  granny: [
+    { block: 'morning', tile: { x: 15, y: 14 } }, // outside the greenhouse door
+    { block: 'midday', tile: { x: 25, y: 16 } },  // the torii-garden pond
+    { block: 'evening', tile: { x: 12, y: 16 } }, // back toward home/the planters
+    { block: 'night', tile: { x: 12, y: 16 } },
+  ],
+  charlie: [
+    { block: 'morning', tile: { x: 15, y: 3 } },  // sidewalk outside the konbini
+    { block: 'midday', tile: { x: 5, y: 3 } },    // drifts west past Doki Doki
+    { block: 'evening', tile: { x: 12, y: 14 } }, // down by the home block
+    { block: 'night', tile: { x: 24, y: 16 } },   // the pond garden after dark
+  ],
+  miko: [
+    { block: 'morning', tile: { x: 14, y: 3 } },  // tending by the honden hall
+    { block: 'midday', tile: { x: 8, y: 7 } },    // the central forecourt
+    { block: 'evening', tile: { x: 15, y: 7 } },  // right side of the grounds
+    { block: 'night', tile: { x: 6, y: 5 } },     // by the stone lantern
+  ],
+  tex: [
+    { block: 'morning', tile: { x: 9, y: 3 } },   // up on the dune grass
+    { block: 'midday', tile: { x: 10, y: 7 } },   // down on the warm sand
+    { block: 'evening', tile: { x: 16, y: 6 } },  // strolling east along the beach
+    { block: 'night', tile: { x: 9, y: 3 } },
+  ],
+  'old-man': [
+    { block: 'morning', tile: { x: 4, y: 8 } },   // Genji at the waterline
+    { block: 'midday', tile: { x: 12, y: 8 } },   // working the tide further along
+    { block: 'evening', tile: { x: 6, y: 6 } },   // up on the sand
+    { block: 'night', tile: { x: 4, y: 4 } },     // resting on the grass
+  ],
+};
+
+// The tile a routine NPC is heading for right now, or null if it has no routine
+// (those keep the default wander-near-spawn behaviour). Deterministic: depends
+// only on the id + the time block, so the same clock always yields the same spot.
+export const routineTargetFor = (npcId: string, timeMin: number): { x: number; y: number } | null => {
+  const stops = ROUTINES[npcId];
+  if (!stops) return null;
+  const block = timeBlock(timeMin);
+  const hit = stops.find(st => st.block === block);
+  return (hit ?? stops[0]).tile;
+};
+
 // ---- Pawn shop daily stock ---------------------------------------------------
 // Seeded by day so the stock is stable all day and rotates overnight.
 

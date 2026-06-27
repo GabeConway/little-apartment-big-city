@@ -51,7 +51,7 @@ import {
   newSave, loadSave, persistSave, clearSave,
   maxEnergy, energyCost, sleep as passNight, pawnStockFor, buyFurniture, allFurnished,
   allRaresOwned, sketchyOfferFor, gachaComplete,
-  clockLabel, nightT, morningT, COLLAPSE_MIN,
+  clockLabel, nightT, morningT, COLLAPSE_MIN, routineTargetFor,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
@@ -2837,6 +2837,12 @@ const LittleApartmentGame: React.FC = () => {
 
     // Gentle NPC wandering (e.g. Granny pacing her block — never far from home).
     for (const w of wanderersRef.current) {
+      // Routine folk steer toward their current time-block target instead of
+      // their spawn: we just retarget their "home" each tick, so the existing
+      // leash (head back when >2.2 tiles away) walks them there, then lets them
+      // idle nearby once arrived. Non-routine wanderers keep their spawn home.
+      const rt = routineTargetFor(w.id, saveRef.current.timeMin);
+      if (rt) { w.homeX = rt.x * TILE; w.homeY = rt.y * TILE; }
       w.stepT -= dt;
       if (w.stepT <= 0) {
         w.stepT = 1.2 + Math.random() * 2.8;

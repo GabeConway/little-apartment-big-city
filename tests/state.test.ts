@@ -10,6 +10,7 @@ import {
   isRainyDay, foggyDay, meteorNight,
   plantCrop, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
   streetEventFor, streetEventDoneToday,
+  timeBlock, routineTargetFor, ROUTINES, type RoutineBlock,
 } from '../src/game/state';
 import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, SKETCHY_DISCOUNT, PAWN_DISCOUNT, GACHA_FIGURES, CROPS, STREET_EVENTS } from '../src/game/data';
 import {
@@ -829,5 +830,63 @@ describe('streetEventDoneToday', () => {
     expect(streetEventDoneToday(s)).toBe(true);
     s.day = 6; // a new day resets the gate
     expect(streetEventDoneToday(s)).toBe(false);
+  });
+});
+
+describe('NPC daily routines', () => {
+  // Which scene each routine NPC lives in (matches maps.ts npcs[]).
+  const NPC_SCENE: Record<string, string> = {
+    granny: 'city', charlie: 'city', miko: 'shrine', tex: 'shore', 'old-man': 'shore',
+  };
+  const tileSolidAt = (sceneId: string, x: number, y: number): boolean => {
+    const sc = SCENES[sceneId];
+    const ch = sc.grid[y]?.[x];
+    return !!sc.legend[ch ?? '']?.solid;
+  };
+
+  it('timeBlock maps the clock to the four blocks (and wraps past midnight)', () => {
+    expect(timeBlock(7 * 60)).toBe('morning');   // wake
+    expect(timeBlock(10 * 60 + 59)).toBe('morning');
+    expect(timeBlock(11 * 60)).toBe('midday');
+    expect(timeBlock(15 * 60 + 59)).toBe('midday');
+    expect(timeBlock(16 * 60)).toBe('evening');
+    expect(timeBlock(19 * 60 + 59)).toBe('evening');
+    expect(timeBlock(20 * 60)).toBe('night');
+    expect(timeBlock(25 * 60)).toBe('night');     // 1 AM (past-midnight clock value)
+    expect(timeBlock(26 * 60)).toBe('night');     // 2 AM collapse
+  });
+
+  it('routineTargetFor is deterministic per block and differs across the day', () => {
+    const id = 'granny';
+    const morning = routineTargetFor(id, 8 * 60)!;
+    const midday = routineTargetFor(id, 13 * 60)!;
+    // same block always yields the same tile (no randomness)
+    expect(routineTargetFor(id, 8 * 60)).toEqual(routineTargetFor(id, 10 * 60));
+    expect(routineTargetFor(id, 13 * 60)).toEqual(routineTargetFor(id, 15 * 60));
+    // Granny moves greenhouse (morning) → pond (midday)
+    expect(morning).not.toEqual(midday);
+  });
+
+  it('returns null for NPCs without a routine (they keep wander-near-spawn)', () => {
+    expect(routineTargetFor('dancer', 8 * 60)).toBeNull();
+    expect(routineTargetFor('yakuza', 8 * 60)).toBeNull();
+  });
+
+  it('every routine tile is walkable + in-bounds in its scene', () => {
+    const blocks: RoutineBlock[] = ['morning', 'midday', 'evening', 'night'];
+    for (const [id, stops] of Object.entries(ROUTINES)) {
+      const sceneId = NPC_SCENE[id];
+      expect(sceneId, `${id} needs a scene mapping`).toBeTruthy();
+      const sc = SCENES[sceneId];
+      // covers all four blocks
+      expect(stops.map(s => s.block).sort()).toEqual([...blocks].sort());
+      for (const st of stops) {
+        expect(st.tile.x, `${id} ${st.block} x`).toBeGreaterThanOrEqual(0);
+        expect(st.tile.y, `${id} ${st.block} y`).toBeGreaterThanOrEqual(0);
+        expect(st.tile.y).toBeLessThan(sc.grid.length);
+        expect(st.tile.x).toBeLessThan(sc.grid[0].length);
+        expect(tileSolidAt(sceneId, st.tile.x, st.tile.y), `${id} ${st.block} tile must be walkable`).toBe(false);
+      }
+    }
   });
 });
