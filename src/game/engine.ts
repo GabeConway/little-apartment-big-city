@@ -156,10 +156,12 @@ export class Input {
       if (!this.held.has(dir)) { this.held.add(dir); this.order.push(dir); }
       return;
     }
-    // E / Space interact in-world. Enter is intentionally NOT here — it's the
-    // menu-activate key (useUiNav). If the engine also claimed Enter (preventDefault
-    // + queue), it raced the DOM menu nav so Enter-on-a-button did nothing.
-    if (k === 'e' || k === ' ') {
+    // E / Space / Enter interact in-world (pick up finds, talk to NPCs, advance
+    // dialogs/sleep overlays). When a DOM menu (data-navroot) is open, useUiNav
+    // handles these keys in the capture phase and STOPS propagation, so this
+    // bubble-phase listener never fires for them — no double-handling, no
+    // re-interacting after a menu closes.
+    if (k === 'e' || k === ' ' || k === 'enter') {
       e.preventDefault();
       if (!e.repeat) this.interactQueued = true;
       this.actionHeld = true;
@@ -175,7 +177,7 @@ export class Input {
       this.held.delete(dir);
       this.order = this.order.filter(d => d !== dir);
     }
-    if (k === 'e' || k === ' ') this.actionHeld = false;
+    if (k === 'e' || k === ' ' || k === 'enter') this.actionHeld = false;
   };
 
   // Virtual controls (touch D-pad / action button)

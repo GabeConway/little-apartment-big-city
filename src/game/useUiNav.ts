@@ -76,9 +76,13 @@ export function useUiNav(): InputSource {
       setSrc('keyboard');
       if (!activeRoot()) return; // in-world: let the engine handle it
       const k = e.key.toLowerCase();
-      if (NAV_NEXT.has(k)) { e.preventDefault(); moveFocus(1); }
-      else if (NAV_PREV.has(k)) { e.preventDefault(); moveFocus(-1); }
-      else if (k === 'enter') { e.preventDefault(); clickFocused(); }
+      // We run in the capture phase (before the engine's bubble-phase keydown).
+      // For keys we handle inside a menu, stop the event reaching the engine so it
+      // can't ALSO queue an in-world interact (which would e.g. re-open a shop the
+      // instant our click closes it).
+      if (NAV_NEXT.has(k)) { e.preventDefault(); e.stopImmediatePropagation(); moveFocus(1); }
+      else if (NAV_PREV.has(k)) { e.preventDefault(); e.stopImmediatePropagation(); moveFocus(-1); }
+      else if (k === 'enter') { e.preventDefault(); e.stopImmediatePropagation(); clickFocused(); }
     };
     const onPointer = () => setSrc('pointer');
     window.addEventListener('keydown', onKey, true);
