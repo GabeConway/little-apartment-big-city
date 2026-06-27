@@ -491,7 +491,7 @@ type Overlay =
   | { type: 'cook' }                          // home kitchen — cook known recipes
   | { type: 'gift'; npcId: string };          // pick a held item to gift an NPC
 
-type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills' | 'fishopedia';
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills' | 'fishopedia' | 'almanac';
 
 // Friendly label for each cooking ingredient kind (shown in the recipe list).
 const INGREDIENT_LABEL: Record<IngredientKind, string> = {
@@ -1898,6 +1898,7 @@ const LittleApartmentGame: React.FC = () => {
         const value = Math.round((kind.min + Math.random() * (kind.max - kind.min)) / 10) * 10;
         s.money += value;
         s.foragedSpots.push(idx);
+        if (!s.almanac.forage.includes(spot.kind)) s.almanac.forage.push(spot.kind); // Almanac: record the find kind
         mineTextRef.current = { x: spot.x * TILE, y: spot.y * TILE, text: `+¥${value.toLocaleString()}`, color: '#ffd24a', t: 1.1 };
         sfxCoin();
         if (!s.storySeen.includes('forage-howto')) {
@@ -1946,6 +1947,7 @@ const LittleApartmentGame: React.FC = () => {
           let amount = node.amount ?? 1;
           if (pick.bonusChance > 0 && Math.random() < pick.bonusChance) amount += 1; // pickaxe lucky strike
           s.minerals[node.mineral.id] = (s.minerals[node.mineral.id] ?? 0) + amount;
+          if (!s.almanac.minerals.includes(node.mineral.id)) s.almanac.minerals.push(node.mineral.id); // Almanac: record the ore kind
           s.today.mineralsMined += amount;
           gainSkill('mine', 5 + Math.round(node.mineral.value / 60)); // rarer ore, more XP
           mineTextRef.current = {
@@ -6082,6 +6084,59 @@ const LittleApartmentGame: React.FC = () => {
       );
     })();
 
+    // Almanac: a single discovery tracker across every collectible system. Each
+    // category shows found/total + a progress bar; the header rolls them up into
+    // one overall discovery %. NO-SPOILER: only counts are shown — nothing names
+    // the things you haven't found yet. (Fish stay a summary line; the Fishopedia
+    // app owns the per-species log.)
+    const almanacApp = (() => {
+      const fishIds = new Set([...FISH, ...DEEP_FISH, ...TROPICAL_FISH].map(f => f.id));
+      const fishFound = [...fishIds].filter(id => (s.fishLog[id] || 0) > 0).length;
+      const gachaFound = GACHA_FIGURES.filter(n => (s.gacha[n] ?? 0) > 0).length;
+      const recipeIds = new Set(RECIPES.map(r => r.id));
+      const recipesFound = s.recipes.filter(id => recipeIds.has(id)).length;
+      // The discovery secrets (each a one-time storySeen flag); count only, never named.
+      const SECRETS = ['island-cave', 'midnight-stranger', 'stargaze', 'island-bottle'];
+      const secretsFound = SECRETS.filter(id => s.storySeen.includes(id)).length;
+      const cats = [
+        { icon: '🐟', name: 'Fish', found: fishFound, total: fishIds.size, note: 'species landed (see the Fishopedia)' },
+        { icon: '💎', name: 'Minerals', found: s.almanac.minerals.length, total: MINERALS.length, note: 'ore struck in the mines' },
+        { icon: '🐚', name: 'Shore finds', found: s.almanac.forage.length, total: FORAGE.length, note: 'washed up on the sand' },
+        { icon: '🎁', name: 'Gacha figures', found: gachaFound, total: GACHA_FIGURES.length, note: 'capsules popped' },
+        { icon: '🍳', name: 'Recipes', found: recipesFound, total: RECIPES.length, note: 'dishes learned to cook' },
+        { icon: '💛', name: 'Friends met', found: metFriends.length, total: FRIENDS.length, note: 'people in your phone' },
+        { icon: '🔮', name: 'Secrets', found: secretsFound, total: SECRETS.length, note: 'hidden things uncovered' },
+        { icon: '🗺️', name: 'Places', found: s.visited.length, total: Object.keys(SCENES).length, note: 'corners of the city seen' },
+      ];
+      const sumFound = cats.reduce((a, c) => a + Math.min(c.found, c.total), 0);
+      const sumTotal = cats.reduce((a, c) => a + c.total, 0);
+      const pctAll = sumTotal ? Math.round((sumFound / sumTotal) * 100) : 0;
+      return (
+        <div className="px-3 py-2">
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">ALMANAC</p>
+          <p className="text-xs opacity-50 mb-2 leading-snug">Everything the city has to discover, in one place. <span className="text-[#7ce8a0]">{pctAll}%</span> uncovered — the rest is still out there.</p>
+          {cats.map(c => {
+            const found = Math.min(c.found, c.total);
+            const done = found >= c.total && c.total > 0;
+            const pct = c.total ? Math.round((found / c.total) * 100) : 0;
+            return (
+              <div key={c.name} className="py-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl shrink-0">{c.icon}</span>
+                  <span className="flex-grow text-base">{c.name}</span>
+                  <span className="text-sm text-[#ffd24a]">{found}/{c.total}{done ? ' ✓' : ''}</span>
+                </div>
+                <div className="mt-1 h-2 rounded-full bg-black/50 overflow-hidden">
+                  <div className="h-full bg-[#7ce8a0] transition-[width]" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-xs opacity-55 mt-1">{c.note}</p>
+              </div>
+            );
+          })}
+        </div>
+      );
+    })();
+
     // ---- app icon grid (home screen) -----------------------------------------
     const AppIcon = ({ icon, label, bg, badge, onClick }: { icon: React.ReactNode; label: string; bg: string; badge?: number; onClick: () => void }) => (
       <button onClick={onClick} className="flex flex-col items-center gap-1 group">
@@ -6098,7 +6153,7 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
-      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends', music: 'Music', skills: 'Skills', fishopedia: 'Fishopedia',
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends', music: 'Music', skills: 'Skills', fishopedia: 'Fishopedia', almanac: 'Almanac',
     };
 
     return (
@@ -6140,6 +6195,7 @@ const LittleApartmentGame: React.FC = () => {
                 <AppIcon icon="🎵" label="Music" bg="linear-gradient(160deg,#7a4fd0,#3a2a8a)" onClick={() => open('music')} />
               )}
               <AppIcon icon="📈" label="Skills" bg="linear-gradient(160deg,#3da26b,#1f6e45)" onClick={() => open('skills')} />
+              <AppIcon icon="📚" label="Almanac" bg="linear-gradient(160deg,#c97f3a,#7a4a1f)" onClick={() => open('almanac')} />
               {s.canFish && (
                 <AppIcon icon="🐟" label="Fishopedia" bg="linear-gradient(160deg,#2f8fc9,#1f5a8a)" onClick={() => open('fishopedia')} />
               )}
@@ -6175,6 +6231,7 @@ const LittleApartmentGame: React.FC = () => {
               {ov.tab === 'friends' && friendsApp}
               {ov.tab === 'music' && musicApp}
               {ov.tab === 'skills' && skillsApp}
+              {ov.tab === 'almanac' && almanacApp}
               {ov.tab === 'fishopedia' && fishopediaApp}
               {ov.tab === 'messages' && messagesApp}
               {ov.tab === 'zamazonk' && zamazonkApp}

@@ -99,6 +99,7 @@ export interface GameSave {
   greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
   cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
   collectibles: string[];       // museum collectible item ids found but not yet donated (in your bag)
+  almanac: { minerals: string[]; forage: string[] }; // Almanac app: ever-discovered sets (ore struck / shore finds grabbed) — survives selling
   // --- Cooking / Friendship / Decor (all default-safe; see kb/games.md) ---
   friends: Record<string, { pts: number; giftDay: number }>; // npc id -> friendship points + last day gifted
   pantry: Record<string, number>;   // konbini staples held for cooking (rice/egg/veg -> count)
@@ -269,6 +270,7 @@ export const newSave = (): GameSave => ({
   greenhouse: freshGreenhouse(),
   cat: { found: false, name: '' },
   collectibles: [],
+  almanac: { minerals: [], forage: [] },
   friends: {},
   pantry: {},
   produce: {},
@@ -325,6 +327,8 @@ export const loadSave = (): GameSave | null => {
       });
       s.greenhouse = fresh;
     }
+    // Almanac: default-safe nested merge so older saves (and partial future ones) get both sets.
+    s.almanac = { minerals: [], forage: [], ...s.almanac };
     return s;
   } catch { return null; }
 };

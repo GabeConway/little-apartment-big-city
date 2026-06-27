@@ -33,6 +33,25 @@ describe('newSave', () => {
   });
 });
 
+describe('almanac (discovery tracker)', () => {
+  it('starts empty + default-safe (both ever-discovered sets present)', () => {
+    const s = newSave();
+    expect(s.almanac).toEqual({ minerals: [], forage: [] });
+  });
+  it('records an ever-mined mineral kind once (the mine-strike recording site)', () => {
+    const s = newSave();
+    const record = (id: string) => { if (!s.almanac.minerals.includes(id)) s.almanac.minerals.push(id); };
+    record('coal'); record('coal'); record('opal');
+    expect(s.almanac.minerals).toEqual(['coal', 'opal']);
+  });
+  it('records a forage find kind once (the shore-grab recording site)', () => {
+    const s = newSave();
+    const record = (id: string) => { if (!s.almanac.forage.includes(id)) s.almanac.forage.push(id); };
+    record('shell'); record('coin'); record('shell');
+    expect(s.almanac.forage).toEqual(['shell', 'coin']);
+  });
+});
+
 describe('maxEnergy', () => {
   it('is the base with no appliances placed', () => {
     expect(maxEnergy(newSave())).toBe(BASE_MAX_ENERGY);
