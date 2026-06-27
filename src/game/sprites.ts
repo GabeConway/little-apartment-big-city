@@ -1566,6 +1566,61 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#244c75'; ctx.fillRect(4, 9, 8, 2);    // ripple
   });
 
+  // ---- Kiwami Island overhaul props -------------------------------------------
+  atlas['t-lagoon'] = tile(ctx => {                          // shallow turquoise lagoon (fishable)
+    fill(ctx, '#5fc6c0');
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(0, 0, 16, 5); speckle(ctx, '#9af0ea', 53, 7);
+    ctx.fillStyle = '#4aa8a4'; ctx.fillRect(0, 11, 16, 5);
+    ctx.fillStyle = '#bdf4ee'; ctx.fillRect(2, 3, 4, 1); ctx.fillRect(9, 8, 5, 1); ctx.fillRect(4, 12, 3, 1); // glints
+  });
+  atlas['t-rock'] = tile(ctx => {                            // dark volcanic rock mass
+    fill(ctx, '#4a4550'); speckle(ctx, '#3a3640', 29, 9);
+    ctx.fillStyle = '#5a5560'; ctx.fillRect(1, 1, 6, 4); ctx.fillRect(9, 3, 5, 5); ctx.fillRect(3, 9, 6, 4); // lit faces (upper-left)
+    ctx.fillStyle = '#33303a'; ctx.fillRect(0, 14, 16, 2);   // ground shadow
+  });
+  atlas['t-volcano'] = tile(ctx => {                         // crater peak — dark cone w/ a lava throat (glow added at draw time)
+    fill(ctx, '#4a4550');
+    ctx.fillStyle = '#3a3640'; ctx.fillRect(0, 0, 3, 16); ctx.fillRect(13, 0, 3, 16); // sky-side dark flanks
+    ctx.fillStyle = '#5a5560'; ctx.fillRect(3, 2, 4, 12);    // upper-left lit face
+    ctx.fillStyle = '#2c2832'; ctx.fillRect(9, 2, 4, 12);    // right shadow face
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(5, 1, 6, 4);     // crater rim (dark red)
+    ctx.fillStyle = '#e0552e'; ctx.fillRect(6, 2, 4, 3);     // lava throat
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 2, 2, 2);     // bright core
+  });
+  atlas['t-hotspring'] = tile(ctx => {                       // onsen pool — stone rim + steamy water (steam added at draw time)
+    fill(ctx, '#6f9e5e'); speckle(ctx, '#5e8a4f', 61, 5);    // grass surround
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(1, 2, 14, 12);   // stone rim
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(1, 2, 14, 1); ctx.fillRect(1, 2, 1, 12); // lit rim edge
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(3, 4, 10, 8);    // mineral water
+    ctx.fillStyle = '#aef4ee'; ctx.fillRect(4, 5, 4, 2); ctx.fillRect(8, 9, 3, 1); // surface glints
+    ctx.fillStyle = '#4aa8a4'; ctx.fillRect(3, 11, 10, 1);
+  });
+  atlas['t-dock'] = tile(ctx => {                            // wooden pier plank over water (walkable)
+    fill(ctx, '#3d6e9e');                                    // water showing through gaps
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(0, 1, 16, 6); ctx.fillRect(0, 9, 16, 6); // two planks
+    ctx.fillStyle = '#a07a4f'; ctx.fillRect(0, 1, 16, 1); ctx.fillRect(0, 9, 16, 1); // lit plank tops
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(0, 6, 16, 1); ctx.fillRect(0, 14, 16, 1); // plank shadow
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(2, 0, 1, 16); ctx.fillRect(13, 0, 1, 16); // nail seams
+  });
+  atlas['t-banana'] = tile(ctx => {                          // banana palm — fronds + a yellow bunch
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 67, 4);
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(1, 1, 7, 4); ctx.fillRect(9, 2, 6, 5); ctx.fillRect(2, 5, 5, 3); // broad fronds
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(2, 2, 3, 1); ctx.fillRect(10, 3, 3, 1);
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(7, 5, 2, 8);     // trunk
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 7, 1, 4); ctx.fillRect(10, 8, 1, 3); ctx.fillRect(11, 7, 1, 4); // banana bunch
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(9, 10, 3, 1);
+    ctx.fillStyle = '#2e4426'; ctx.fillRect(0, 14, 16, 2);
+  });
+  atlas['t-bottle'] = tile(ctx => {                          // message in a bottle, half-buried in sand (a secret)
+    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 43, 6);    // sand
+    ctx.fillStyle = '#50a0d0'; ctx.fillRect(4, 7, 9, 5);     // glass body (on its side)
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(4, 7, 9, 1);     // highlight
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(4, 11, 9, 1);    // shadow
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(12, 8, 2, 3);    // cork end
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(6, 8, 3, 3);     // rolled paper inside
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(6, 9, 3, 1);     // ribbon
+  });
+
   // Beach stand
   atlas['t-parasol'] = tile(ctx => {
     fill(ctx, '#cdbb8e');

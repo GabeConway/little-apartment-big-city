@@ -763,35 +763,51 @@ const island: SceneDef = {
   name: 'Kiwami Island',
   legend: {
     '~': T('t-water-0', true),
+    'l': T('t-lagoon', true),       // shallow turquoise lagoon — tropical fishing
     's': T('t-sand'),
     'g': T('t-grass'),
-    'P': T('t-tree', true), // coconut palms
+    'D': T('t-dock'),               // wooden pier (walkable, over water)
+    'P': T('t-tree', true),         // coconut palms
+    'B': T('t-banana', true),       // banana palms (scenery)
+    'R': T('t-rock', true),         // volcanic rock
+    'V': T('t-volcano', true),      // the crater peak
+    'H': T('t-hotspring', true),    // onsen pool
     'K': T('t-tiki', true),
-    'Z': T('t-zama-poster', true), // ZamaZonk billboard
+    'Z': T('t-zama-poster', true),  // ZamaZonk billboard
+    'b': T('t-bottle'),             // message in a bottle (secret; walkable sand)
   },
   outdoor: true,
   grid: [
-    '~~~~~~~~~~~~~~~~~~~~~~',
-    '~~~~~ssssssssssss~~~~~',
-    '~~~ssssssssssssssss~~~',
-    '~~ssgggggggggKKKggss~~',
-    '~~ssgPgggggggggPggss~~',
-    '~~ssggggggPgggggggss~~',
-    '~~ssssssssZsssssssss~~',
-    '~~~~ssssssssssssss~~~~',
-    '~~~~~~~~~~~~~~~~~~~~~~',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+    '~~~~~~~ssssRRVVRRssss~~~~~~~',
+    '~~~~~ssssgggRRRRgggssss~~~~~',
+    '~~~~ssgggggggHHgggggssss~~~~',
+    '~~~sssgggPgggggggBgggsss~~~~',
+    '~~ssgggggggggggggggsslll~~~~',
+    '~~sgggggPgggggggggggslllll~~',
+    '~DDsgggggggggggggggslllll~~~',
+    '~~sggggggggggggggggDDDll~~~~',
+    '~~ssggggggBgggggggggsslll~~~',
+    '~~~sssgggggggggggggsssll~~~~',
+    '~~~~ssKKKssssssZsssssss~~~~~',
+    '~~~~ssssssssssssssssssbs~~~~',
+    '~~~~~ssssssssssssssssss~~~~~',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
   ],
   warps: [],
   interactables: [
-    { id: 'boat-island', x: 4, y: 7, w: 2, h: 1, label: 'The skiff' },
-    { id: 'tiki', x: 13, y: 3, w: 3, h: 1, label: 'Tiki bar' },
-    { id: 'zama-poster', x: 10, y: 6, label: 'Read the poster' },
-    { id: 'coconut', x: 5, y: 4, label: 'Coconut palm' },
-    { id: 'coconut', x: 15, y: 4, label: 'Coconut palm' },
-    { id: 'coconut', x: 10, y: 5, label: 'Coconut palm' },
-    { id: 'fish-tropical', x: 4, y: 8, w: 14, h: 1, label: 'Fish' },
+    { id: 'boat-island', x: 1, y: 7, w: 2, h: 1, label: 'The skiff' },
+    { id: 'tiki', x: 6, y: 11, w: 3, h: 1, label: 'Tiki bar' },
+    { id: 'zama-poster', x: 15, y: 11, label: 'Read the poster' },
+    { id: 'onsen', x: 13, y: 3, w: 2, h: 1, label: 'Hot spring' },
+    { id: 'coconut', x: 9, y: 4, label: 'Coconut palm' },
+    { id: 'coconut', x: 8, y: 6, label: 'Coconut palm' },
+    { id: 'banana', x: 17, y: 4, label: 'Banana palm' },
+    { id: 'banana', x: 10, y: 9, label: 'Banana palm' },
+    { id: 'island-bottle', x: 22, y: 12, label: 'A bottle in the sand' },
+    { id: 'fish-tropical', x: 19, y: 4, w: 7, h: 7, label: 'Fish the lagoon' },
   ],
-  npcs: [{ id: 'tiki', x: 14, y: 2, sprite: 'npc-hatvendor', dir: 'down' }],
+  npcs: [{ id: 'tiki', x: 7, y: 10, sprite: 'npc-hatvendor', dir: 'down' }],
 };
 
 // ---- Open water (take the skiff out from the shore) -----------------------------------

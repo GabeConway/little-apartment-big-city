@@ -2369,6 +2369,43 @@ const LittleApartmentGame: React.FC = () => {
         showDialog([`THUNK. A coconut rolls to your feet. You bag it. (×${s.coconuts} — eat it from the menu, or sell it at the tiki bar)`]);
         break;
       }
+      case 'banana': {
+        if (s.palmDay !== s.day) { s.palmDay = s.day; s.palmsShaken = []; }
+        const key = `${target.x},${target.y}`;
+        if (s.palmsShaken.includes(key)) { showDialog(['This banana palm is picked clean for today. Its leaves rustle a polite no.']); break; }
+        s.palmsShaken.push(key);
+        s.energy = Math.min(maxEnergy(s), s.energy + 8);
+        sfxCatch();
+        persistSave(s); refreshHud();
+        showDialog(['You tug down a ripe banana and eat it right there. Sweet, sun-warm, gone in three bites. (+8 energy)']);
+        break;
+      }
+      case 'onsen': {
+        if (s.onsenDay === s.day) { showDialog(['You have already had your soak today. The spring steams on, patient as a cat.']); break; }
+        s.onsenDay = s.day;
+        s.energy = maxEnergy(s);
+        s.buff = { id: 'warm', day: s.day };
+        sfxCatch();
+        persistSave(s); refreshHud();
+        showDialog([
+          'You ease into the hot spring — mineral water, volcano-warmed, up to your chin. Below, the whole bay glitters.',
+          'Every knot in your shoulders lets go at once. (Energy fully restored, and you are Warmed for the day — everything costs less.)',
+        ]);
+        break;
+      }
+      case 'island-bottle': {
+        if (s.storySeen.includes('island-bottle')) { showDialog(['Just an empty bottle now, catching the light. Whatever it carried, it carried to you.']); break; }
+        s.storySeen.push('island-bottle');
+        s.money += 1200;
+        sfxCoin();
+        persistSave(s); refreshHud();
+        showDialog([
+          'Half-buried in the sand: a green bottle with a curl of paper inside. You work the salt-stiff cork loose.',
+          'The note is water-stained, the hand old-fashioned. "To whoever finds this — the island keeps more secrets than it tells. Look for the ones that look back. — K."',
+          'Folded inside are a few damp banknotes and a pressed flower from a plant you do not recognise. (+¥1,200, and a small chill down your spine.)',
+        ]);
+        break;
+      }
       case 'tiki': setOverlayBoth({ type: 'shop', shop: 'tiki' }); break;
       case 'zama-poster':
         if (!s.zamazonkApp) {
@@ -3390,7 +3427,7 @@ const LittleApartmentGame: React.FC = () => {
         ctx.drawImage(atlas['v-boat'], 2 * TILE - cam.x, 9 * TILE - cam.y + bob);
       }
       if (scene.id === 'island') {
-        ctx.drawImage(atlas['v-boat'], 4 * TILE - cam.x, 7 * TILE - cam.y + bob);
+        ctx.drawImage(atlas['v-boat'], 0 * TILE - cam.x, 7 * TILE - cam.y + bob); // moored at the west dock
       }
       if (scene.id === 'garage') { // showroom stock
         ctx.drawImage(atlas['v-car'], 2 * TILE - cam.x, 2 * TILE - cam.y);
@@ -3688,6 +3725,36 @@ const LittleApartmentGame: React.FC = () => {
           const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 3;
           ctx.globalAlpha = 0.20 + 0.04 * Math.sin(t * 2 + tx);  // faint flicker
           ctx.drawImage(lamp, gx - 22, gy - 22, 44, 44);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // Kiwami Island: the volcano crater glows (always, gently pulsing) and the
+    // hot spring breathes little puffs of steam — cheap touches that make the
+    // place feel alive. Reuses the cached glow() sprite, additive-blended.
+    if (scene.id === 'island') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const crater = glow('255,120,40');
+      const steam = glow('228,238,236');
+      for (let ty = ty0; ty <= ty1; ty++) {
+        const row = scene.grid[ty];
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const ch = row[tx];
+          if (ch !== 'V' && ch !== 'H') continue;
+          const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y;
+          if (ch === 'V') {
+            ctx.globalAlpha = 0.28 + 0.10 * Math.sin(t * 2.2 + tx);
+            ctx.drawImage(crater, gx - 18, gy - 14, 36, 36);
+          } else {
+            for (let k = 0; k < 2; k++) {
+              const ph = (t * 0.45 + k * 0.5 + tx * 0.2) % 1; // 0..1 rise+fade loop
+              ctx.globalAlpha = 0.16 * (1 - ph);
+              ctx.drawImage(steam, gx - 10, gy + 4 - ph * 16 - 10, 20, 20);
+            }
+          }
         }
       }
       ctx.globalAlpha = 1;
@@ -6417,7 +6484,7 @@ const LittleApartmentGame: React.FC = () => {
         <ShopFrame title="THE SKIFF" subtitle="She creaks in a way Kojima swears is normal" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
           <div className="flex flex-col gap-2 py-1">
             <button className={btnCls} onClick={() => { setOverlayBoth(null); enterScene('deepsea', 9, 9, 'up'); showDialog(['The motor coughs twice, then commits. Sumikawa Bay opens up around you.', 'Sail anywhere. Press E to drop a line. The way home is the gap in the south swell.']); }}>HEAD OUT INTO THE BAY 🌊</button>
-            <button className={btnCls} onClick={() => { setOverlayBoth(null); enterScene('island', 5, 6, 'down'); showDialog(['The skiff puts the city behind you, tower by tower, until it is a postcard.', 'Ahead: a green smudge becomes palms. Kiwami Island.']); }}>SAIL TO KIWAMI ISLAND ⛵</button>
+            <button className={btnCls} onClick={() => { setOverlayBoth(null); enterScene('island', 3, 7, 'right'); showDialog(['The skiff puts the city behind you, tower by tower, until it is a postcard.', 'Ahead: a green smudge becomes palms, then a whole island — a volcano smoking gently over a turquoise lagoon. Kiwami.']); }}>SAIL TO KIWAMI ISLAND ⛵</button>
             <button className={`${btnCls} opacity-60`} onClick={close}>NEVER MIND</button>
           </div>
         </ShopFrame>

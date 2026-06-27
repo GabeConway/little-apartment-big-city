@@ -46,7 +46,8 @@ export interface GameSave {
   driving: boolean;             // currently behind the wheel
   coconuts: number;             // coconuts in your bag (eat or sell at the tiki bar)
   palmDay: number;              // day the shaken-palm list belongs to
-  palmsShaken: string[];        // "x,y" palms already shaken today
+  palmsShaken: string[];        // "x,y" palms/bananas already shaken today
+  onsenDay: number;             // last day you soaked in the island hot spring (0 = never)
   gacha: Record<string, number>; // figure name -> count
   hat: boolean;                 // Tex's $67 cowboy hat (worn on the sprite)
   peepis: number;               // cans of "Diet Doctor Peepis" in your pocket
@@ -214,6 +215,7 @@ export const newSave = (): GameSave => ({
   coconuts: 0,
   palmDay: 0,
   palmsShaken: [],
+  onsenDay: 0,
   gacha: {},
   hat: false,
   peepis: 0,

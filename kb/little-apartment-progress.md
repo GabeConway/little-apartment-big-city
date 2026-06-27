@@ -26,6 +26,10 @@ subagents), tooling upgrades. No softlocks, dead-ends, or economy exploits found
   unreachable); `SCENE_SPAWN` expanded **6 → all 19 scenes** + `SCENE_EXTRA` unlock flags so
   any scene is one `--save <scene>` away; new **`smoke`** command sweeps every scene for runtime
   errors in one run (exit 1 on any failure) — fast post-draw-change regression guard.
+- [x] **No-spoiler UI pass** (user-driven): phone apps no longer reveal unfound content — Friends app lists only met people (`metFriend`); Skills app shows a row only once its activity is unlocked; end-of-day recap hides Fish/Minerals/Shifts rows until that system is in play. (commit c4c2208)
+- [x] **Game reframed endless + first-contact friends + trimmed pop-ups** (user-driven, see games.md): removed the furniture auto-ending (now a quiet milestone + the `furnished` achievement; `s.ended` reused as the milestone flag); first time you talk to / shop with a befriendable NPC adds them to the Friends app + a "💛 new contact" toast (`meetFriend`/`meetFriendNotify`, toast gained an icon arg); Journal reframed around discovery; light message trim (cut 'A Start'/'Almost There' letters + Doki Doki / Konbini ad texts). (commit e16a884)
+- [x] **Island overhaul** (user-driven, see games.md `Island (Kiwami)`): 22×9 → 28×15, volcano + lagoon + docks + jungle + onsen + banana palms + a bottle secret; 7 new in-code sprites. Verified via smoke (19/19) + screenshot + interaction asserts (onsen/bottle/banana).
+- [x] **Toolkit note**: the **sprite-ai MCP** ("new toolkit" for PNG world art per art-direction.md) was **out of budget** this session — balance **5 purchased tokens, 0 monthly** (a map tile costs 4, a prop 1). Not enough for an art overhaul, so the island was done **in-code** instead. **Top up sprite-ai tokens** to regenerate island/world art as higher-res PNGs (`loadSheets`/`SheetDef` pipeline) later.
 - [x] **Docs** — logged here; mines perf note + Map/fast-travel feature idea added to kb.
 - Verified: `tsc`/`npm test` (113)/`build` clean; `smoke` 19/19 green; mines re-screenshotted.
 - Note: bundle is one 590 KB JS chunk (180 KB gzip). Fine for a Tauri-bundled local app (no
