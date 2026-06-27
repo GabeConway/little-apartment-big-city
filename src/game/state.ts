@@ -92,6 +92,7 @@ export interface GameSave {
   forceRain: boolean;           // cheat: force rain for the current day (cleared next morning)
   rainCleared: boolean;         // a shrine offering made the rain suddenly stop today (cleared next morning)
   shrineDay: number;            // last day an offering was made at the shrine (0 = never); one per day
+  wishDay: number;              // last day a meteor-shower wish was made (0 = never); one wish per shower-night
   museum: { donated: string[] }; // MUSEUM_SLOTS ids the player has donated a piece to (empty by default)
   greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
   cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
@@ -260,6 +261,7 @@ export const newSave = (): GameSave => ({
   forceRain: false,
   rainCleared: false,
   shrineDay: 0,
+  wishDay: 0,
   museum: { donated: [] },
   greenhouse: freshGreenhouse(),
   cat: { found: false, name: '' },
@@ -365,6 +367,24 @@ export const sleep = (s: GameSave): void => {
 // shrine offering that "suddenly stops" the rain (rainCleared) wins over both.
 export const isRainyDay = (s: GameSave): boolean =>
   !s.rainCleared && (s.forceRain || (s.day > 1 && mulberry32(s.day * 1013904223 + 53)() < 0.2));
+
+// Extra outdoor weather, layered on top of (and mutually exclusive with) rain.
+// Each is its own per-day seeded roll — stable across reloads, never day 1 — but
+// priority is enforced by construction: rain wins over fog, and a meteor shower
+// only happens on a clear (non-rainy, non-foggy) night.
+//
+// FOG: a calm, cozy ~13% misty day. Independent roll, but if it's already a rainy
+// day there's no fog (rain takes the sky). The draw loop paints a soft grey-blue
+// wash + a gentle vignette on outdoor scenes when this is true.
+export const foggyDay = (s: GameSave): boolean =>
+  !isRainyDay(s) && s.day > 1 && mulberry32(s.day * 2654435789 + 131)() < 0.16;
+
+// METEOR SHOWER: a rare ~4.5% CLEAR night — only when it's neither rainy nor
+// foggy. This just marks the day's sky as a shower sky; the draw loop gates the
+// actual shooting-stars on `nightT` (and outdoor scenes), and the player can make
+// one wish per shower-night (see `wishDay`) for a next-day `lucky` buff.
+export const meteorNight = (s: GameSave): boolean =>
+  !isRainyDay(s) && !foggyDay(s) && s.day > 1 && mulberry32(s.day * 374761397 + 89)() < 0.062;
 
 // ---- Daily special events ----------------------------------------------------
 // At most one "special day" rolls per day — seeded so it's stable across reloads,

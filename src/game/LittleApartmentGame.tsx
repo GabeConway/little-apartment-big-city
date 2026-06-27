@@ -55,7 +55,7 @@ import {
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
-  isRainyDay, dayEventFor, DAY_EVENT_LABEL, type DayEvent, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
+  isRainyDay, foggyDay, meteorNight, dayEventFor, DAY_EVENT_LABEL, type DayEvent, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
   plotStage, waterPlot, waterAllPlots, applyFertilizer, sellShipping, buySeed, buySprinkler,
   buyFertilizer, expandBeds, upgradeGreenhouse, grantMoonSeed, seedShopFor, activeRequest,
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
@@ -1073,6 +1073,7 @@ const LittleApartmentGame: React.FC = () => {
   const signSpriteRef = useRef(new Map<object, { c: HTMLCanvasElement; w: number; h: number; s: number; mx: number; my: number; pw: number; ph: number }>()); // each sign's framed plate (drop shadow + bevel + hardware + text) rendered once at device scale, then blitted (no per-frame font switching); w/h = full canvas incl. shadow, mx/my = plate inset, pw/ph = plate size; rebuilt if the scale changes
   const skyGradRef = useRef<CanvasGradient | null>(null);  // night sky band — built once, alpha modulated per frame
   const sunGradRef = useRef<CanvasGradient | null>(null);  // morning sun rake — same
+  const fogVigRef = useRef<CanvasGradient | null>(null);   // foggy-day vignette — radial, built once
   const mineDarkRef = useRef<{ lr: number; grad: CanvasGradient } | null>(null); // mines flashlight gradient, cached per light-radius (centered at 0,0, translated each frame)
   const glowSpriteRef = useRef(new Map<string, HTMLCanvasElement>()); // cached radial light sprites (club lights, street lamps) — built once, blitted per frame
   const wanderersRef = useRef<Wanderer[]>([]); // live positions of gently-pacing NPCs in the current scene
@@ -2647,6 +2648,28 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // Meteor-shower wish: the rare clear-night sky grants ONE wish per shower. The
+    // first moment you stand under it after dark, a quiet prompt fires on its own —
+    // making the wish stamps `wishDay` (so it never re-fires that shower-night) and
+    // seeds TOMORROW with the `lucky` buff (buffs read by their own day, so it lights
+    // up after you sleep). Reaches here only with no overlay/cutscene open.
+    {
+      const sw = saveRef.current;
+      if (sceneRef.current.outdoor && sw.wishDay !== sw.day
+        && nightT(sw) > 0.2 && meteorNight(sw)) {
+        sw.wishDay = sw.day;
+        sw.buff = { id: 'lucky', day: sw.day + 1 };
+        persistSave(sw);
+        movingRef.current = false;
+        showDialog([
+          'A streak of light tears the dark — then another, and another. The whole sky is falling in slow silver lines.',
+          'You do what people have always done under skies like this. You shut your eyes, and you wish.',
+          'Something far away seems to hear you. Tomorrow will lean a little your way. 🍀',
+        ]);
+        return;
+      }
+    }
+
     // Gentle NPC wandering (e.g. Granny pacing her block — never far from home).
     for (const w of wanderersRef.current) {
       w.stepT -= dt;
@@ -3675,6 +3698,74 @@ const LittleApartmentGame: React.FC = () => {
         // faint cool wash so the whole scene reads overcast
         ctx.fillStyle = 'rgba(70, 90, 120, 0.12)';
         ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      }
+    }
+
+    // Fog: a calm, cozy misty day — a soft grey-blue wash + a gentle full-screen
+    // vignette that trims visibility at the edges (still very readable). Outdoor
+    // scenes only, and mutually exclusive with rain (`foggyDay` is false on rainy
+    // days). Authored neutral/low-contrast so it reads at any time of day. The
+    // vignette is a radial gradient cached once (no per-frame alloc, like the
+    // sky/sun bands), in the same logical 384×224 space the draw transform maps.
+    if (scene.outdoor && foggyDay(saveRef.current)) {
+      ctx.fillStyle = 'rgba(178, 192, 206, 0.20)'; // flat misty grey-blue haze
+      ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+      if (!fogVigRef.current) {
+        const g = ctx.createRadialGradient(
+          VIEW_PW / 2, VIEW_PH / 2, VIEW_PH * 0.34,
+          VIEW_PW / 2, VIEW_PH / 2, VIEW_PW * 0.62);
+        g.addColorStop(0, 'rgba(150, 166, 184, 0)');
+        g.addColorStop(1, 'rgba(150, 166, 184, 0.5)');
+        fogVigRef.current = g;
+      }
+      ctx.fillStyle = fogVigRef.current;
+      ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+    }
+
+    // Meteor shower: a rare clear-night sky (`meteorNight`, mutually exclusive with
+    // rain/fog) sends occasional shooting stars across the upper sky band on outdoor
+    // scenes once night falls. Gated on the same `nightT` ramp as the dusk wash, so
+    // they only streak over real darkness. Cheap & state-free: each "slot" cycles on
+    // its own period, dormant most of the time, drawing one short bright diagonal
+    // streak (a faint full tail + a brighter head half + a hot pixel) that fades in
+    // and out over its short flight. No per-frame gradient — just a few stroked lines.
+    {
+      const sM = saveRef.current;
+      const nAmt = nightT(sM);
+      if (scene.outdoor && nAmt > 0.15 && meteorNight(sM)) {
+        const SKY_H = VIEW_PH * 0.52; // upper sky band — meteors live here, fade as they cross it
+        ctx.save();
+        ctx.lineCap = 'round';
+        const SLOTS = 4;
+        for (let i = 0; i < SLOTS; i++) {
+          const period = 3.4 + i * 1.7;            // seconds between this slot's meteors
+          const TRAVEL = 0.9;                      // seconds a single streak is in flight
+          const flight = (t + i * 1.31) % period;  // time since this slot's last spawn
+          if (flight > TRAVEL) continue;           // dormant for the rest of the cycle
+          const k = flight / TRAVEL;               // 0..1 progress of THIS streak
+          const h = (i * 2654435761) >>> 0;        // cheap per-slot hash → start + slope
+          const sx = ((h % 1000) / 1000) * VIEW_PW * 0.7 + VIEW_PW * 0.12;
+          const sy = (h >> 16) & 31;               // start near the top
+          const slopeX = 96 + ((h >> 10) & 63);    // px of travel (down-right)
+          const slopeY = 44 + ((h >> 6) & 31);
+          const inv = 1 / Math.hypot(slopeX, slopeY);
+          const hx = sx + k * slopeX, hy = sy + k * slopeY;        // streak head
+          if (hy > SKY_H) continue;
+          const fade = Math.sin(k * Math.PI);      // 0 → 1 → 0 over the flight
+          const a = fade * nAmt;
+          if (a <= 0.03) continue;
+          const LEN = 15;                          // tail length, pointing back along travel
+          const tx = hx - slopeX * inv * LEN, ty = hy - slopeY * inv * LEN;
+          const mx = hx - slopeX * inv * LEN * 0.5, my = hy - slopeY * inv * LEN * 0.5;
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = `rgba(206, 224, 255, ${a * 0.45})`; // faint full tail
+          ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+          ctx.strokeStyle = `rgba(235, 244, 255, ${a * 0.9})`;  // brighter head half
+          ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(hx, hy); ctx.stroke();
+          ctx.fillStyle = `rgba(255, 255, 255, ${a})`;          // hot leading pixel
+          ctx.fillRect(hx - 0.6, hy - 0.6, 1.6, 1.6);
+        }
+        ctx.restore();
       }
     }
 

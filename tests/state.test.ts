@@ -7,6 +7,7 @@ import {
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
   mineChallengeFor, enterMineStreak, crackGeode, dayEventFor, shoreForageFor,
+  isRainyDay, foggyDay, meteorNight,
   plantCrop, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
 } from '../src/game/state';
 import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, SKETCHY_DISCOUNT, PAWN_DISCOUNT, GACHA_FIGURES, CROPS } from '../src/game/data';
@@ -508,6 +509,55 @@ describe('dayEventFor (special days)', () => {
     expect(lc).toBeGreaterThanOrEqual(6); expect(lc).toBeLessThanOrEqual(8); // +2 lucky band
     // seeded → stable across reloads (verifies the +2 is baked into this day's roll)
     expect(shoreForageFor({ ...lucky, foragedSpots: [], forageDay: 0 }).length).toBe(lc);
+  });
+});
+
+describe('weather variety (fog + meteor shower)', () => {
+  it('never fogs or showers on day 1', () => {
+    const s = newSave(); s.day = 1;
+    expect(foggyDay(s)).toBe(false);
+    expect(meteorNight(s)).toBe(false);
+  });
+  it('is deterministic per day (stable across reloads)', () => {
+    const s = newSave();
+    for (let d = 2; d <= 60; d++) {
+      s.day = d;
+      expect(foggyDay(s)).toBe(foggyDay({ ...s }));
+      expect(meteorNight(s)).toBe(meteorNight({ ...s }));
+    }
+  });
+  it('rolls the known seeded fog & meteor days', () => {
+    const s = newSave();
+    s.day = 14; expect(foggyDay(s)).toBe(true);    // a foggy day
+    s.day = 13; expect(meteorNight(s)).toBe(true); // a meteor-shower night
+    s.day = 9;  expect(foggyDay(s)).toBe(true);
+    s.day = 25; expect(meteorNight(s)).toBe(true);
+  });
+  it('is mutually exclusive with rain and with each other (no day has two)', () => {
+    const s = newSave();
+    for (let d = 2; d <= 1500; d++) {
+      s.day = d;
+      const r = isRainyDay(s), f = foggyDay(s), m = meteorNight(s);
+      expect(r && f).toBe(false); // rain wins over fog
+      expect(f && m).toBe(false); // a meteor night is never foggy
+      expect(r && m).toBe(false); // a meteor night is never rainy
+    }
+  });
+  it('a rainy day is never foggy and never a meteor night (rain has priority)', () => {
+    // forceRain makes any day rainy; fog/meteor must both back off.
+    const s = newSave(); s.day = 14; s.forceRain = true; // day 14 is otherwise foggy
+    expect(isRainyDay(s)).toBe(true);
+    expect(foggyDay(s)).toBe(false);
+    expect(meteorNight(s)).toBe(false);
+  });
+  it('keeps fog & meteor rates in their cozy/rare bands over a long stretch', () => {
+    const s = newSave();
+    let fog = 0, met = 0;
+    const N = 5000;
+    for (let d = 2; d <= N + 1; d++) { s.day = d; if (foggyDay(s)) fog++; if (meteorNight(s)) met++; }
+    const fogPct = (fog / N) * 100, metPct = (met / N) * 100;
+    expect(fogPct).toBeGreaterThan(10); expect(fogPct).toBeLessThan(15); // ~12% cozy fog
+    expect(metPct).toBeGreaterThan(3);  expect(metPct).toBeLessThan(6);  // ~4% rare shower
   });
 });
 
