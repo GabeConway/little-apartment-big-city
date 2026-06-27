@@ -379,7 +379,6 @@ const shore: SceneDef = {
     'S': T('t-sand-wet'),
     'f': T('t-foam-0'),
     'o': T('t-beachrock', true),
-    't': T('t-tidepool'),
     'L': T('t-driftwood', true),
     'D': T('t-dock'),
     '~': T('t-water-0', true),
@@ -394,11 +393,11 @@ const shore: SceneDef = {
     'vddvUdJddvddvddvdvddPddd',
     'ddsddsdsddsssddssdsddkkk',
     'sssossssssUsssssLsssssss',
-    'sssssstssssssssssstsssss',
-    'sssstsssssssssssssssssss',
-    'sssssssssssssssssssstsss',
+    'ssssssssssssssssssssssss',
+    'ssssssssssssssssssssssss',
+    'ssssssssssssssssssssssss',
     'SSSSSSSSSSSSSSSSSSSSSSSS',
-    'SSSSSSStSoSSStSLSSSSooSS',
+    'SSSSSSSSSoSSSSSLSSSSooSS',
     'ffDfffffffffffffffffooff',
     '~~D~~~~~~~~~~~~~~~~~~o~~',
     '~~D~~~~~~~~~~~~~~~~~~~~~',
@@ -569,7 +568,8 @@ const garage: SceneDef = {
   ],
   interactables: [
     { id: 'shop-garage', x: 5, y: 5, w: 3, h: 1, label: 'Vehicles' },
-    { id: 'job-dispatch', x: 10, y: 1, label: 'Delivery Job' },
+    // Delivery gig is taken in person now — talk to Kojima (the mechanic NPC).
+    // The dispatch clipboard tile (t-dispatch) stays as wall decor.
   ],
   npcs: [{ id: 'mechanic', x: 6, y: 4, sprite: 'npc-mechanic', dir: 'down' }],
 };

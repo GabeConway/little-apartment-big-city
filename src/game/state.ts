@@ -477,7 +477,7 @@ export interface RoutineStop { block: RoutineBlock; tile: { x: number; y: number
 export const ROUTINES: Record<string, RoutineStop[]> = {
   granny: [
     { block: 'morning', tile: { x: 15, y: 14 } }, // outside the greenhouse door
-    { block: 'midday', tile: { x: 25, y: 16 } },  // the torii-garden pond
+    { block: 'midday', tile: { x: 24, y: 14 } },  // open grass by the torii garden (not the boxed-in pocket)
     { block: 'evening', tile: { x: 12, y: 16 } }, // back toward home/the planters
     { block: 'night', tile: { x: 12, y: 16 } },
   ],

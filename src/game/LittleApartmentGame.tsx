@@ -105,7 +105,7 @@ const blip = (freqs: number[], dur = 0.09, vol = 0.05) => {
     });
   } catch { /* no audio */ }
 };
-const sfxCoin = () => playSfx('/sfx/coin.mp3');   // sampled (was a blip) — earnings/pickups
+const sfxCoin = () => playSfx('/sfx/coin.mp3', 0.3);   // sampled — earnings/pickups (40% quieter than default)
 const sfxBuy = () => playSfx('/sfx/buy.mp3');     // sampled (was a blip) — purchases
 const sfxCatch = () => blip([659, 880, 1175], 0.09);
 const sfxMiss = () => blip([330, 220], 0.12);
@@ -2189,6 +2189,7 @@ const LittleApartmentGame: React.FC = () => {
         return;
       }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
+      if (npc.id === 'mechanic') { startDelivery(); return; } // Kojima hands out the delivery gig in person
       if (npc.id === 'casino-host') { setOverlayBoth({ type: 'shop', shop: 'casino' }); return; }
       if (npc.id === 'monster') {
         // Once you own every one of his rares, The Manager lets you in on the
@@ -2626,7 +2627,6 @@ const LittleApartmentGame: React.FC = () => {
         break;
       case 'shop-pawn': setOverlayBoth({ type: 'shop', shop: 'pawn' }); break;
       case 'shop-garage': setOverlayBoth({ type: 'shop', shop: 'garage' }); break;
-      case 'job-dispatch': startDelivery(); break;
       case 'boat': setOverlayBoth({ type: 'shop', shop: 'boat' }); break;
       case 'boat-island': setOverlayBoth({ type: 'shop', shop: 'boat-island' }); break;
       case 'coconut': {
@@ -7352,7 +7352,7 @@ const LittleApartmentGame: React.FC = () => {
                   <p className="text-sm opacity-60 leading-tight">{f.blurb}</p>
                 </div>
                 <span className="text-sm opacity-40 line-through shrink-0">¥{f.price.toLocaleString()}</span>
-                <button className={`${btnCls} shrink-0`} disabled={s.money < o.price} onClick={() => buyAtPrice(o.itemId, o.price)}>¥{o.price.toLocaleString()}</button>
+                <button data-nosfx className={`${btnCls} shrink-0`} disabled={s.money < o.price} onClick={() => buyAtPrice(o.itemId, o.price)}>¥{o.price.toLocaleString()}</button>
               </div>
             );
           })}
