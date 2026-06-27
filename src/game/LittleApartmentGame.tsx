@@ -2795,7 +2795,7 @@ const LittleApartmentGame: React.FC = () => {
         const gp = s.greenhouse.plots[idx];
         if (gp.crop && !plotReady(gp) && !s.greenhouse.sprinkler && gp.wateredDay !== s.day) {
           waterPlot(s, idx);
-          sfxCoin(); persistSave(s); refreshHud();
+          sfxDrip(); persistSave(s); refreshHud();
           mineTextRef.current = { x: target!.x * TILE, y: target!.y * TILE - 6, text: '💧 watered', color: '#7ce8e0', t: 1.1 };
           break;
         }
@@ -5737,7 +5737,7 @@ const LittleApartmentGame: React.FC = () => {
   // ---- Greenhouse actions (plot menu + supply counter) -----------------------
   const ghTick = () => { persistSave(saveRef.current); refreshHud(); setShopTick(v => v + 1); };
   const doPlantCrop = (cropId: string) => { if (plantCrop(saveRef.current, ghPlotRef.current, cropId)) { sfxBuy(); ghTick(); } };
-  const doWaterPlot = () => { if (waterPlot(saveRef.current, ghPlotRef.current)) { sfxCoin(); ghTick(); } };
+  const doWaterPlot = () => { if (waterPlot(saveRef.current, ghPlotRef.current)) { sfxDrip(); ghTick(); } };
   const doFertilizePlot = () => { if (applyFertilizer(saveRef.current, ghPlotRef.current)) { sfxBuy(); ghTick(); } };
   // Pull up a planted crop (no refund) so a bed can be replanted.
   const doClearPlot = () => { if (clearPlot(saveRef.current, ghPlotRef.current)) { sfxCoin(); ghTick(); } };

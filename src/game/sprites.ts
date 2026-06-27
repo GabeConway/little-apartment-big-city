@@ -418,9 +418,9 @@ const addCharacter = (atlas: Atlas, key: string, pal: CharPalette, accs: Accesso
 
 // The backrooms merchant — not built on the human body.
 // Faceless shadow-thing: a dark looming mass, blank glowing eyes (y, no
-// pupils), a hollow screaming void for a mouth (w pale rim around empty
-// gaps), ragged dangling underside. Only a faint side rim (l) / shadow (d)
-// for form — kept mostly dark so it reads anonymous and unsettling.
+// pupils), a recessed dark maw (d) framed by a pale rim (w) — solid, NO
+// see-through gaps — and a ragged dangling underside. Only a faint side
+// rim (l) / shadow (d) for form, kept mostly dark: anonymous and unsettling.
 const MONSTER_ROWS = [
   '....m......m....',
   '....mm....mm....',
@@ -431,7 +431,7 @@ const MONSTER_ROWS = [
   '.lmyymmmmmmyymd.',
   '.lmmmmmmmmmmmmd.',
   '.lmmmwwwwwwmmmd.',
-  '.lmmw......wmmd.',
+  '.lmmwddddddwmmd.',
   '.lmmmwwwwwwmmmd.',
   '..mmmmmmmmmmmm..',
   '..mmm.mmmm.mmm..',
@@ -1089,21 +1089,15 @@ const buildTiles = (atlas: Atlas) => {
 
   // Backrooms
   atlas['t-backwall'] = tile(ctx => {
-    fill(ctx, '#b0a050');                                      // sickly backrooms yellow
-    ctx.fillStyle = '#bcac5a'; ctx.fillRect(0, 0, 16, 1);      // lit top
-    ctx.fillStyle = '#a89a48'; for (let x = 4; x < 16; x += 6) ctx.fillRect(x, 0, 1, 16); // faint wallpaper stripe
-    ctx.fillStyle = '#988a40'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1); // seams
-    ctx.fillStyle = '#8c7e38'; ctx.fillRect(2, 6, 4, 3); ctx.fillRect(10, 2, 3, 4); // damp stains
-    ctx.fillStyle = '#7a6e30'; ctx.fillRect(3, 7, 2, 1); ctx.fillRect(11, 4, 1, 1); // stain cores
-    ctx.fillStyle = '#887a36'; ctx.fillRect(0, 14, 16, 2);     // skirting
-    speckle(ctx, '#c4b462', 47, 5);
+    fill(ctx, '#b0a050');
+    ctx.fillStyle = '#988a40'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1);
+    ctx.fillStyle = '#887a36'; ctx.fillRect(0, 14, 16, 2);
+    speckle(ctx, '#c4b462', 47, 4);
   });
   atlas['t-backfloor'] = tile(ctx => {
     fill(ctx, '#8a7e46');
-    speckle(ctx, '#7a6e3c', 53, 11); speckle(ctx, '#988a50', 59, 7); // damp carpet fleck
-    ctx.fillStyle = '#74683a'; ctx.fillRect(0, 4, 16, 1); ctx.fillRect(0, 12, 16, 1); // worn traffic lines
-    ctx.fillStyle = '#6e6234'; ctx.fillRect(3, 6, 4, 3); ctx.fillRect(11, 10, 3, 2); // damp patches
-    ctx.fillStyle = '#968a4e'; ctx.fillRect(8, 2, 2, 2);      // lighter wear spot
+    speckle(ctx, '#7a6e3c', 53, 9);
+    speckle(ctx, '#988a50', 59, 5);
   });
   atlas['t-portal-0'] = tile(ctx => {
     fill(ctx, '#16181d');
