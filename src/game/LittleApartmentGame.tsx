@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  TILE, VIEW_PW, VIEW_PH, RR, Input, startLoop, tryMove, feetTile, facedTile,
+  TILE, VIEW_PW, VIEW_PH, RR, Input, startLoop, tryMove, unstickDirs, feetTile, facedTile,
   cameraFor, sceneSize, isSolid, tileAt,
 } from './engine';
 import type { Dir, Vec, SceneDef, Interactable } from './engine';
@@ -860,10 +860,13 @@ const streetEventDoneLines = (id: string): string[] => {
   }
 };
 
-type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: number; homeY: number; dir: Dir; moving: boolean; stepT: number };
+// walkPhase = this NPC's own accumulated stride time (drives the 2-frame walk +
+// bob independent of a shared clock); stuck = consecutive fully-blocked attempts,
+// so a wanderer walled off from its target gives up and idles instead of grinding.
+type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: number; homeY: number; dir: Dir; moving: boolean; stepT: number; walkPhase: number; stuck: number };
 const makeWanderers = (scene: SceneDef): Wanderer[] =>
   scene.npcs.filter(n => WANDER_IDS.has(n.id)).map(n => ({
-    id: n.id, sprite: n.sprite, x: n.x * TILE, y: n.y * TILE, homeX: n.x * TILE, homeY: n.y * TILE, dir: n.dir, moving: false, stepT: Math.random() * 1.5,
+    id: n.id, sprite: n.sprite, x: n.x * TILE, y: n.y * TILE, homeX: n.x * TILE, homeY: n.y * TILE, dir: n.dir, moving: false, stepT: Math.random() * 1.5, walkPhase: 0, stuck: 0,
   }));
 
 const LittleApartmentGame: React.FC = () => {
@@ -1061,6 +1064,9 @@ const LittleApartmentGame: React.FC = () => {
   const streetEventRef = useRef<StreetEvent | null>(null);
   const inputRef = useRef(new Input());
   const solidsRef = useRef(new Set<string>());
+  // Wanderers avoid everything the player's collision does PLUS warp tiles — an NPC
+  // must never stand on a door/return tile. Built alongside solidsRef in computeSolids.
+  const wanderBlockRef = useRef(new Set<string>());
   const overlayRef = useRef<Overlay | null>(null);
   const fishModeRef = useRef<FishMode | null>(null);
   const shiftRef = useRef<ShiftGame | null>(null);
@@ -1320,6 +1326,11 @@ const LittleApartmentGame: React.FC = () => {
       set.add(`${ev.x},${ev.y}`);
     }
     solidsRef.current = set;
+    // Wanderers also steer clear of warp tiles (doors/return seams) so townsfolk
+    // never park on a doorway. Player keeps using solidsRef so it can still warp.
+    const wb = new Set(set);
+    for (const wp of scene.warps) wb.add(`${wp.x},${wp.y}`);
+    wanderBlockRef.current = wb;
   }, []);
 
   const checkStory = useCallback(() => {
@@ -2902,24 +2913,44 @@ const LittleApartmentGame: React.FC = () => {
       }
       if (w.moving) {
         const sp = 20 * dt; // slow shuffle
-        const ndx = w.dir === 'left' ? -sp : w.dir === 'right' ? sp : 0;
-        const ndy = w.dir === 'up' ? -sp : w.dir === 'down' ? sp : 0;
-        const nx = tryMove(sceneRef.current, { x: w.x, y: w.y }, ndx, ndy, solidsRef.current);
-        const blocked = Math.abs(nx.x - w.x) < 0.05 && Math.abs(nx.y - w.y) < 0.05;
-        w.x = nx.x; w.y = nx.y;
-        if (blocked) {
-          // Bumped a wall/prop. Don't grind against it (that's how an NPC ends up
-          // pinned in one spot forever). Nudge once on the perpendicular axis —
-          // toward home — then stand and re-decide soon, so we always slip free.
-          const hx = w.homeX - w.x, hy = w.homeY - w.y;
-          const alt: Dir = ndx !== 0 ? (hy >= 0 ? 'down' : 'up') : (hx >= 0 ? 'right' : 'left');
-          const ax = alt === 'left' ? -sp : alt === 'right' ? sp : 0;
-          const ay = alt === 'up' ? -sp : alt === 'down' ? sp : 0;
-          const n2 = tryMove(sceneRef.current, { x: w.x, y: w.y }, ax, ay, solidsRef.current);
-          w.x = n2.x; w.y = n2.y; w.dir = alt;
-          w.moving = false;
-          w.stepT = Math.min(w.stepT, 0.25 + Math.random() * 0.5);
+        // One step in a direction, against the wander block set (solids + warps) so
+        // an NPC never walks onto a wall, prop, or doorway. Returns whether it moved.
+        const stepDir = (d: Dir): boolean => {
+          const next = tryMove(sceneRef.current, { x: w.x, y: w.y },
+            d === 'left' ? -sp : d === 'right' ? sp : 0,
+            d === 'up' ? -sp : d === 'down' ? sp : 0,
+            wanderBlockRef.current);
+          if (Math.abs(next.x - w.x) < 0.05 && Math.abs(next.y - w.y) < 0.05) return false;
+          w.x = next.x; w.y = next.y; w.walkPhase += dt;
+          return true;
+        };
+        if (stepDir(w.dir)) {
+          w.stuck = 0;
+        } else {
+          // Blocked by a wall/prop/warp. Instead of grinding face-first into it (how
+          // Charlie used to jam the odd-jobs board), STEER AROUND: try the
+          // perpendiculars (toward home first) then a U-turn, commit to the first
+          // that actually moves, and keep walking it for a beat so we round the corner.
+          let slipped = false;
+          for (const alt of unstickDirs(w.dir, w.homeX - w.x, w.homeY - w.y)) {
+            if (stepDir(alt)) {
+              w.dir = alt;
+              w.stepT = Math.min(w.stepT, 0.6 + Math.random() * 0.6);
+              slipped = true; w.stuck = 0;
+              break;
+            }
+          }
+          if (!slipped) {
+            // Boxed in on every side (e.g. a routine NPC walled off from its
+            // scheduled tile). Give up gracefully and idle rather than vibrate;
+            // after a few dead-ends, take a long pause so we stop re-charging the wall.
+            w.moving = false; w.walkPhase = 0;
+            w.stuck += 1;
+            w.stepT = w.stuck >= 3 ? 2.5 + Math.random() * 2 : 0.25 + Math.random() * 0.5;
+          }
         }
+      } else if (w.walkPhase !== 0) {
+        w.walkPhase = 0; // settle to a clean idle pose (frame 0), no mid-stride freeze
       }
     }
 
@@ -3708,9 +3739,19 @@ const LittleApartmentGame: React.FC = () => {
         draw: () => {
           ctx.drawImage(atlas['m-shadow'], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + 2);
           const dancing = DANCER_IDS.has(w.id);
-          // dancers always animate (and hop) even when not walking
-          const frame = (w.moving || dancing) ? (Math.floor(animRef.current * (dancing ? 9 : 7)) % 2) : 0;
-          const bob = dancing ? -(Math.abs(Math.sin(animRef.current * 7 + w.homeX)) > 0.5 ? 1 : 0) : 0;
+          let frame: number, bob: number;
+          if (dancing) {
+            // dancers bob in place even when not walking (Club Kaiju crowd) — unchanged
+            frame = Math.floor(animRef.current * 9) % 2;
+            bob = -(Math.abs(Math.sin(animRef.current * 7 + w.homeX)) > 0.5 ? 1 : 0);
+          } else if (w.moving) {
+            // walk cadence rides THIS NPC's own stride (walkPhase), not a shared clock,
+            // so steps read naturally; a 1px lift on alternate frames adds a gentle bob.
+            const step = Math.floor(w.walkPhase * 7) % 2;
+            frame = step; bob = -step;
+          } else {
+            frame = 0; bob = 0; // clean idle pose, no twitch
+          }
           ctx.drawImage(atlas[`${w.sprite}-${w.dir}-${frame}`], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + bob);
         },
       });
@@ -4673,6 +4714,13 @@ const LittleApartmentGame: React.FC = () => {
           chest: mineChestRef.current,
           chestOpen: mineChestOpenRef.current,
         } : null,
+        // Live wanderer positions (tile-rounded) — lets the harness confirm townsfolk
+        // keep moving (don't grind against a wall) without a screenshot.
+        wanderers: wanderersRef.current.map(w => ({
+          id: w.id, x: Math.round(w.x), y: Math.round(w.y),
+          tx: Math.round(w.x / TILE), ty: Math.round(w.y / TILE),
+          dir: w.dir, moving: w.moving, stuck: w.stuck,
+        })),
         save: saveRef.current,
       }),
     };

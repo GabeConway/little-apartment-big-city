@@ -100,6 +100,22 @@ export const tryMove = (
   return { x: nx, y: ny };
 };
 
+// Wanderer anti-stick: a NPC that walked into a wall/prop/warp gets an ordered
+// list of escape directions to try (caller commits to the first that actually
+// moves). We steer AROUND the obstacle — the perpendicular toward home first, then
+// the other perpendicular, then a U-turn — so the NPC slips past it instead of
+// grinding face-first into it forever. Pure + deterministic so it can be unit-tested.
+const OPPOSITE: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', right: 'left' };
+export const unstickDirs = (blocked: Dir, homeDx: number, homeDy: number): Dir[] => {
+  const horizontal = blocked === 'left' || blocked === 'right';
+  if (horizontal) {
+    const toward: Dir = homeDy >= 0 ? 'down' : 'up';
+    return [toward, OPPOSITE[toward], OPPOSITE[blocked]];
+  }
+  const toward: Dir = homeDx >= 0 ? 'right' : 'left';
+  return [toward, OPPOSITE[toward], OPPOSITE[blocked]];
+};
+
 // Tile the player's feet occupy (for warps) and the tile faced (for interactions).
 export const feetTile = (pos: Vec): Vec => ({
   x: Math.floor((pos.x + HB_X + HB_W / 2) / TILE),

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   TILE, VIEW_PW, VIEW_PH,
-  sceneSize, tileAt, isSolid, tryMove, feetTile, facedTile, cameraFor,
+  sceneSize, tileAt, isSolid, tryMove, unstickDirs, feetTile, facedTile, cameraFor,
   mulberry32, Input,
   type SceneDef, type Dir,
 } from '../src/game/engine';
@@ -75,6 +75,26 @@ describe('tryMove', () => {
     const moved = tryMove(scene(), start, -8, 0, new Set());
     // y was unchanged here; verify the two axes are independent
     expect(moved.y).toBe(TILE);
+  });
+});
+
+describe('unstickDirs', () => {
+  it('blocked horizontally → tries perpendicular toward home first, then away, then U-turn', () => {
+    // walking right into a wall, home is below → prefer down, then up, then left
+    expect(unstickDirs('right', 0, 40)).toEqual(['down', 'up', 'left']);
+    // home above → prefer up first
+    expect(unstickDirs('left', 0, -40)).toEqual(['up', 'down', 'right']);
+  });
+  it('blocked vertically → tries the horizontal perpendicular toward home first', () => {
+    expect(unstickDirs('up', 40, 0)).toEqual(['right', 'left', 'down']);
+    expect(unstickDirs('down', -40, 0)).toEqual(['left', 'right', 'up']);
+  });
+  it('always offers three distinct escape directions (never re-tries the blocked one)', () => {
+    for (const d of ['up', 'down', 'left', 'right'] as Dir[]) {
+      const got = unstickDirs(d, 1, -1);
+      expect(new Set(got).size).toBe(3);
+      expect(got).not.toContain(d); // never shove back into the obstacle
+    }
   });
 });
 
