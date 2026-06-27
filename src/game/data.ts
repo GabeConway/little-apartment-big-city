@@ -257,7 +257,6 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'greenthumb', title: 'Green Thumb', desc: 'Grew a Moonflower in the community greenhouse.', hint: 'Earn the shrine\'s deepest favor — its seeds bloom only after midnight.' },
   { id: 'broke', title: 'i dont have enough money for chicken nugget', desc: 'Dropped under ¥100. The nuggets remain a dream.', hint: 'Spend almost all of it.' },
   { id: 'regular', title: 'Everybody Knows Your Name', desc: 'Met everyone worth knowing in Kawamachi.', hint: 'A city is just strangers you have not met yet.' },
-  { id: 'skyline', title: 'Rooftop, 3 A.M.', desc: 'Climbed the city fire escape and met the skyline.', hint: 'Some ladders go up, not down. One is bolted to a building downtown.' },
   { id: 'mid', title: "That's Mid", desc: 'Harvested a plain, normal-quality crop. It is fine. It is a crop.', hint: 'Not every harvest is silver or gold. Some are just... a vegetable.' },
 ];
 
@@ -677,11 +676,12 @@ export const MESSAGES: MessageDef[] = [
 export type IngredientKind = 'fish' | 'crop' | 'coconut' | 'peepis' | 'soda' | 'rice' | 'egg' | 'veg';
 export type BuffId = 'hearty' | 'warm' | 'lucky';
 
-export interface BuffInfo { id: BuffId; name: string; emoji: string; desc: string }
+// `tag` = a tiny effect summary for the HUD chip (the full sentence is `desc`).
+export interface BuffInfo { id: BuffId; name: string; emoji: string; tag: string; desc: string }
 export const BUFFS: Record<BuffId, BuffInfo> = {
-  hearty: { id: 'hearty', name: 'Hearty', emoji: '💪', desc: '+20 max energy until tomorrow.' },
-  warm:   { id: 'warm',   name: 'Warmed',  emoji: '🔥', desc: 'Everything costs 20% less energy today.' },
-  lucky:  { id: 'lucky',  name: 'Lucky',   emoji: '🍀', desc: 'Extra shore finds & richer mine veins today.' },
+  hearty: { id: 'hearty', name: 'Hearty', emoji: '💪', tag: '+20 max energy', desc: '+20 max energy until tomorrow.' },
+  warm:   { id: 'warm',   name: 'Warmed',  emoji: '🔥', tag: '−20% energy cost', desc: 'Everything costs 20% less energy today.' },
+  lucky:  { id: 'lucky',  name: 'Lucky',   emoji: '🍀', tag: 'better finds', desc: 'Extra shore finds & richer mine veins today.' },
 };
 
 export interface Recipe {

@@ -151,13 +151,12 @@ const city: SceneDef = {
     'R': T('t-gh-roof', true),     // greenhouse pitched glass roof (over the facade)
     'G': T('t-gh-door'),           // greenhouse glass door (walk-in warp, gated)
     'J': T('t-board', true),       // odd-jobs notice board (errand giver)
-    'L': T('t-fire-escape', true), // fire-escape ladder up a building (secret rooftop; solid, faced from the sidewalk)
   },
   outdoor: true,
   grid: [
     'BBBBBBBBBBAAAAAAAAAACCCCCCCQQQQQ',
     'BBBBBBBBBBAAAAAAAAAACCCCCCCQQQQQ',
-    'bbbbDDbbbbaaaaDDaaaaCCCDDCCQDDLQ',
+    'bbbbDDbbbbaaaaDDaaaaCCCDDCCQDDQQ',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwVwwwwwwwwwwwwwwwwwVwwwww',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
@@ -203,7 +202,6 @@ const city: SceneDef = {
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
     { id: 'errand-board', x: 11, y: 13, label: 'Odd-jobs board' },
     { id: 'landlord', x: 9, y: 13, label: 'Lease office' },
-    { id: 'city-rooftop', x: 30, y: 2, label: 'Fire escape' },
   ],
   npcs: [
     { id: 'charlie', x: 17, y: 3, sprite: 'npc-charlie', dir: 'down' },

@@ -556,7 +556,7 @@ interface Hud {
   late: boolean; // past midnight — 2 AM collapse looms
   unread: number; // unread phone messages (badge on the 📱 button)
   event: DayEvent; // today's special day ('market' / 'lucky' / null) — HUD chip
-  buff: { emoji: string; name: string } | null; // active food buff today — HUD chip
+  buff: { emoji: string; name: string; tag: string } | null; // active food buff today — HUD chip
 }
 
 // Every named character has a voice: several line-sets, picked at random per
@@ -1249,7 +1249,7 @@ const LittleApartmentGame: React.FC = () => {
       late: s.timeMin >= 24 * 60, // midnight or later
       unread: unreadCount(s),
       event: dayEventFor(s),
-      buff: s.buff && s.buff.day === s.day ? { emoji: BUFFS[s.buff.id].emoji, name: BUFFS[s.buff.id].name } : null,
+      buff: s.buff && s.buff.day === s.day ? { emoji: BUFFS[s.buff.id].emoji, name: BUFFS[s.buff.id].name, tag: BUFFS[s.buff.id].tag } : null,
     });
   }, [award]);
 
@@ -2555,27 +2555,7 @@ const LittleApartmentGame: React.FC = () => {
         ]);
         break;
       }
-      // 2) City rooftop — climb the fire escape for the skyline. First time = achievement.
-      case 'city-rooftop': {
-        if (s.storySeen.includes('city-rooftop')) {
-          s.energy = Math.min(maxEnergy(s), s.energy + 20);
-          persistSave(s); refreshHud();
-          showDialog(['You climb the fire escape again, just to breathe. The skyline is still up here, patient as ever. The city exhales with you. (+20 energy)']);
-          break;
-        }
-        s.storySeen.push('city-rooftop');
-        s.energy = maxEnergy(s);
-        award('skyline');
-        sfxCatch();
-        persistSave(s); refreshHud();
-        showDialog([
-          'The fire escape is rust-flecked but sound. You climb past dark windows, past somebody\'s wind chime, up onto a gravel roof nobody seems to remember building.',
-          'And there it is: Kawamachi laid end to end — train lines stitched in light, the harbor a sheet of black glass, ten thousand windows each holding one small life.',
-          'No one in all of it knows you are up here. For a little while the whole enormous city feels like something you could hold in two cupped hands. You climb down lighter than you went up. (Energy restored.)',
-        ]);
-        break;
-      }
-      // 3) Shore stargazing — only after dark; spot the Sleeping Cat constellation.
+      // 2) Shore stargazing — only after dark; spot the Sleeping Cat constellation.
       case 'stargaze': {
         if (nightT(s) < 0.45) { showDialog(['You tip your head back. Just the wide blue afternoon — a gull, the smell of salt, no stars to speak of. They keep their own hours. Come back after dark.']); break; }
         if (s.storySeen.includes('stargaze')) { showDialog(['You lie back in the cool dune grass and find the Sleeping Cat again, curled exactly where you left her. Some things stay put. It is a quiet comfort.']); break; }
@@ -7170,12 +7150,15 @@ const LittleApartmentGame: React.FC = () => {
             );
           })()}
 
-          {/* active food buff */}
+          {/* active food buff — emoji + name + what it does, so it's not a mystery icon */}
           {hud.buff && (
             <span
-              className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-[#e0843a]/20 text-base leading-none"
-              title={`${hud.buff.name} meal — active until tomorrow`}
-            >{hud.buff.emoji}</span>
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#e0843a]/20 leading-none"
+              title={`${hud.buff.name} — ${hud.buff.tag} (until tomorrow)`}
+            >
+              <span className="text-base">{hud.buff.emoji}</span>
+              <span className="hidden sm:inline text-[10px] font-pixel text-[#ffd2a0] whitespace-nowrap">{hud.buff.name} · {hud.buff.tag}</span>
+            </span>
           )}
 
           {/* special-day chip — Market / Lucky Day */}

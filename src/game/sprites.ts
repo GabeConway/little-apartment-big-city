@@ -1648,15 +1648,6 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#2c2832'; ctx.fillRect(5, 2, 1, 12); ctx.fillRect(10, 2, 1, 12); // crack edges
     ctx.fillStyle = '#33303a'; ctx.fillRect(0, 14, 16, 2);   // ground shadow
   });
-  atlas['t-fire-escape'] = tile(ctx => {                     // rusted fire-escape ladder bolted up a brick wall (secret)
-    fill(ctx, '#6e5a4a'); speckle(ctx, '#5c4a3c', 37, 7);    // brick wall
-    ctx.fillStyle = '#3a3a42'; ctx.fillRect(5, 0, 6, 16);    // steel cage shadow band
-    ctx.fillStyle = '#55555f'; ctx.fillRect(5, 2, 6, 1); ctx.fillRect(5, 8, 6, 1); ctx.fillRect(5, 14, 6, 1); // landing rails
-    ctx.fillStyle = '#6b6b76'; ctx.fillRect(6, 0, 1, 16); ctx.fillRect(9, 0, 1, 16); // ladder side rails
-    ctx.fillStyle = '#8a8a96'; for (let y = 1; y < 16; y += 3) ctx.fillRect(6, y, 4, 1); // rungs
-    ctx.fillStyle = '#b87a4a'; ctx.fillRect(6, 5, 1, 2); ctx.fillRect(9, 10, 1, 2); // rust streaks
-  });
-
   // Beach stand
   atlas['t-parasol'] = tile(ctx => {
     fill(ctx, '#cdbb8e');
