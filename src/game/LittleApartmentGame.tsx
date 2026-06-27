@@ -233,6 +233,7 @@ const sfxBackroomsWarp = () => playSfx('/sfx/backrooms-teleport.mp3');
 const sfxUiClick = () => playSfx('/sfx/ui-click.mp3', 0.4);
 const sfxGameStart = () => playSfx('/sfx/game-start.mp3');
 const sfxPhone = () => playSfx('/sfx/phone-notification.mp3');
+const sfxLevelUp = () => playSfx('/sfx/level-up.mp3');
 
 // ---- background music -------------------------------------------------------
 // Per-scene tracks; everywhere unlisted (city, badtown, gacha) falls back to the
@@ -1205,7 +1206,7 @@ const LittleApartmentGame: React.FC = () => {
   const SKILL_NAME: Record<SkillId, string> = { fish: 'Fishing', mine: 'Mining', farm: 'Farming' };
   const gainSkill = (k: SkillId, n: number) => {
     const lvl = addSkillXp(saveRef.current, k, n);
-    if (lvl) showToast(`📈 ${SKILL_NAME[k]} Lv.${lvl}!`, 'Your skill is growing — the rolls tilt your way.');
+    if (lvl) { sfxLevelUp(); showToast(`📈 ${SKILL_NAME[k]} Lv.${lvl}!`, 'Your skill is growing — the rolls tilt your way.'); }
   };
 
   const refreshHud = useCallback(() => {
