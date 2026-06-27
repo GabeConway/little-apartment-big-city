@@ -201,6 +201,18 @@ export const freshDayLog = (money: number): DayLog => ({
 
 const KEY = 'lab-save';
 
+// Clean a player-typed name: drop control chars, collapse runs of whitespace,
+// trim, cap at 16 visible chars. Falls back to 'Neighbor' so copy + every
+// '{name}' substitution always has a real, safe value.
+export const sanitizeName = (raw: string): string => {
+  const cleaned = (raw ?? '')
+    .replace(/\s+/g, ' ')                          // tabs/newlines/runs -> one space first (so words never merge)
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')  // then strip remaining (non-whitespace) control chars
+    .trim()
+    .slice(0, 16);
+  return cleaned || 'Neighbor';
+};
+
 export const newSave = (): GameSave => ({
   v: 2,
   vibe: 'fem',

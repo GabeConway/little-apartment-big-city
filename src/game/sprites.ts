@@ -175,9 +175,10 @@ const ACC = {
     left: ['.....cccccc.....', '....cccccccc....', '..cccccccccccc..', '.cccccccccccccc.'],
   }),
   shades: (c: string): Accessory => ({
-    dy: 4, pal: { x: c },
-    down: ['...xxxx.xxxx....'],
-    left: ['...xxxxx........'],
+    // proper sunglasses: dark steel frame (f), tinted lenses (x), cool glint (g)
+    dy: 3, pal: { x: c, f: '#3a3f4a', g: '#9fc4e8' },
+    down: ['...fffffffff....', '...xggx.xggx....', '....xx...xx.....'],
+    left: ['...ffffff.......', '...xggx.........', '....xx..........'],
   }),
   glasses: (frame: string, lens: string): Accessory => ({
     dy: 4, pal: { x: frame, l: lens },
@@ -213,8 +214,9 @@ const ACC = {
     left: ['....cccccccc....', '...cccccccccc...', '...cc.....ccc...', '...cc.....ccc...', '...cc.....ccc...', '...ccc...cccc...', '....cc...ccc....'],
   }),
   bowtie: (c: string): Accessory => ({
+    // two pinched wings + center knot — reads as a bowtie, not a smudge
     dy: 7, pal: { r: c },
-    down: ['......r..r......', '......rrrr......'],
+    down: ['....rr.r.rr.....', '....rrrrrrr.....', '....rr.r.rr.....'],
   }),
   cowboy: (c: string, band: string): Accessory => ({
     pal: { c, b: band },
@@ -415,28 +417,30 @@ const addCharacter = (atlas: Atlas, key: string, pal: CharPalette, accs: Accesso
 };
 
 // The backrooms merchant — not built on the human body.
+// Horned merchant blob: upper-left rim light (l), lower-right shadow (d),
+// glowing eyes with pupils (y/p) and a fanged grin (w teeth / k dark maw).
 const MONSTER_ROWS = [
   '....m......m....',
+  '...mlm....mlm...',
+  '..lmmmmmmmmmmd..',
+  '.lmmmmmmmmmmmmd.',
+  '.lmyymmmmmmyymd.',
+  '.lmypmmmmmmpymd.',
+  '.lmmmmmmmmmmmmd.',
+  '.lmmwwwwwwwwmmd.',
+  '..lmkkkkkkkkmd..',
+  '..lmmwwwwwwmmd..',
+  '...lmmmmmmmmd...',
+  '....mmmmmmmm....',
   '....mm....mm....',
-  '..mmmmmmmmmmmm..',
-  '.mmmmmmmmmmmmmm.',
-  '.mmyymmmmmmyymm.',
-  '.mmyymmmmmmyymm.',
-  '.mmmmmmmmmmmmmm.',
-  '.mmmmmwwwwmmmmm.',
-  '.mmmmw....wmmmm.',
-  '.mmmmmwwwwmmmmm.',
-  '.mmmmmmmmmmmmmm.',
-  '..mmmmmmmmmmmm..',
-  '..mmm.mmmm.mmm..',
-  '..mm...mm...mm..',
-  '..m....mm....m..',
+  '....dd....dd....',
+  '................',
   '................',
 ];
 const addMonster = (atlas: Atlas) => {
-  const c = strSprite(MONSTER_ROWS, { m: '#2a1f38', y: '#ffd24a', w: '#e8e0d0' });
+  const c = strSprite(MONSTER_ROWS, { m: '#2a1f38', d: '#1a1326', l: '#42325a', y: '#ffd24a', p: '#16181d', w: '#e8e0d0', k: '#0e0a16' });
   // Club Kaiju's most loyal patron — same silhouette, very different vibe
-  const k = strSprite(MONSTER_ROWS, { m: '#3e6e3a', y: '#ffd24a', w: '#aef0a0' });
+  const k = strSprite(MONSTER_ROWS, { m: '#3e6e3a', d: '#284827', l: '#5a924f', y: '#ffd24a', p: '#16181d', w: '#dff5cf', k: '#16280f' });
   for (const dir of ['down', 'up', 'left', 'right']) {
     atlas[`npc-monster-${dir}-0`] = c;
     atlas[`npc-monster-${dir}-1`] = c;
@@ -446,19 +450,21 @@ const addMonster = (atlas: Atlas) => {
 };
 
 // Mine crawlers — skittering shadows with too many eyes.
+// Crawlers: domed carapace with a top-left rim (l), belly shadow (d) and
+// glowing eyes (y). Two skitter frames swap the leg positions.
 const CRAWLER_0 = [
   '................',
   '................',
   '................',
   '....cc....cc....',
-  '...cccc..cccc...',
-  '..cccccccccccc..',
-  '..ccyccccccycc..',
-  '..cccccccccccc..',
-  '..ccccyccyc.cc..',
-  '...cccccccccc...',
-  '..c..cc..cc..c..',
-  '.c...c....c...c.',
+  '...lccc..cccl...',
+  '..lccccccccccd..',
+  '..lcyccccccycd..',
+  '..lccccccccccd..',
+  '..lcccyccycccd..',
+  '...dccccccccd...',
+  '..d..dd..dd..d..',
+  '.d...d....d...d.',
   '................',
   '................',
   '................',
@@ -469,22 +475,22 @@ const CRAWLER_1 = [
   '................',
   '................',
   '....cc....cc....',
-  '...cccc..cccc...',
-  '..cccccccccccc..',
-  '..ccyccccccycc..',
-  '..cccccccccccc..',
-  '..cc.cyccycccc..',
-  '...cccccccccc...',
-  '..cc..cc..cc....',
-  '...c...c...c....',
+  '...lccc..cccl...',
+  '..lccccccccccd..',
+  '..lcyccccccycd..',
+  '..lccccccccccd..',
+  '..lcccyccycccd..',
+  '...dccccccccd...',
+  '.d..dd..dd..d...',
+  '..d...d..d...d..',
   '................',
   '................',
   '................',
   '................',
 ];
 const addCrawler = (atlas: Atlas) => {
-  atlas['crawler-0'] = strSprite(CRAWLER_0, { c: '#1d1924', y: '#e857a8' });
-  atlas['crawler-1'] = strSprite(CRAWLER_1, { c: '#1d1924', y: '#e857a8' });
+  atlas['crawler-0'] = strSprite(CRAWLER_0, { c: '#1d1924', y: '#e857a8', l: '#352b42', d: '#0e0b15' });
+  atlas['crawler-1'] = strSprite(CRAWLER_1, { c: '#1d1924', y: '#e857a8', l: '#352b42', d: '#0e0b15' });
 };
 
 // Fast crawler — lean, narrow, spindly legs.
@@ -493,13 +499,13 @@ const CRAWLER_FAST_0 = [
   '................',
   '................',
   '......cccc......',
-  '.....cccccc.....',
-  '....cycccyc.....',
-  '....cccccccc....',
-  '....cc.cc.cc....',
-  '.....cccccc.....',
-  '...c.c.cc.c.c...',
-  '..c..........c..',
+  '.....lccccd.....',
+  '....lcyccycd....',
+  '....lccccccd....',
+  '....dd.dd.dd....',
+  '.....dccccd.....',
+  '...d.d.dd.d.d...',
+  '..d..........d..',
   '................',
   '................',
   '................',
@@ -511,32 +517,32 @@ const CRAWLER_FAST_1 = [
   '................',
   '................',
   '......cccc......',
-  '.....cccccc.....',
-  '....cycccyc.....',
-  '....cccccccc....',
-  '....cc.cc.cc....',
-  '.....cccccc.....',
-  '..c.c.cc.c.c....',
-  '...c..........c.',
+  '.....lccccd.....',
+  '....lcyccycd....',
+  '....lccccccd....',
+  '....dd.dd.dd....',
+  '.....dccccd.....',
+  '..d.d.dd.d.d....',
+  '...d..........d.',
   '................',
   '................',
   '................',
   '................',
   '................',
 ];
-// Tank crawler — bulky, wide, heavy body with stubby legs.
+// Tank crawler — bulky, wide, heavy carapace with stubby legs.
 const CRAWLER_TANK_0 = [
   '................',
   '...cc......cc...',
-  '..cccc....cccc..',
-  '.cccccccccccccc.',
-  'cccccccccccccccc',
-  'ccyccccccccyccc.',
-  'cccccccccccccccc',
-  '.cccccccccccccc.',
-  '.cccccccccccccc.',
-  '..cc.cc.cc.cc...',
-  '..c..c..c..c....',
+  '..lccc....cccl..',
+  '.lccccccccccccd.',
+  'lccccccccccccccd',
+  'lcyccccccccyccd.',
+  'lccccccccccccccd',
+  '.lccccccccccccd.',
+  '.dccccccccccccd.',
+  '..dd.dd.dd.dd...',
+  '..d..d..d..d....',
   '................',
   '................',
   '................',
@@ -546,15 +552,15 @@ const CRAWLER_TANK_0 = [
 const CRAWLER_TANK_1 = [
   '................',
   '...cc......cc...',
-  '..cccc....cccc..',
-  '.cccccccccccccc.',
-  'cccccccccccccccc',
-  'ccyccccccccyccc.',
-  'cccccccccccccccc',
-  '.cccccccccccccc.',
-  '.cccccccccccccc.',
-  '.cc.cc.cc.cc.cc.',
-  '.c..c..c..c..c..',
+  '..lccc....cccl..',
+  '.lccccccccccccd.',
+  'lccccccccccccccd',
+  'lcyccccccccyccd.',
+  'lccccccccccccccd',
+  '.lccccccccccccd.',
+  '.dccccccccccccd.',
+  '.dd.dd.dd.dd.dd.',
+  '.d..d..d..d..d..',
   '................',
   '................',
   '................',
@@ -562,12 +568,12 @@ const CRAWLER_TANK_1 = [
   '................',
 ];
 const addCrawlerVariants = (atlas: Atlas) => {
-  atlas['crawler-fast-0'] = strSprite(CRAWLER_FAST_0, { c: '#241d2e', y: '#7ce8e0' });
-  atlas['crawler-fast-1'] = strSprite(CRAWLER_FAST_1, { c: '#241d2e', y: '#7ce8e0' });
-  atlas['crawler-tank-0'] = strSprite(CRAWLER_TANK_0, { c: '#1a1622', y: '#ff7cc4' });
-  atlas['crawler-tank-1'] = strSprite(CRAWLER_TANK_1, { c: '#1a1622', y: '#ff7cc4' });
-  atlas['crawler-gold-0'] = strSprite(CRAWLER_0, { c: '#bd9a3a', y: '#fff0b0' });
-  atlas['crawler-gold-1'] = strSprite(CRAWLER_1, { c: '#bd9a3a', y: '#fff0b0' });
+  atlas['crawler-fast-0'] = strSprite(CRAWLER_FAST_0, { c: '#241d2e', y: '#7ce8e0', l: '#3d3450', d: '#130f1c' });
+  atlas['crawler-fast-1'] = strSprite(CRAWLER_FAST_1, { c: '#241d2e', y: '#7ce8e0', l: '#3d3450', d: '#130f1c' });
+  atlas['crawler-tank-0'] = strSprite(CRAWLER_TANK_0, { c: '#1a1622', y: '#ff7cc4', l: '#322940', d: '#0c0913' });
+  atlas['crawler-tank-1'] = strSprite(CRAWLER_TANK_1, { c: '#1a1622', y: '#ff7cc4', l: '#322940', d: '#0c0913' });
+  atlas['crawler-gold-0'] = strSprite(CRAWLER_0, { c: '#bd9a3a', y: '#fff0b0', l: '#e6c866', d: '#7a5e1e' });
+  atlas['crawler-gold-1'] = strSprite(CRAWLER_1, { c: '#bd9a3a', y: '#fff0b0', l: '#e6c866', d: '#7a5e1e' });
 };
 
 // ---- Tiles (16x16, procedural) ------------------------------------------
@@ -639,10 +645,19 @@ const buildTiles = (atlas: Atlas) => {
   });
 
   // City
-  atlas['t-road'] = tile(ctx => { fill(ctx, '#3a3a42'); speckle(ctx, '#44444d', 3, 8); });
+  atlas['t-road'] = tile(ctx => {
+    fill(ctx, '#34343c');
+    speckle(ctx, '#45454f', 3, 14);                                    // light aggregate
+    speckle(ctx, '#2b2b32', 71, 10);                                   // dark grit
+    speckle(ctx, '#525260', 89, 4);                                    // bright fleck
+    ctx.fillStyle = '#2a2a31'; ctx.fillRect(0, 11, 6, 1); ctx.fillRect(9, 4, 5, 1); // hairline cracks
+  });
   atlas['t-road-line'] = tile(ctx => {
-    fill(ctx, '#3a3a42'); speckle(ctx, '#44444d', 5, 8);
-    ctx.fillStyle = '#d8d8c8'; ctx.fillRect(2, 7, 5, 2); ctx.fillRect(10, 7, 5, 2);
+    fill(ctx, '#34343c');
+    speckle(ctx, '#45454f', 5, 14); speckle(ctx, '#2b2b32', 73, 10);
+    ctx.fillStyle = '#c9c5a8'; ctx.fillRect(2, 7, 5, 2); ctx.fillRect(10, 7, 5, 2);  // worn paint dashes
+    ctx.fillStyle = '#eae6cc'; ctx.fillRect(2, 7, 2, 1); ctx.fillRect(10, 7, 2, 1);  // dash highlight
+    ctx.fillStyle = '#a39f82'; ctx.fillRect(2, 9, 5, 1); ctx.fillRect(10, 9, 5, 1);  // dash wear/shadow
   });
   atlas['t-sidewalk'] = tile(ctx => {
     fill(ctx, '#9aa0a6');
@@ -1265,13 +1280,20 @@ const buildTiles = (atlas: Atlas) => {
   // Mines
   atlas['t-cave-wall'] = tile(ctx => {
     fill(ctx, '#2a2430');
-    ctx.fillStyle = '#3a3344'; ctx.fillRect(1, 2, 5, 4); ctx.fillRect(9, 7, 5, 5); ctx.fillRect(4, 11, 4, 3);
-    ctx.fillStyle = '#1d1924'; ctx.fillRect(0, 14, 16, 2);
+    ctx.fillStyle = '#3a3344'; ctx.fillRect(1, 1, 6, 5); ctx.fillRect(9, 6, 5, 6); ctx.fillRect(3, 11, 5, 4); // rock facets
+    ctx.fillStyle = '#473e54'; ctx.fillRect(1, 1, 6, 1); ctx.fillRect(9, 6, 5, 1); ctx.fillRect(3, 11, 5, 1); // facet top highlight
+    ctx.fillStyle = '#221d2a'; ctx.fillRect(7, 2, 1, 12); ctx.fillRect(0, 7, 16, 1);                          // crevice shadows
+    speckle(ctx, '#4a4256', 41, 6);                                                                            // mineral fleck
+    speckle(ctx, '#1d1924', 47, 5);
+    ctx.fillStyle = '#1d1924'; ctx.fillRect(0, 14, 16, 2);                                                     // base seam
   });
   atlas['t-cave-floor'] = tile(ctx => {
-    fill(ctx, '#4a4252');
-    speckle(ctx, '#564d60', 61, 7);
-    speckle(ctx, '#3e3746', 67, 5);
+    fill(ctx, '#453d4e');
+    speckle(ctx, '#524a5c', 61, 9);                                                                            // light grit
+    speckle(ctx, '#3a3344', 67, 7);                                                                            // dark grit
+    ctx.fillStyle = '#564d62'; ctx.fillRect(3, 4, 3, 2); ctx.fillRect(10, 9, 3, 2); ctx.fillRect(6, 12, 2, 2); // pebbles (lit)
+    ctx.fillStyle = '#5e5468'; ctx.fillRect(3, 4, 1, 1); ctx.fillRect(10, 9, 1, 1);                            // pebble highlight
+    ctx.fillStyle = '#332c3e'; ctx.fillRect(3, 6, 3, 1); ctx.fillRect(10, 11, 3, 1); ctx.fillRect(6, 14, 2, 1); // pebble shadow
   });
   atlas['t-hole'] = tile(ctx => {
     fill(ctx, '#8a7e46'); // backrooms carpet around it

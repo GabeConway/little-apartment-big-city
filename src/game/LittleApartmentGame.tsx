@@ -69,6 +69,7 @@ import {
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
   ROOM_PRICE, JUKEBOX_PRICE, skillLevel, skillProgress, addSkillXp,
   streetEventFor, streetEventDoneToday,
+  sanitizeName,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe, SkillId } from './state';
@@ -613,7 +614,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   charlie: {
     speaker: 'Charlie',
     sets: [
-      ['Oh hey — Charlie. Don\'t mind the camera, I film basically everything. The city\'s got this golden-hour thing at like 4pm, it\'s unreal.', 'konbini\'s always hiring if you\'re short on cash. tell \'em I sent you. or don\'t, that\'s also a vibe.'],
+      ['Oh hey, {name} — Charlie. Don\'t mind the camera, I film basically everything. The city\'s got this golden-hour thing at like 4pm, it\'s unreal.', 'konbini\'s always hiring if you\'re short on cash. tell \'em I sent you. or don\'t, that\'s also a vibe.'],
       ['I wrote a song about the vending machine outside your building. Three chords. Two of them are the same chord. It SLAPS though.', 'pawn shop flips fresh stuff every morning — I got a tambourine there once. Best ¥400 I ever spent.'],
       ['So I\'m filming a documentary about the pigeons in this district. Working title: "Coo." ...That\'s it, that\'s the whole title. I think it\'s funny.'],
       ['You ever notice the streetlights buzz in, like, B-flat? Drove me nuts till I tuned the guitar to it. Now we jam. Me and the streetlight.'],
@@ -623,7 +624,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
     speaker: 'Granny Sato',
     sets: [
       ['How is my greenhouse treating you? Keep those sprinklers on and something will always be growing.', 'A plot of soil and a little patience. That is most of happiness, I find.'],
-      ['Nakatomi Apartments? I have lived there forty years. Thin walls, good light.', 'A home is not bought in a day, dear. It is bought one small thing at a time.'],
+      ['Nakatomi Apartments? I have lived there forty years. Thin walls, good light.', 'A home is not bought in a day, {name}. It is bought one small thing at a time.'],
       ['The man at the pawn shop was a jazz pianist, you know. Ask him about it. Watch his face.'],
       ['Downtown used to be even louder, if you can believe it. The club is still there. So is everything else, in its way.'],
     ],
@@ -631,7 +632,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   'old-man': {
     speaker: 'Genji',
     sets: [
-      ['Hold steady when the fish runs deep. Let the little ones tire themselves out.'],
+      ['Hold steady when the fish runs deep, {name}. Let the little ones tire themselves out.'],
       ['They say a golden carp lives off this shore. Forty years, I have never caught it.', 'Sometimes I think it has caught me.'],
       ['The konbini buys whatever you pull out. City people will eat anything fresh.'],
     ],
@@ -663,7 +664,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   mechanic: {
     speaker: 'Kojima',
     sets: [
-      ['Yeah? Counter is there. Car runs, boat floats. That is the whole pitch.'],
+      ['Yeah, {name}? Counter is there. Car runs, boat floats. That is the whole pitch.'],
       ['Thirty years fixing engines in Old Town. The neighborhood got quiet. Engines did not.'],
       ['The kei car is a good machine. Do not let the cigarette smell fool you. That is character.'],
     ],
@@ -692,7 +693,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   bartender: {
     speaker: 'Saito',
     sets: [
-      ['Welcome to Club Kaiju. Highball is ¥500. The bowtie is non-negotiable.'],
+      ['Welcome to Club Kaiju, {name}. Highball is ¥500. The bowtie is non-negotiable.'],
       ['I have poured drinks here for eleven years. The DJ has played the same set for nine of them. It grows on you.'],
       ['The big guy by the dance floor? Regular. Tips in scales. We frame them.'],
     ],
@@ -708,7 +709,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   tourist: {
     speaker: 'Jean-Pierre (tourist)',
     sets: [
-      ['Ah! Bonjour! You also find ze... immersive exhibition? Magnifique. Very conceptual. Very yellow.', 'Ze guidebook said "authentic local konbini experience". Five stars. I have been here three days.'],
+      ['Ah! Bonjour, {name}! You also find ze... immersive exhibition? Magnifique. Very conceptual. Very yellow.', 'Ze guidebook said "authentic local konbini experience". Five stars. I have been here three days.'],
       ['I ask ze big monsieur for directions. He is very polite. He sells me a table that whispers. C\'est la vie.'],
       ['Do not worry for me! In France we also have liminal spaces. We call them "Charles de Gaulle Airport".'],
     ],
@@ -721,7 +722,7 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
       ['I sweep the same leaves every morning. The tree drops them again every night. We have an understanding.'],
       ['People come up the steps in such a hurry. The kami has waited four hundred years. It can wait for you to catch your breath.'],
       ['A coin in the box is not a transaction. It is a hello. The luck that follows is the kami being polite back.'],
-      ['You smell of the city — neon, fried things, hurry. Stand here a moment. Let the cedar have a turn.'],
+      ['You smell of the city, {name} — neon, fried things, hurry. Stand here a moment. Let the cedar have a turn.'],
       ['The komainu? One has its mouth open, one closed. Beginning and end. They have been arguing the middle for centuries.'],
       ['I drew my own fortune this morning. "Small blessing." It is always "small blessing." I have made my peace with small.'],
       ['When it rains I do not mind. The kami likes the sound on the roof, and so, it turns out, do I.'],
@@ -1313,7 +1314,10 @@ const LittleApartmentGame: React.FC = () => {
   }, [award]);
 
   const showDialog = useCallback((lines: string[], speaker?: string, actions?: DialogAction[]) => {
-    setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker, actions });
+    // Address the player by name everywhere — every dialog flows through here, so
+    // any '{name}' token in an NPC/event line resolves to the chosen name.
+    const nm = saveRef.current.name || 'Neighbor';
+    setOverlayBoth({ type: 'dialog', lines: lines.map(l => l.replaceAll('{name}', nm)), idx: 0, speaker, actions });
   }, [setOverlayBoth]);
 
   // Capstone: the one-time "you know everyone now" payoff. Fires the first time
@@ -4863,7 +4867,7 @@ const LittleApartmentGame: React.FC = () => {
   // START button on the picker: lock in the highlighted model + name, then begin.
   const startWithVibe = useCallback(() => {
     pendingVibeRef.current = pickedVibe;
-    pendingNameRef.current = pcName.trim() || 'Neighbor';
+    pendingNameRef.current = sanitizeName(pcName);
     setVibePick(false);
     startGame(true);
   }, [pickedVibe, pcName, startGame]);
@@ -7982,7 +7986,7 @@ const LittleApartmentGame: React.FC = () => {
                 id="pc-name"
                 data-nosfx
                 value={pcName}
-                onChange={e => setPcName(e.target.value.slice(0, 16))}
+                onChange={e => setPcName(e.target.value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').slice(0, 16))}
                 placeholder="Neighbor"
                 maxLength={16}
                 className="font-pixel text-lg text-center text-[#e8e0d0] bg-black/50 border-2 border-[#ffd24a]/50 focus:border-[#ffd24a] outline-none px-3 py-1.5 w-56"
