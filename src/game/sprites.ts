@@ -909,14 +909,19 @@ const buildTiles = (atlas: Atlas) => {
   // Bad side of town
   atlas['t-sidewalk-bad'] = tile(ctx => {
     fill(ctx, '#6e7276');
-    ctx.fillStyle = '#5a5e62'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1); ctx.fillRect(8, 0, 1, 8);
-    ctx.fillStyle = '#4a4e52'; ctx.fillRect(3, 4, 6, 1); ctx.fillRect(11, 11, 4, 1); // cracks
-    speckle(ctx, '#7c8084', 31, 5);
+    ctx.fillStyle = '#7c8388'; ctx.fillRect(0, 0, 16, 1);                  // lit top
+    ctx.fillStyle = '#5a5e62'; ctx.fillRect(0, 1, 16, 1); ctx.fillRect(0, 8, 16, 1); ctx.fillRect(8, 0, 1, 8); // slab joints
+    ctx.fillStyle = '#3e4246'; ctx.fillRect(2, 3, 5, 1); ctx.fillRect(6, 4, 1, 2); ctx.fillRect(10, 10, 5, 1); ctx.fillRect(12, 11, 1, 3); // jagged cracks
+    ctx.fillStyle = '#4a4e52'; ctx.fillRect(3, 12, 2, 2);                  // chipped pothole
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(8, 9, 1, 1); ctx.fillRect(9, 8, 1, 1); // weed in crack
+    speckle(ctx, '#7c8084', 31, 6); speckle(ctx, '#56595d', 37, 4);
   });
   atlas['t-asphalt'] = tile(ctx => {
     fill(ctx, '#2c2c32');
-    speckle(ctx, '#36363c', 37, 8);
-    ctx.fillStyle = '#222226'; ctx.fillRect(2, 9, 7, 1);
+    speckle(ctx, '#36363c', 37, 10); speckle(ctx, '#26262b', 41, 6);      // aggregate
+    ctx.fillStyle = '#3a3a44'; ctx.fillRect(0, 5, 16, 1);                  // faint oily sheen band
+    ctx.fillStyle = '#222226'; ctx.fillRect(2, 9, 7, 1); ctx.fillRect(9, 3, 4, 1); // cracks
+    ctx.fillStyle = '#42424c'; ctx.fillRect(11, 12, 2, 1);                 // gravel fleck
   });
   atlas['t-bld-club'] = tile(ctx => {
     fill(ctx, '#2a2333');
@@ -926,9 +931,12 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-bld-garage'] = tile(ctx => {
     fill(ctx, '#7a7468');
-    ctx.fillStyle = '#665f54';
-    for (let y = 2; y < 16; y += 4) ctx.fillRect(0, y, 16, 1); // corrugation
-    ctx.fillStyle = '#564f44'; ctx.fillRect(0, 14, 16, 2);
+    for (let y = 1; y < 16; y += 4) {                          // corrugated ribs
+      ctx.fillStyle = '#8a8478'; ctx.fillRect(0, y, 16, 1);    // rib highlight
+      ctx.fillStyle = '#5e584d'; ctx.fillRect(0, y + 2, 16, 1);// rib shadow
+    }
+    ctx.fillStyle = '#9a6a4a'; ctx.fillRect(3, 4, 1, 8); ctx.fillRect(11, 2, 1, 10); // rust streaks
+    ctx.fillStyle = '#564f44'; ctx.fillRect(0, 14, 16, 2);     // base
   });
   atlas['t-bld-grim'] = tile(ctx => {
     fill(ctx, '#4a4640');
@@ -968,15 +976,26 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#4a3f36'; ctx.fillRect(6, 12, 4, 2);
   });
   atlas['t-vending-dead'] = tile(ctx => {
-    fill(ctx, '#7a4444');
-    ctx.fillStyle = '#5c3434'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 14, 16, 2);
-    ctx.fillStyle = '#3c3c40'; ctx.fillRect(2, 2, 12, 6);
-    ctx.fillStyle = '#2c2c30'; ctx.fillRect(2, 10, 8, 3);
-    ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 4, 1, 1); // one dying light
+    fill(ctx, '#6e3e3e');
+    ctx.fillStyle = '#854a4a'; ctx.fillRect(0, 0, 16, 1);      // faded top
+    ctx.fillStyle = '#5c3434'; ctx.fillRect(0, 1, 16, 1); ctx.fillRect(0, 14, 16, 2);
+    ctx.fillStyle = '#7a5638'; ctx.fillRect(11, 4, 2, 6); ctx.fillRect(2, 9, 1, 4); // rust streaks
+    ctx.fillStyle = '#2c2c30'; ctx.fillRect(2, 2, 12, 6);      // dead display glass
+    ctx.fillStyle = '#3c3c40'; ctx.fillRect(2, 2, 12, 1);      // glass top sheen
+    ctx.fillStyle = '#16181d'; ctx.fillRect(4, 3, 5, 1); ctx.fillRect(8, 5, 4, 2); // cracked screen
+    ctx.fillStyle = '#2c2c30'; ctx.fillRect(2, 10, 8, 3);      // dark dispenser
+    ctx.fillStyle = '#c9821e'; ctx.fillRect(4, 4, 1, 1);       // one dying amber light
   });
 
   // Nightclub
-  atlas['t-club-floor'] = tile(ctx => { fill(ctx, '#1d1826'); speckle(ctx, '#2a2333', 41, 6); });
+  atlas['t-club-floor'] = tile(ctx => {
+    fill(ctx, '#1d1826');
+    ctx.fillStyle = '#241e30'; ctx.fillRect(0, 0, 8, 8); ctx.fillRect(8, 8, 8, 8); // polished checker sheen (8px = seamless)
+    speckle(ctx, '#2a2333', 41, 6);
+    ctx.fillStyle = '#3a2f4a'; ctx.fillRect(2, 2, 1, 1); ctx.fillRect(11, 5, 1, 1); ctx.fillRect(6, 12, 1, 1); // floor glints
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(13, 3, 1, 1);     // reflected neon (pink)
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(4, 9, 1, 1);      // reflected neon (cyan)
+  });
   atlas['t-dance-0'] = tile(ctx => {
     fill(ctx, '#3a2a55');
     ctx.fillStyle = '#e857a8'; ctx.fillRect(0, 0, 8, 8);
@@ -1013,9 +1032,12 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-garage-stain'] = tile(ctx => {
     fill(ctx, '#9a9aa0');
-    ctx.fillStyle = '#8a8a90'; ctx.fillRect(0, 7, 16, 1); ctx.fillRect(7, 0, 1, 16);
-    ctx.fillStyle = '#4a4a52'; ctx.fillRect(3, 8, 7, 4); ctx.fillRect(5, 6, 4, 2);
-    ctx.fillStyle = '#3a3a42'; ctx.fillRect(5, 9, 3, 2);
+    ctx.fillStyle = '#a4a4aa'; ctx.fillRect(0, 0, 16, 1);      // lit
+    ctx.fillStyle = '#8a8a90'; ctx.fillRect(0, 7, 16, 1); ctx.fillRect(7, 0, 1, 16); // slab joints
+    ctx.fillStyle = '#4a4a52'; ctx.fillRect(3, 8, 7, 4); ctx.fillRect(5, 6, 4, 2); ctx.fillRect(4, 12, 4, 1); // oil pool spread
+    ctx.fillStyle = '#2a2a32'; ctx.fillRect(5, 9, 3, 2);       // oil core
+    ctx.fillStyle = '#4a4258'; ctx.fillRect(6, 8, 2, 1);       // faint sheen
+    speckle(ctx, '#8a8a90', 67, 4);
   });
   atlas['t-metal'] = tile(ctx => {
     fill(ctx, '#7a828e');
@@ -1067,15 +1089,21 @@ const buildTiles = (atlas: Atlas) => {
 
   // Backrooms
   atlas['t-backwall'] = tile(ctx => {
-    fill(ctx, '#b0a050');
-    ctx.fillStyle = '#988a40'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1);
-    ctx.fillStyle = '#887a36'; ctx.fillRect(0, 14, 16, 2);
-    speckle(ctx, '#c4b462', 47, 4);
+    fill(ctx, '#b0a050');                                      // sickly backrooms yellow
+    ctx.fillStyle = '#bcac5a'; ctx.fillRect(0, 0, 16, 1);      // lit top
+    ctx.fillStyle = '#a89a48'; for (let x = 4; x < 16; x += 6) ctx.fillRect(x, 0, 1, 16); // faint wallpaper stripe
+    ctx.fillStyle = '#988a40'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1); // seams
+    ctx.fillStyle = '#8c7e38'; ctx.fillRect(2, 6, 4, 3); ctx.fillRect(10, 2, 3, 4); // damp stains
+    ctx.fillStyle = '#7a6e30'; ctx.fillRect(3, 7, 2, 1); ctx.fillRect(11, 4, 1, 1); // stain cores
+    ctx.fillStyle = '#887a36'; ctx.fillRect(0, 14, 16, 2);     // skirting
+    speckle(ctx, '#c4b462', 47, 5);
   });
   atlas['t-backfloor'] = tile(ctx => {
     fill(ctx, '#8a7e46');
-    speckle(ctx, '#7a6e3c', 53, 9);
-    speckle(ctx, '#988a50', 59, 5);
+    speckle(ctx, '#7a6e3c', 53, 11); speckle(ctx, '#988a50', 59, 7); // damp carpet fleck
+    ctx.fillStyle = '#74683a'; ctx.fillRect(0, 4, 16, 1); ctx.fillRect(0, 12, 16, 1); // worn traffic lines
+    ctx.fillStyle = '#6e6234'; ctx.fillRect(3, 6, 4, 3); ctx.fillRect(11, 10, 3, 2); // damp patches
+    ctx.fillStyle = '#968a4e'; ctx.fillRect(8, 2, 2, 2);      // lighter wear spot
   });
   atlas['t-portal-0'] = tile(ctx => {
     fill(ctx, '#16181d');
@@ -1662,19 +1690,25 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-sakura-petals'] = tile(ctx => {                 // fallen blossom petals on grass (walkable)
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 97, 6); speckle(ctx, '#4d7440', 99, 4);
-    ctx.fillStyle = '#f0b8d4'; ctx.fillRect(3, 4, 2, 1); ctx.fillRect(10, 7, 2, 1); ctx.fillRect(6, 11, 2, 1); ctx.fillRect(13, 3, 1, 1);
-    ctx.fillStyle = '#d98ab0'; ctx.fillRect(4, 4, 1, 1); ctx.fillRect(11, 7, 1, 1); ctx.fillRect(7, 11, 1, 1);
-    ctx.fillStyle = '#ffe9f2'; ctx.fillRect(8, 6, 1, 1); ctx.fillRect(2, 9, 1, 1);
+    const petal = (x: number, y: number) => {              // little curled petal w/ shaded fold
+      ctx.fillStyle = '#f0b8d4'; ctx.fillRect(x, y, 2, 1); ctx.fillRect(x, y + 1, 1, 1);
+      ctx.fillStyle = '#d98ab0'; ctx.fillRect(x + 1, y + 1, 1, 1);
+    };
+    petal(3, 4); petal(10, 7); petal(6, 11); petal(12, 2); petal(2, 12);
+    ctx.fillStyle = '#ffe9f2'; ctx.fillRect(8, 6, 1, 1); ctx.fillRect(13, 10, 1, 1); // bright flecks
   });
 
   // Island
   atlas['t-zama-poster'] = tile(ctx => {                    // ZamaZonk billboard on a post (sand)
-    fill(ctx, '#e8d49a'); speckle(ctx, '#d8c48a', 41, 6);   // sandy ground
-    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 9, 2, 7);    // post
+    fill(ctx, '#e8d49a'); speckle(ctx, '#d8c48a', 41, 6); speckle(ctx, '#f0e0ae', 43, 3); // sandy ground
+    ctx.fillStyle = '#4a3120'; ctx.fillRect(7, 9, 2, 7);    // post
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 9, 1, 7);    // post lit edge
     ctx.fillStyle = '#120726'; ctx.fillRect(1, 0, 14, 9);   // dark board
     ctx.fillStyle = '#6a3fb0'; ctx.fillRect(1, 0, 14, 1); ctx.fillRect(1, 8, 14, 1); ctx.fillRect(1, 0, 1, 9); ctx.fillRect(14, 0, 1, 9); // purple frame
     ctx.fillStyle = '#9a6fe0'; ctx.fillRect(4, 2, 8, 5);    // box logo body
-    ctx.fillStyle = '#c9a227'; ctx.fillRect(4, 2, 8, 1); ctx.fillRect(7, 2, 2, 5); // gold tape
+    ctx.fillStyle = '#b388f0'; ctx.fillRect(4, 2, 8, 1); ctx.fillRect(4, 2, 1, 5); // logo lit
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(4, 2, 8, 1); ctx.fillRect(7, 2, 2, 5); // gold tape cross
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 6, 6, 1);    // smile arrow
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 7, 1, 1); ctx.fillRect(12, 7, 1, 1); // sparkle
   });
   atlas['t-tiki'] = tile(ctx => {
@@ -1773,10 +1807,15 @@ const buildTiles = (atlas: Atlas) => {
   });
   // Beach stand
   atlas['t-parasol'] = tile(ctx => {
-    fill(ctx, '#cdbb8e');
-    ctx.fillStyle = '#d05050'; ctx.fillRect(2, 1, 12, 3);
-    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 1, 3, 3); ctx.fillRect(10, 1, 3, 3);
-    ctx.fillStyle = '#5a4d42'; ctx.fillRect(7, 4, 2, 10);
+    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 23, 4);
+    ctx.fillStyle = '#b8a878'; ctx.fillRect(8, 6, 6, 8);      // cast shadow on sand
+    ctx.fillStyle = '#d05050'; ctx.fillRect(1, 1, 14, 4);     // canopy dome
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(3, 1, 3, 4); ctx.fillRect(9, 1, 3, 4); // white stripes
+    ctx.fillStyle = '#e8746a'; ctx.fillRect(1, 1, 14, 1);     // canopy sun edge
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(1, 4, 14, 1);     // canopy under-rim
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 0, 2, 1);      // finial
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(7, 5, 2, 9);      // pole
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(7, 5, 1, 9);      // pole lit edge
   });
   atlas['t-crate'] = tile(ctx => {
     fill(ctx, '#cdbb8e');
@@ -1916,12 +1955,17 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#b5651d'; ctx.fillRect(3, 11, 3, 2); ctx.fillRect(7, 10, 3, 2); ctx.fillRect(10, 12, 3, 1);
   });
   atlas['t-paris-door'] = tile(ctx => {      // bistro door (walkable) on cobble
-    fill(ctx, '#8b8a86');
+    fill(ctx, '#8b8a86'); speckle(ctx, '#7d7c78', 71, 3);   // cobble
     ctx.fillStyle = '#1f3a2a'; ctx.fillRect(2, 0, 12, 16);  // dark green frame
-    ctx.fillStyle = '#2e5e44'; ctx.fillRect(3, 1, 10, 14);
+    ctx.fillStyle = '#2e5e44'; ctx.fillRect(3, 1, 10, 14);  // door face
+    ctx.fillStyle = '#3a7254'; ctx.fillRect(3, 1, 10, 1); ctx.fillRect(3, 1, 1, 14); // lit edge
+    ctx.fillStyle = '#234a35'; ctx.fillRect(12, 1, 1, 14);  // shadow edge
     ctx.fillStyle = '#9fc4e8'; ctx.fillRect(4, 2, 8, 5);    // glass top
-    ctx.fillStyle = '#234a35'; ctx.fillRect(7, 2, 1, 5);
-    ctx.fillStyle = '#ffd24a'; ctx.fillRect(10, 9, 2, 2);   // brass handle
+    ctx.fillStyle = '#c7e0f4'; ctx.fillRect(4, 2, 3, 1);    // glass glare
+    ctx.fillStyle = '#234a35'; ctx.fillRect(7, 2, 1, 5); ctx.fillRect(4, 4, 8, 1); // glass muntins
+    ctx.fillStyle = '#234a35'; ctx.fillRect(4, 9, 8, 1); ctx.fillRect(4, 12, 8, 1); // lower panel lines
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(10, 9, 1, 2);   // brass handle
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(10, 9, 1, 1);   // handle shine
   });
   atlas['t-paris-tree'] = tile(ctx => {      // pollarded plane tree in a planter
     fill(ctx, '#c4b48f');                                          // pavement
@@ -3216,11 +3260,12 @@ const buildMisc = (atlas: Atlas) => {
     ctx.fillStyle = '#ffffff'; ctx.fillRect(11, 4, 1, 1); ctx.fillRect(4, 11, 1, 1); ctx.fillRect(12, 11, 1, 1);
   });
   atlas['m-bobber'] = strSprite([
-    '.rr.',
+    '.tt.',
+    'rRr.',
     'rrrr',
-    'wwww',
+    'wWww',
     '.ww.',
-  ], { r: '#d05050', w: '#e8e0d0' });
+  ], { r: '#d05050', R: '#e8746a', w: '#e8e0d0', W: '#ffffff', t: '#9e3a3a' });
   // wand sparkle burst (combat VFX)
   atlas['m-sparkle'] = strSprite([
     '.......pp.......',
