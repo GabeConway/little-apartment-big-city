@@ -417,30 +417,32 @@ const addCharacter = (atlas: Atlas, key: string, pal: CharPalette, accs: Accesso
 };
 
 // The backrooms merchant — not built on the human body.
-// Horned merchant blob: upper-left rim light (l), lower-right shadow (d),
-// glowing eyes with pupils (y/p) and a fanged grin (w teeth / k dark maw).
+// Faceless shadow-thing: a dark looming mass, blank glowing eyes (y, no
+// pupils), a hollow screaming void for a mouth (w pale rim around empty
+// gaps), ragged dangling underside. Only a faint side rim (l) / shadow (d)
+// for form — kept mostly dark so it reads anonymous and unsettling.
 const MONSTER_ROWS = [
   '....m......m....',
-  '...mlm....mlm...',
-  '..lmmmmmmmmmmd..',
+  '....mm....mm....',
+  '..mmmmmmmmmmmm..',
+  '.lmmmmmmmmmmmmd.',
   '.lmmmmmmmmmmmmd.',
   '.lmyymmmmmmyymd.',
-  '.lmypmmmmmmpymd.',
+  '.lmyymmmmmmyymd.',
   '.lmmmmmmmmmmmmd.',
-  '.lmmwwwwwwwwmmd.',
-  '..lmkkkkkkkkmd..',
-  '..lmmwwwwwwmmd..',
-  '...lmmmmmmmmd...',
-  '....mmmmmmmm....',
-  '....mm....mm....',
-  '....dd....dd....',
-  '................',
+  '.lmmmwwwwwwmmmd.',
+  '.lmmw......wmmd.',
+  '.lmmmwwwwwwmmmd.',
+  '..mmmmmmmmmmmm..',
+  '..mmm.mmmm.mmm..',
+  '..mm...mm...mm..',
+  '..m....mm....m..',
   '................',
 ];
 const addMonster = (atlas: Atlas) => {
-  const c = strSprite(MONSTER_ROWS, { m: '#2a1f38', d: '#1a1326', l: '#42325a', y: '#ffd24a', p: '#16181d', w: '#e8e0d0', k: '#0e0a16' });
+  const c = strSprite(MONSTER_ROWS, { m: '#2a1f38', d: '#16101f', l: '#352848', y: '#ffd24a', w: '#6e5a86' });
   // Club Kaiju's most loyal patron — same silhouette, very different vibe
-  const k = strSprite(MONSTER_ROWS, { m: '#3e6e3a', d: '#284827', l: '#5a924f', y: '#ffd24a', p: '#16181d', w: '#dff5cf', k: '#16280f' });
+  const k = strSprite(MONSTER_ROWS, { m: '#3e6e3a', d: '#223c20', l: '#4e7e45', y: '#ffd24a', w: '#5a7a50' });
   for (const dir of ['down', 'up', 'left', 'right']) {
     atlas[`npc-monster-${dir}-0`] = c;
     atlas[`npc-monster-${dir}-1`] = c;
