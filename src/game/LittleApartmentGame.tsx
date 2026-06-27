@@ -5452,11 +5452,17 @@ const LittleApartmentGame: React.FC = () => {
     })();
 
     // Friends: the cast you can befriend. Tap one to give a gift; hearts unlock perks.
+    // Only people you've actually met — the app shouldn't spoil the cast you
+    // haven't run into yet (their names, blurbs, or that they exist at all).
+    const metFriends = FRIENDS.filter(f => metFriend(s, f.id));
     const friendsApp = (
       <div className="px-3 py-2">
         <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">FRIENDS</p>
         <p className="text-xs opacity-50 mb-2 leading-snug">Walk up to someone and choose GIVE A GIFT (one each per day) to grow closer. Hearts unlock perks. (Loves/likes reveal at 2 ♥.)</p>
-        {FRIENDS.map(f => {
+        {metFriends.length === 0 && (
+          <p className="py-3 text-base opacity-50 leading-snug">You haven't met anyone worth noting yet. Get out there and talk to people.</p>
+        )}
+        {metFriends.map(f => {
           const hearts = friendHearts(s, f.id);
           const met = metFriend(s, f.id);
           const gifted = !canGiftToday(s, f.id);
@@ -5503,15 +5509,22 @@ const LittleApartmentGame: React.FC = () => {
 
     // Skills: fishing / mining / farming levels with a progress bar + the live perk.
     const skillsApp = (() => {
-      const rows: { k: SkillId; icon: string; name: string; perk: (lv: number) => string }[] = [
-        { k: 'fish', icon: '🎣', name: 'Fishing', perk: lv => lv > 0 ? `rarer & bigger fish bite (+${lv * 12}%)` : 'level up to draw the rare fish' },
-        { k: 'mine', icon: '⛏️', name: 'Mining', perk: lv => lv > 0 ? `richer veins (+${(lv * 2.5).toFixed(0)}% ore)` : 'level up for richer ore' },
-        { k: 'farm', icon: '🌱', name: 'Farming', perk: lv => lv >= 8 ? '+2 crop quality' : lv >= 4 ? '+1 crop quality' : 'better crops from Lv.4' },
+      // Each skill only appears once you've discovered its activity — don't reveal
+      // mining/minerals or the greenhouse before the player has found them. XP > 0 also
+      // reveals it (defensive, for grandfathered saves).
+      const allRows: { k: SkillId; icon: string; name: string; unlocked: boolean; perk: (lv: number) => string }[] = [
+        { k: 'fish', icon: '🎣', name: 'Fishing', unlocked: s.canFish, perk: lv => lv > 0 ? `rarer & bigger fish bite (+${lv * 12}%)` : 'level up to draw the rare fish' },
+        { k: 'mine', icon: '⛏️', name: 'Mining', unlocked: s.backroomsUnlocked, perk: lv => lv > 0 ? `richer veins (+${(lv * 2.5).toFixed(0)}% ore)` : 'level up for richer ore' },
+        { k: 'farm', icon: '🌱', name: 'Farming', unlocked: s.greenhouseUnlocked, perk: lv => lv >= 8 ? '+2 crop quality' : lv >= 4 ? '+1 crop quality' : 'better crops from Lv.4' },
       ];
+      const rows = allRows.filter(sk => sk.unlocked || s.skills[sk.k] > 0);
       return (
         <div className="px-3 py-2">
           <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">SKILLS</p>
           <p className="text-xs opacity-50 mb-2 leading-snug">Fish, mine, and farm to gain XP. Higher levels quietly tilt the odds your way.</p>
+          {rows.length === 0 && (
+            <p className="py-3 text-base opacity-50 leading-snug">No skills picked up yet. Find a hobby out in the city.</p>
+          )}
           {rows.map(sk => {
             const pr = skillProgress(s, sk.k);
             const maxed = pr.level >= 10;
@@ -7149,6 +7162,7 @@ const LittleApartmentGame: React.FC = () => {
         {/* end-of-day recap */}
         {overlay?.type === 'endday' && (() => {
           const r = overlay.recap;
+          const sv = saveRef.current;
           const row = (label: string, value: string, tone?: string) => (
             <div className="flex items-center justify-between gap-3 py-1 border-b border-[#ffd24a]/15">
               <span className="opacity-70">{label}</span>
@@ -7164,9 +7178,11 @@ const LittleApartmentGame: React.FC = () => {
                 </div>
                 <div className="font-pixel text-base sm:text-lg">
                   {row('Money', `${r.net >= 0 ? '+' : '−'}¥${Math.abs(r.net).toLocaleString()}`, r.net >= 0 ? 'text-[#3da26b]' : 'text-[#e0552e]')}
-                  {row('Fish caught', `${r.fish}`)}
-                  {row('Minerals mined', `${r.minerals}`)}
-                  {row('Shifts worked', `${r.shifts}`)}
+                  {/* Only surface a stat once that system is in play — a day-1 recap
+                      shouldn't spoil mining/fishing/shifts you haven't discovered yet. */}
+                  {(sv.canFish || r.fish > 0) && row('Fish caught', `${r.fish}`)}
+                  {(sv.backroomsUnlocked || r.minerals > 0) && row('Minerals mined', `${r.minerals}`)}
+                  {(sv.shiftsWorked > 0 || r.shifts > 0) && row('Shifts worked', `${r.shifts}`)}
                   <div className="py-1">
                     <div className="flex items-center justify-between gap-3">
                       <span className="opacity-70">New furniture</span>
