@@ -46,6 +46,7 @@ import {
   FORTUNES,
 } from './data';
 import type { BingusFetch, GiftKind, GiftTier, IngredientKind, DecorItem, StreetEvent } from './data';
+import type { HangoutScene, HomeVisit } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
   newSave, loadSave, persistSave, clearSave,
@@ -63,7 +64,7 @@ import {
   errandFor, errandDoneToday,
   canCook, canCookHere, cook, eatDish, ingredientCount, buyGrocery, keepProduce,
   buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend, meetFriend,
-  friendFlavorLine, allFriendsMet,
+  friendFlavorLine, allFriendsMet, pendingHangout, pendingHomeVisit, homeVisitFlag,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
   ROOM_PRICE, JUKEBOX_PRICE, skillLevel, skillProgress, addSkillXp,
   streetEventFor, streetEventDoneToday,
@@ -504,6 +505,19 @@ const INGREDIENT_LABEL: Record<IngredientKind, string> = {
 const FRIEND_OF_NPC: Record<string, string> = {
   'old-man': 'genji', 'tiki': 'lulu', 'monster': 'manager', 'david': 'max',
   'granny': 'granny', 'charlie': 'charlie', 'bingus': 'bingus', 'tex': 'tex', 'miko': 'miko',
+};
+
+// A home-visit guest reacts to YOUR apartment — picking the most characterful
+// thing they can see (the cat first, then a rug, a full room, decor, or bareness).
+// Returned as one extra dialog line, slotted in before their parting words.
+const homeDecorReaction = (s: GameSave): string => {
+  if (s.cat.found) return 'Then a small black cat strolls out, sits, and judges the visitor thoroughly. "...You have a CAT. That explains a great deal, and improves all of it."';
+  if (s.rugs.length > 0) return 'They notice the rug and visibly approve. "A rug. A real, proper rug. This is the home of a person who has their life together."';
+  const placed = Object.keys(s.placed).length;
+  if (placed >= 8) return 'They take in how full and lived-in the place has become. "You\'ve really made this yours. It feels like somebody\'s HOME — not just where they sleep."';
+  if (s.decor.wall !== 'wall-default' || s.decor.floor !== 'floor-default') return 'They run a hand along your chosen walls. "Ooh — you decorated. Picked all this yourself? It suits you, you know."';
+  if (placed <= 1) return 'They take in the, ah, minimalism. "Cozy! Very... open-plan. A blank canvas. I admire the restraint, honestly."';
+  return 'They turn a slow circle, taking it all in. "It\'s a good little place. Warm. It\'s got you all over it."';
 };
 
 const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
@@ -1490,8 +1504,29 @@ const LittleApartmentGame: React.FC = () => {
           '"I let myself out. Rest. Eat something." He turns for the door.',
         ], 'Jean-Pierre');
       }
+    } else {
+      // No rescue this morning — a high-heart friend may instead DROP BY. They walk
+      // in from the door (input locked), react to your place, leave a housewarming
+      // gift, then walk back out. Reuses the cutsceneRef approach→talk→return rig.
+      const s = saveRef.current;
+      const visit = pendingHomeVisit(s);
+      if (visit && sceneRef.current.id === 'apartment') {
+        s.storySeen.push(homeVisitFlag(visit.friend));
+        if (visit.money) s.money += visit.money;
+        persistSave(s); refreshHud();
+        award('housewarming');
+        const lines = [...visit.lines, homeDecorReaction(s)];
+        if (visit.closeLine) lines.push(visit.closeLine);
+        cutsceneRef.current = {
+          actor: { x: 12 * TILE, y: 9 * TILE, dir: 'up', sprite: visit.sprite },
+          phase: 'approach',
+          path: [{ x: 12 * TILE, y: 3 * TILE }, { x: 4 * TILE, y: 2 * TILE - 4 }],
+          home: { x: 12 * TILE, y: 10 * TILE }, // walk back out through the door
+          then: () => showDialog(lines, visit.speaker),
+        };
+      }
     }
-  }, [setOverlayBoth, playMusicFor, showDialog]);
+  }, [setOverlayBoth, playMusicFor, showDialog, refreshHud, award]);
 
   const doSleep = useCallback((collapsed = false, nursed = false, rescuer?: 'jean' | 'yoshi') => {
     const s = saveRef.current;
@@ -1693,6 +1728,23 @@ const LittleApartmentGame: React.FC = () => {
     return [{ label: '🎁 Give a gift', onPick: () => setOverlayBoth({ type: 'gift', npcId: friendId }) }];
   };
 
+  // Heart-event hangout: a one-time deeper scene that plays the next time you talk
+  // to a friend once you've crossed a heart threshold (see pendingHangout). Sets
+  // the storySeen flag immediately so it never repeats, applies any keepsake/buff,
+  // and shows the scripted dialog. Normal conversation resumes after this.
+  const playHangout = (h: HangoutScene) => {
+    const s = saveRef.current;
+    s.storySeen.push(h.flag);
+    const lines = [...h.lines];
+    if (h.money) s.money += h.money;
+    if (h.buff) s.buff = { id: h.buff, day: s.day };
+    if (h.rewardLine) lines.push(h.rewardLine);
+    sfxCatch();
+    persistSave(s); refreshHud();
+    award('heart2heart');
+    showDialog(lines, h.speaker);
+  };
+
   const feedMonster = () => {
     const s = saveRef.current;
     if (s.peepis <= 0 || s.monsterFed) return;
@@ -1823,6 +1875,9 @@ const LittleApartmentGame: React.FC = () => {
       const ct = { x: Math.round(catRef.current.x / TILE), y: Math.round(catRef.current.y / TILE) };
       if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
         catRef.current.sitting = true; catRef.current.timer = 4; // he stops to address you
+        // A heart-threshold hangout with the cat takes priority over his usual one-liners.
+        const catHang = pendingHangout(s, 'david');
+        if (catHang) { playHangout(catHang); return; }
         const catLines = WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)];
         const catFlavor = friendFlavorLine(s, 'david'); // warmer as you bond with him
         showDialog(catFlavor ? [...catLines, catFlavor] : catLines, 'David', giftActionFor('david'));
@@ -2031,6 +2086,10 @@ const LittleApartmentGame: React.FC = () => {
       // unchanged. `warm()` appends it to whatever a branch was going to say.
       const flavor = friendId ? friendFlavorLine(s, friendId) : null;
       const warm = (lines: string[]): string[] => (flavor ? [...lines, flavor] : lines);
+      // A crossed-a-heart-threshold hangout plays once, ahead of normal chat. The
+      // flag is set inside playHangout, so the very next talk is ordinary again.
+      const hangout = friendId ? pendingHangout(s, friendId) : undefined;
+      if (hangout) { playHangout(hangout); return; }
       if (npc.id === 'yakuza') {
         if (s.gangPaid) return; // already paid; he's on his way out
         setOverlayBoth({ type: 'shop', shop: 'yakuza' });

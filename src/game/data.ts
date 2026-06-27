@@ -259,6 +259,8 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'regular', title: 'Everybody Knows Your Name', desc: 'Met everyone worth knowing in Kawamachi.', hint: 'A city is just strangers you have not met yet.' },
   { id: 'mid', title: "That's Mid", desc: 'Harvested a plain, normal-quality crop. It is fine. It is a crop.', hint: 'Not every harvest is silver or gold. Some are just... a vegetable.' },
   { id: 'vault', title: 'X Marks the Floor', desc: 'Cracked open a treasure vault deep in the mines.', hint: 'Some floors down there glow gold. Bring it home.' },
+  { id: 'heart2heart', title: 'Heart to Heart', desc: 'Shared a deeper, one-of-a-kind moment with a friend.', hint: 'Keep someone close. Some conversations only open once you truly know each other.' },
+  { id: 'housewarming', title: 'Housewarming', desc: 'A friend felt close enough to drop by your apartment.', hint: 'Grow a friendship deep enough that someone wants to see where you live.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------
@@ -828,6 +830,163 @@ export const FRIEND_HEART_LINES: Record<string, HeartLine[]> = {
     { hearts: 8, line: 'David presses his head, once, against your hand — then pretends it never happened. "We will not speak of that. But know that I meant it."' },
   ],
 };
+
+// ---- Heart-event hangouts ---------------------------------------------------
+// One-time, deeper scenes that play the next time you TALK to a friend once you
+// cross a heart threshold (4 ♥ and 8 ♥). Each is storySeen-gated by `flag`, so it
+// fires exactly once and then normal conversation resumes. Bespoke and in-voice;
+// some leave a tiny keepsake (cash) and/or grant a day-long buff. Keyed by the
+// FRIENDS id. Friends not listed here simply have no hangouts (graceful no-op).
+export interface HangoutScene {
+  friend: string;        // FRIENDS id
+  hearts: number;        // heart threshold that unlocks the scene
+  flag: string;          // storySeen id, e.g. 'hang-granny-4'
+  speaker: string;       // dialog speaker (matches a portrait where one exists)
+  lines: string[];
+  money?: number;        // a small keepsake handed over during the scene
+  buff?: BuffId;         // an optional day-long buff the scene grants
+  rewardLine?: string;   // a closing line describing the keepsake / buff
+}
+export const HANGOUTS: HangoutScene[] = [
+  // — Granny Sato —
+  { friend: 'granny', hearts: 4, flag: 'hang-granny-4', speaker: 'Granny Sato',
+    lines: [
+      'Granny Sato waves you over to a folding stool she keeps tucked by the tomatoes. "Sit, sit. The plants can wait. Old women cannot."',
+      '"When my husband passed, the neighbors stopped knocking. Folk get shy around grief, like it might be catching. This glass house was the only thing that still needed me every single morning."',
+      '"And then you turned up, smelling of fish, asking an old woman for a key. Best thing to happen to this place in years."',
+    ], money: 800, rewardLine: 'She presses a jar of sun-pickled plums into your bag. "For later. Do not argue." (+¥800 of plums — and a grandmother.)' },
+  { friend: 'granny', hearts: 8, flag: 'hang-granny-8', speaker: 'Granny Sato',
+    lines: [
+      '"I have something to say, and I will only say it once, so listen." Granny Sato sets down her watering can with great ceremony.',
+      '"I wrote you into the greenhouse rota. In pen. In my book. When I am too old to climb the step-ladder, this place is yours to mind."',
+      '"Do not look at me like that. It is only a glasshouse and some dirt. ...It is also forty years of my mornings, and I am handing them to you."',
+    ], buff: 'hearty', rewardLine: '"Now EAT — you are too thin." She feeds you until your seams creak. You feel hale and hearty all day. (Hearty buff!)' },
+  // — Charlie —
+  { friend: 'charlie', hearts: 4, flag: 'hang-charlie-4', speaker: 'Charlie',
+    lines: [
+      'Charlie lowers the camera he was definitely not pointing at you. "Okay, busted. I film everybody on this corner. It\'s a project. A document. A love letter to the block, y\'know?"',
+      '"Thing is, it\'s been stuck for a year. No through-line. No heart. Couldn\'t figure out what it was even ABOUT."',
+      'He looks at you a beat too long. "...And then I kept finding you in the footage. Just being decent to people. I think you might be the spine of the whole movie, man."',
+    ], money: 1000, rewardLine: '"Here — coffee\'s on the production budget. You\'re talent now." He slips you a fistful of yen. (+¥1,000 "talent fee".)' },
+  { friend: 'charlie', hearts: 8, flag: 'hang-charlie-8', speaker: 'Charlie',
+    lines: [
+      'Charlie\'s got his guitar out and, for once, the camera off. "Wrote something. Don\'t make it weird."',
+      'He plays — rough, half-finished, but real. It\'s the konbini at 2am, the train hum, neon in the puddles. It\'s the whole neighborhood. It\'s, somehow, you.',
+      '"Working title\'s \'Big City, Little Apartment.\' ...The little apartment\'s the good part. That\'s where the people are."',
+    ], money: 1500, rewardLine: 'He hands you a sharpie-scrawled demo disc with your name on it. "First copy. Don\'t flip it on auction when I\'m famous." (A keepsake, +¥1,500.)' },
+  // — Max (the shore vampire) —
+  { friend: 'max', hearts: 4, flag: 'hang-max-4', speaker: 'Max',
+    lines: [
+      'Max feeds the driftwood fire without looking up. "Sit. I want to show you something the daylight people never get to see."',
+      'He lifts a hand toward the black water and the whole bay answers — bioluminescence, blue-green, breathing with the tide. "Three centuries, and this still stops me cold."',
+      '"You learn to love the small repeating things, when you have forever to fill. A tide. A fire. A friend who sits without flinching."',
+    ], buff: 'warm', rewardLine: '"Take some of the fire\'s warmth with you. It keeps better than I do." You feel pleasantly warm all day. (Warm buff — −20% energy cost.)' },
+  { friend: 'max', hearts: 8, flag: 'hang-max-8', speaker: 'Max',
+    lines: [
+      'Max is quiet a long while. Then: "I am going to give you something, and you will NOT make it sentimental, because I cannot bear it."',
+      'He works a heavy iron ring off his finger — older than the city, older than the country. "The man who built my coffin made this. He has been dead two hundred years. I have no one left to leave it to."',
+      '"So. You. Pawn it if you are ever truly desperate; it is worth a fortune. But I would rather you kept it, and remembered an old monster kindly."',
+    ], money: 3000, rewardLine: 'You pocket the ring. It hums faintly, like it remembers being loved. (A vampire\'s keepsake — worth ¥3,000 if you ever must.)' },
+  // — Bingus the curator —
+  { friend: 'bingus', hearts: 4, flag: 'hang-bingus-4', speaker: 'Bingus Doofelsmurt',
+    lines: [
+      'Bingus seizes your sleeve and hauls you behind the velvet rope. "You — YOU — get to see the Vault. Nobody sees the Vault."',
+      'The "Vault" is a broom closet with one cracked teacup on a silk pillow, lit like a coronation. "My first acquisition. Worthless. Priceless. The day I decided this town deserved a museum."',
+      '"Everyone laughed, of course. They still laugh. But you keep COMING BACK. You make the laughing quieter."',
+    ], money: 1200, rewardLine: 'He presses a "PATRON — LEVEL ONE" badge into your palm, hand-laminated, slightly sticky. "Wear it with terrifying pride." (+¥1,200 endowment.)' },
+  { friend: 'bingus', hearts: 8, flag: 'hang-bingus-8', speaker: 'Bingus Doofelsmurt',
+    lines: [
+      'Bingus waits at the door with a brass plaque and the air of a man about to commit emotion. "Stand there. Do not move. Posterity is watching."',
+      'He mounts the plaque by the entrance. It reads: "KAWAMACHI MUSEUM — co-founded, in spirit, by a true friend of the collection." Your name is under it. Spelled correctly and everything.',
+      '"I have no children. The exhibits are my children. ...And you, I think, are the one who will keep them safe when I am only a portrait on a wall."',
+    ], money: 2000, rewardLine: 'He weeps magnificently and insists you take a ¥2,000 "patronage stipend." (+¥2,000.)' },
+  // — Tex —
+  { friend: 'tex', hearts: 4, flag: 'hang-tex-4', speaker: 'Tex',
+    lines: [
+      'Tex sits you down on an upturned bait bucket and goes quiet, which for Tex is an event. "Lemme tell ya how I wound up sellin\' hats on a beach in Japan."',
+      '"Had a ranch. Had a whole life, big as the sky. Lost the lot to a bad year and a worse handshake. Packed one sack — hats, mostly — and kept goin\' east till the land ran out."',
+      '"Figured I\'d be a stranger here forever. Then folks like you started sayin\' howdy back." He clears his throat, aggressively.',
+    ], money: 900, rewardLine: '"Aw, hell. Take a hat band, on the house — real silver concho." He won\'t meet your eye. (A keepsake, +¥900.)' },
+  { friend: 'tex', hearts: 8, flag: 'hang-tex-8', speaker: 'Tex',
+    lines: [
+      'Tex is holding his oldest hat, the brim sweat-dark and shapeless with years. "This one rode the ranch with me. Through the good and the losin\' of it. Ain\'t for sale. Never was."',
+      '"...Which is exactly why I want YOU to have it. A hat like this don\'t belong on a shelf. It belongs on somebody headed somewhere."',
+      '"Don\'t you dare thank me. Just wear it when the wind\'s at your back, and think on old Tex once in a while."',
+    ], money: 2500, rewardLine: 'You take the hat. It has seen more country than you can imagine, and now it\'s yours. (A weathered keepsake, +¥2,500.)' },
+  // — Yoshi the miko —
+  { friend: 'miko', hearts: 4, flag: 'hang-miko-4', speaker: 'Yoshi',
+    lines: [
+      'Yoshi stops you at the temizuya and ladles the cold water herself. "Today you are not a visitor. Today you help me sweep. The kami does not mind an extra pair of hands, and neither do I."',
+      'You sweep the sando in companionable quiet. She tells you the shrine is older than the city\'s name; that she is its ninth keeper; that some mornings the loneliness of that is a real weight.',
+      '"And some mornings," she says, not looking at you, "a friend arrives with the dawn, and it is not heavy at all."',
+    ], money: 1000, rewardLine: 'She ties a small omamori to your bag — handmade this morning, for you. "For safe roads. Carry it." (A blessed keepsake, +¥1,000.)' },
+  { friend: 'miko', hearts: 8, flag: 'hang-miko-8', speaker: 'Yoshi',
+    lines: [
+      'Yoshi leads you behind the honden, where visitors never go, to a plum tree her grandmother planted. "I have shown this to no one. It did not feel right — until you."',
+      '"When the ninth keeper has no daughter, the shrine chooses its own tenth. The kami has been... unsubtle. It keeps sending me you."',
+      'She bows, deeper than a miko bows to anyone. "Whatever roads you walk, this gate is yours to return through. Always. That is not a small thing for me to say."',
+    ], buff: 'lucky', money: 1500, rewardLine: 'She folds a paper fortune into your hand. It reads only: 大吉 — greatest blessing. Fortune turns toward you. (Lucky buff + ¥1,500.)' },
+  // — David the cat —
+  { friend: 'david', hearts: 4, flag: 'hang-david-4', speaker: 'David',
+    lines: [
+      'David hops onto the windowsill and pats the spot beside him with one deliberate paw. "Sit. We are going to watch the city do nothing for a while. It is the highest of the arts."',
+      'You watch the trains together. After a long silence: "I have outlasted nine owners. I do not call them owners, of course. Staff."',
+      '"You are different. You ask me things — as though I might know the answers." A pause. "...I usually do. But it is the asking I have come to like."',
+    ], money: 1500, rewardLine: 'He nudges a small hoard from behind the radiator toward you — a bottle cap, a shiny button, a fold of yen. "My contribution to the household. Do not make it strange." (+¥1,500.)' },
+  { friend: 'david', hearts: 8, flag: 'hang-david-8', speaker: 'David',
+    lines: [
+      'David sits very upright, tail curled, the way he does only when something matters. "I am going to tell you my real name. I have not spoken it since before you were born."',
+      'He tells you. It is long, and old, and in no language you know, and it sounds like wind through a shrine gate. "You will forget it by morning. That is correct. It is not for keeping. It is for having been trusted with."',
+      '"I have been a stray, a god\'s messenger, and a dumpster\'s king. This — a warm window, a foolish human who listens — this is the best of my nine lives. Tell the others nothing."',
+    ], buff: 'lucky', rewardLine: 'He presses his forehead to yours, once, and the room feels brighter for it. You feel oddly, deeply lucky. (Lucky buff!)' },
+];
+
+// ---- Friend home visits -----------------------------------------------------
+// Once a friend reaches a high heart count (HOME_VISIT_HEARTS), one morning they
+// show up in YOUR apartment as a scripted actor: they walk in, react to your
+// place, leave a housewarming gift, and go. Once per friend (storySeen
+// `visit-<id>`). `sprite` is the existing NPC sprite they walk in as. A decor
+// reaction line is appended at runtime by the game (it needs your save state).
+export interface HomeVisit {
+  friend: string;     // FRIENDS id
+  speaker: string;
+  sprite: string;     // existing NPC sprite the visitor walks in as
+  lines: string[];    // said on arrival (a decor reaction + closeLine are appended)
+  money?: number;     // a housewarming gift
+  closeLine?: string; // their parting line as they head for the door
+}
+export const HOME_VISITS: HomeVisit[] = [
+  { friend: 'granny', speaker: 'Granny Sato', sprite: 'npc-granny', money: 1500,
+    lines: [
+      'A soft knock, far too early. You open the door to Granny Sato, a covered basket on her arm. "I was up. Old women are always up. So I thought — why not see where my favorite tenant actually LIVES."',
+      'She bustles in without waiting to be asked, the way grandmothers do everywhere.',
+    ], closeLine: '"I left soup on the counter. Eat it before it goes cold, and do not let the dishes pile up." She bustles out as briskly as she came. (+¥1,500 and a pot of soup.)' },
+  { friend: 'charlie', speaker: 'Charlie', sprite: 'npc-charlie', money: 1500,
+    lines: [
+      'You wake to your buzzer and a familiar grin on the intercom. Charlie lets himself up, camera already rolling. "Morning! Don\'t mind me — establishing shots. \'The hero\'s humble dwelling.\' This is gold."',
+      'He pans slowly across your apartment like it is a film set.',
+    ], closeLine: '"This was great. THE place, man. I\'ll send you the rough cut." He backs out the door, still filming. (+¥1,500 location fee, he insists.)' },
+  { friend: 'max', speaker: 'Max', sprite: 'npc-vampire', money: 2500,
+    lines: [
+      'A knock after dark — of course after dark. Max stands in your doorway, pale and apologetic. "Forgive the hour. I do not do mornings, as you may have gathered. May I come in? I have not been invited anywhere in some... decades."',
+      'He steps over the threshold with visible, genuine delight.',
+    ], closeLine: '"Thank you. Truly. An old thing like me is rarely invited in." He bows and slips out into the night. (+¥2,500, pressed on you firmly.)' },
+  { friend: 'bingus', speaker: 'Bingus Doofelsmurt', sprite: 'npc-bingus', money: 2000,
+    lines: [
+      'A frantic knock. Bingus is on your doorstep with a clipboard. "I am conducting a SURVEY of significant local interiors, and yours made the shortlist! May I? I will be quick. I am never quick."',
+      'He sweeps in, appraising everything as though it might belong in a display case.',
+    ], closeLine: '"Provisionally, I declare your apartment a Site of Minor Cultural Importance. Congratulations." He leaves a small grant on the table. (+¥2,000.)' },
+  { friend: 'tex', speaker: 'Tex', sprite: 'npc-hatvendor', money: 1200,
+    lines: [
+      'A knock, and a muffled "Howdy?" through the door. Tex stands in the hall holding his hat to his chest, strangely shy indoors. "Hope it ain\'t rude, droppin\' by. Beach gets quiet. Wanted to see how a city fella keeps house."',
+      'He wipes his boots with enormous care before stepping in.',
+    ], closeLine: '"Real nice place, partner. Real nice." He tips his hat and ambles back toward the sea. (+¥1,200 left on the table, "for the trouble.")' },
+  { friend: 'miko', speaker: 'Yoshi', sprite: 'npc-miko', money: 1500,
+    lines: [
+      'A quiet knock at first light. Yoshi waits in the hall with a small cloth bundle. "I do not often leave the grounds. But a keeper should know where her people return to at night. So. Here I am."',
+      'She slips off her sandals at the door and steps in softly.',
+    ], closeLine: 'She sets a pinch of salt at your threshold and a fresh omamori on the shelf. "Now the gate watches over here, too." She bows, and goes. (+¥1,500 and a blessing.)' },
+];
 
 // ---- Decor: wallpaper / flooring / rugs ------------------------------------
 // Bought + applied right in Arrange mode. Wall & floor are room-wide swaps; rugs

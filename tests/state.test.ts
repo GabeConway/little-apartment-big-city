@@ -18,10 +18,11 @@ import {
   canCookHere, canCook, cook, eatDish, ingredientCount, buyGrocery, learnRecipe,
   buffActive, friendHearts, giftTo, canGiftToday, applyFriendPerks,
   allFriendsMet, friendFlavorLine, meetFriend,
+  pendingHangout, pendingHomeVisit, homeVisitFlag, HOME_VISIT_HEARTS,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt,
   skillLevel, addSkillXp, skillProgress, SKILL_XP, ROOM_PRICE,
 } from '../src/game/state';
-import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS } from '../src/game/data';
+import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS, HANGOUTS, HOME_VISITS } from '../src/game/data';
 import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
@@ -774,6 +775,46 @@ describe('friendship', () => {
     // Shop-only friends have no line table → always null.
     s.friends['lulu'] = { pts: 800, giftDay: -1 };
     expect(friendFlavorLine(s, 'lulu')).toBeNull();
+  });
+});
+
+describe('heart-event hangouts', () => {
+  it('every hangout is keyed to a real friend and a 4/8-heart threshold', () => {
+    for (const h of HANGOUTS) {
+      expect(FRIENDS.some(f => f.id === h.friend)).toBe(true);
+      expect([4, 8]).toContain(h.hearts);
+      expect(h.flag).toBe(`hang-${h.friend}-${h.hearts}`);
+    }
+  });
+  it('pendingHangout: none below the threshold, the lowest unseen once met', () => {
+    const s = newSave();
+    s.friends['granny'] = { pts: 300, giftDay: -1 };   // 3 hearts — below 4
+    expect(pendingHangout(s, 'granny')).toBeUndefined();
+    s.friends['granny'].pts = 450;                      // 4 hearts → the 4 ♥ scene
+    const first = pendingHangout(s, 'granny');
+    expect(first?.flag).toBe('hang-granny-4');
+    s.friends['granny'].pts = 850;                      // 8 hearts, but 4 ♥ still unseen
+    expect(pendingHangout(s, 'granny')?.flag).toBe('hang-granny-4'); // lowest fires first
+    s.storySeen.push('hang-granny-4');
+    expect(pendingHangout(s, 'granny')?.flag).toBe('hang-granny-8'); // now the 8 ♥ one
+    s.storySeen.push('hang-granny-8');
+    expect(pendingHangout(s, 'granny')).toBeUndefined(); // both seen → done
+  });
+});
+
+describe('friend home visits', () => {
+  it('every home visit targets a real friend', () => {
+    for (const v of HOME_VISITS) expect(FRIENDS.some(f => f.id === v.friend)).toBe(true);
+  });
+  it('pendingHomeVisit: needs met + threshold hearts + unseen flag, one at a time', () => {
+    const s = newSave();
+    expect(pendingHomeVisit(s)).toBeUndefined();                 // fresh: nobody close
+    s.friends['granny'] = { pts: (HOME_VISIT_HEARTS - 1) * 100, giftDay: -1 };
+    expect(pendingHomeVisit(s)).toBeUndefined();                 // met but below threshold
+    s.friends['granny'].pts = HOME_VISIT_HEARTS * 100;           // 6 hearts
+    expect(pendingHomeVisit(s)?.friend).toBe('granny');
+    s.storySeen.push(homeVisitFlag('granny'));
+    expect(pendingHomeVisit(s)).toBeUndefined();                 // already visited
   });
 });
 

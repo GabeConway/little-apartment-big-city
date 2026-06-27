@@ -11,9 +11,10 @@ import {
   CROP_REQUESTS, NON_MANAGER_RARES, FORAGE, ERRANDS, STREET_EVENTS,
   RECIPES, recipeById, STARTER_RECIPES, GIFT_POINTS, HEART_POINTS, MAX_HEARTS,
   friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
-  FRIENDS, FRIEND_HEART_LINES,
+  FRIENDS, FRIEND_HEART_LINES, HANGOUTS, HOME_VISITS,
 } from './data';
 import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind } from './data';
+import type { HangoutScene, HomeVisit } from './data';
 import type { CropRequest } from './data';
 import type { Errand, StreetEvent } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
@@ -1326,6 +1327,27 @@ export const giftTo = (s: GameSave, npcId: string, kind: GiftKind): { tier: Gift
   const hearts = friendHearts(s, npcId);
   return { tier, hearts, gainedHeart: hearts > before };
 };
+
+// ---- Heart-event hangouts & home visits --------------------------------------
+// The lowest-threshold hangout this friend has unlocked (hearts met) but not yet
+// seen, or undefined. The talk path plays it once, then sets its storySeen flag —
+// so 4 ♥ fires before 8 ♥, each exactly once. Pure (reads save state only).
+export const pendingHangout = (s: GameSave, friendId: string): HangoutScene | undefined => {
+  const h = friendHearts(s, friendId);
+  return HANGOUTS
+    .filter(x => x.friend === friendId && h >= x.hearts && !s.storySeen.includes(x.flag))
+    .sort((a, b) => a.hearts - b.hearts)[0];
+};
+// Heart threshold a friend must reach before they'll drop by your apartment.
+export const HOME_VISIT_HEARTS = 6;
+export const homeVisitFlag = (friendId: string): string => `visit-${friendId}`;
+// One eligible friend to visit your apartment this morning: met, at/over the
+// threshold, with an authored visit they haven't made yet. First match only — the
+// wake flow fires a single visit at a time, in HOME_VISITS order.
+export const pendingHomeVisit = (s: GameSave): HomeVisit | undefined =>
+  HOME_VISITS.find(v => metFriend(s, v.friend)
+    && friendHearts(s, v.friend) >= HOME_VISIT_HEARTS
+    && !s.storySeen.includes(homeVisitFlag(v.friend)));
 
 // ---- Decor: wallpaper / flooring / rugs --------------------------------------
 export const RUG_W = 2, RUG_H = 2;
