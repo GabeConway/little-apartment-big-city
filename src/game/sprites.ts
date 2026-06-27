@@ -364,6 +364,10 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#e8e4dc', k: '#c4c0b6', s: '#eec6a2', e: '#222', t: '#2c7a6e', u: '#1f5a52', p: '#3a3322', b: '#4a3120' },
     acc: [ACC.glasses('#c9a227', '#e8f0f4'), ACC.bowtie('#b06ad0')],
   },
+  'npc-stranger': { // the midnight stranger — a hooded indigo figure, pale lavender skin, eyes like two cold lights. Only out in the small hours.
+    pal: { h: '#241a33', k: '#160f22', s: '#d6d2e2', e: '#aef4ee', t: '#2a2140', u: '#1a1430', p: '#15101f', b: '#0d0a14' },
+    acc: [ACC.hood('#2e2350', '#1c1638')],
+  },
 };
 
 const drawOverlay = (canvas: HTMLCanvasElement, acc: Accessory, rows?: string[]) => {
@@ -1619,6 +1623,22 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#cdbb8e'; ctx.fillRect(12, 8, 2, 3);    // cork end
     ctx.fillStyle = '#e8e0d0'; ctx.fillRect(6, 8, 3, 3);     // rolled paper inside
     ctx.fillStyle = '#c0392b'; ctx.fillRect(6, 9, 3, 1);     // ribbon
+  });
+  atlas['t-cave-crack'] = tile(ctx => {                      // a hidden crack/sea-cave mouth in the volcanic rock (secret)
+    fill(ctx, '#4a4550'); speckle(ctx, '#3a3640', 31, 9);    // volcanic rock, matches t-rock
+    ctx.fillStyle = '#5a5560'; ctx.fillRect(1, 1, 5, 4); ctx.fillRect(11, 2, 4, 5); // upper-left lit faces
+    ctx.fillStyle = '#16121d'; ctx.fillRect(6, 2, 4, 12);    // the dark crack/mouth
+    ctx.fillStyle = '#080610'; ctx.fillRect(7, 4, 2, 9);     // deeper black throat
+    ctx.fillStyle = '#2c2832'; ctx.fillRect(5, 2, 1, 12); ctx.fillRect(10, 2, 1, 12); // crack edges
+    ctx.fillStyle = '#33303a'; ctx.fillRect(0, 14, 16, 2);   // ground shadow
+  });
+  atlas['t-fire-escape'] = tile(ctx => {                     // rusted fire-escape ladder bolted up a brick wall (secret)
+    fill(ctx, '#6e5a4a'); speckle(ctx, '#5c4a3c', 37, 7);    // brick wall
+    ctx.fillStyle = '#3a3a42'; ctx.fillRect(5, 0, 6, 16);    // steel cage shadow band
+    ctx.fillStyle = '#55555f'; ctx.fillRect(5, 2, 6, 1); ctx.fillRect(5, 8, 6, 1); ctx.fillRect(5, 14, 6, 1); // landing rails
+    ctx.fillStyle = '#6b6b76'; ctx.fillRect(6, 0, 1, 16); ctx.fillRect(9, 0, 1, 16); // ladder side rails
+    ctx.fillStyle = '#8a8a96'; for (let y = 1; y < 16; y += 3) ctx.fillRect(6, y, 4, 1); // rungs
+    ctx.fillStyle = '#b87a4a'; ctx.fillRect(6, 5, 1, 2); ctx.fillRect(9, 10, 1, 2); // rust streaks
   });
 
   // Beach stand

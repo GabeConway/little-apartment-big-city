@@ -821,6 +821,12 @@ const WANDER_IDS = new Set(['granny', 'tex', 'charlie', 'old-man', 'miko', ...DA
 // NPCs (David the vampire + his campfire) that only appear on even-numbered nights.
 const NIGHT_EVEN_IDS = new Set(['david', 'campfire']);
 const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.45;
+// The midnight stranger haunts the city only in the small hours (10 PM → the 2 AM collapse).
+const MIDNIGHT_IDS = new Set(['stranger']);
+const strangerActive = (s: GameSave): boolean => s.timeMin >= 22 * 60;
+// True if a time-gated NPC is currently hidden (not drawn, not solid, not interactive).
+const npcHiddenNow = (s: GameSave, id: string): boolean =>
+  (NIGHT_EVEN_IDS.has(id) && !davidActive(s)) || (MIDNIGHT_IDS.has(id) && !strangerActive(s));
 
 // ---- Bingus museum fetch-quest helpers --------------------------------------
 const bingusHasKind = (s: GameSave, kind: BingusFetch['kind']): boolean =>
@@ -1268,7 +1274,7 @@ const LittleApartmentGame: React.FC = () => {
     for (const npc of scene.npcs) {
       if (npc.id === 'yakuza' && s.gangPaid) continue; // paid off — no longer blocks
       if (WANDER_IDS.has(npc.id)) continue; // wanderers move; not part of the static solid set
-      if (NIGHT_EVEN_IDS.has(npc.id) && !davidActive(s)) continue; // David's only here on even nights
+      if (npcHiddenNow(s, npc.id)) continue; // time-gated folk (Max on even nights, the midnight stranger) aren't here now
       set.add(`${npc.x},${npc.y}`);
     }
     if (scene.id === 'apartment') {
@@ -1913,7 +1919,7 @@ const LittleApartmentGame: React.FC = () => {
     const npc = wanderHit
       ? { id: wanderHit.id, x: faced.x, y: faced.y, sprite: wanderHit.sprite, dir: wanderHit.dir }
       : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
-          && !(NIGHT_EVEN_IDS.has(n.id) && !davidActive(s)));
+          && !npcHiddenNow(s, n.id));
     if (npc) {
       // Talk is always the default (no chooser). Befriendable NPCs you actually
       // converse with get a trailing "🎁 Give a gift" button on their last line
@@ -1933,6 +1939,28 @@ const LittleApartmentGame: React.FC = () => {
         return;
       }
       if (npc.id === 'campfire') { showDialog(['Driftwood crackles, though no one gathered it. The fire smells of the sea — and something older.']); return; }
+      // The midnight stranger — a one-time gift, then just eerie company on later nights.
+      if (npc.id === 'stranger') {
+        if (!s.storySeen.includes('midnight-stranger')) {
+          s.storySeen.push('midnight-stranger');
+          s.money += 888;
+          s.buff = { id: 'lucky', day: s.day };
+          sfxCatch();
+          persistSave(s); refreshHud();
+          showDialog([
+            'A figure you did not hear arrive. The streetlight finds nothing under the hood but two pale, patient lights where a face should be.',
+            '"Out walking the dead hours too. Good. The city is more honest at this end of the clock — fewer people pretending it is theirs."',
+            '"Here. You will want this before the others do." A cold coin drops into your palm, heavier than it has any right to be. The pale lights crease, almost a smile.',
+            '"Spend it on something small and warm. And do not come looking for me by daylight — I am not there." (+¥888, and your luck has quietly turned — you feel Lucky today.)',
+          ], 'The Stranger');
+          return;
+        }
+        showDialog([
+          'The Stranger inclines the hood a fraction. "Still keeping the dead hours, I see. The city suits you better down here at the bottom of the night."',
+          'A pale glint where a smile would be, and nothing else. Then the streetlight buzzes, and for a breath you are sure you are alone.',
+        ], 'The Stranger');
+        return;
+      }
       if (npc.id === 'david') {
         if (s.rares.includes('coffin')) {
           showDialog(warm(['Max smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."']), 'Max', giftAct);
@@ -2440,6 +2468,56 @@ const LittleApartmentGame: React.FC = () => {
           'Half-buried in the sand: a green bottle with a curl of paper inside. You work the salt-stiff cork loose.',
           'The note is water-stained, the hand old-fashioned. "To whoever finds this — the island keeps more secrets than it tells. Look for the ones that look back. — K."',
           'Folded inside are a few damp banknotes and a pressed flower from a plant you do not recognise. (+¥1,200, and a small chill down your spine.)',
+        ]);
+        break;
+      }
+      // ---- Hidden discoverables (each fires once, then a short flavor line) ----
+      // 1) Island sea cave — a crack in the volcanic rock hides a smugglers' stash.
+      case 'island-cave': {
+        if (s.storySeen.includes('island-cave')) { showDialog(['The crack in the rock breathes cool, salt-damp air at you. Empty now — you have already taken what the dark was keeping.']); break; }
+        s.storySeen.push('island-cave');
+        s.money += 5000;
+        sfxCoin();
+        persistSave(s); refreshHud();
+        showDialog([
+          'A hairline crack in the volcanic rock — too straight to be natural. You turn sideways, breathe in, and squeeze into a sea cave the island forgot it had.',
+          'Inside it is cold and far louder than the surface: the whole ocean breathing in and out through the stone. The walls are scratched with tally-marks no one is left to explain.',
+          'In a niche, bound in oilcloth gone hard as bark, someone\'s buried nest egg — old coins, salt-blackened but real, hidden against a worse day than they ever lived to see. You take them, and whisper a thank-you to the dark. (+¥5,000)',
+        ]);
+        break;
+      }
+      // 2) City rooftop — climb the fire escape for the skyline. First time = achievement.
+      case 'city-rooftop': {
+        if (s.storySeen.includes('city-rooftop')) {
+          s.energy = Math.min(maxEnergy(s), s.energy + 20);
+          persistSave(s); refreshHud();
+          showDialog(['You climb the fire escape again, just to breathe. The skyline is still up here, patient as ever. The city exhales with you. (+20 energy)']);
+          break;
+        }
+        s.storySeen.push('city-rooftop');
+        s.energy = maxEnergy(s);
+        award('skyline');
+        sfxCatch();
+        persistSave(s); refreshHud();
+        showDialog([
+          'The fire escape is rust-flecked but sound. You climb past dark windows, past somebody\'s wind chime, up onto a gravel roof nobody seems to remember building.',
+          'And there it is: Kawamachi laid end to end — train lines stitched in light, the harbor a sheet of black glass, ten thousand windows each holding one small life.',
+          'No one in all of it knows you are up here. For a little while the whole enormous city feels like something you could hold in two cupped hands. You climb down lighter than you went up. (Energy restored.)',
+        ]);
+        break;
+      }
+      // 3) Shore stargazing — only after dark; spot the Sleeping Cat constellation.
+      case 'stargaze': {
+        if (nightT(s) < 0.45) { showDialog(['You tip your head back. Just the wide blue afternoon — a gull, the smell of salt, no stars to speak of. They keep their own hours. Come back after dark.']); break; }
+        if (s.storySeen.includes('stargaze')) { showDialog(['You lie back in the cool dune grass and find the Sleeping Cat again, curled exactly where you left her. Some things stay put. It is a quiet comfort.']); break; }
+        s.storySeen.push('stargaze');
+        s.energy = maxEnergy(s);
+        sfxCatch();
+        persistSave(s); refreshHud();
+        showDialog([
+          'You lie back on the dark dune grass and let your eyes adjust, until the whole sky comes out at once — far more stars than a city has any right to show.',
+          'You trace a shape you half-remember: a long curl of stars with two bright points for eyes. The old fishermen call it the Sleeping Cat — it keeps watch on the tide, they say, so the sailors do not have to.',
+          'You stay until the cold finds you, and the wondering empties your head of every heavy thing in it. (You feel rested right down to the bone — energy restored.)',
         ]);
         break;
       }
@@ -3507,7 +3585,7 @@ const LittleApartmentGame: React.FC = () => {
     for (const npc of scene.npcs) {
       if (npc.id === 'yakuza' && saveRef.current.gangPaid) continue; // paid off — gone
       if (WANDER_IDS.has(npc.id)) continue; // wanderers are drawn from their live positions below
-      if (NIGHT_EVEN_IDS.has(npc.id) && !davidActive(saveRef.current)) continue; // David only on even nights
+      if (npcHiddenNow(saveRef.current, npc.id)) continue; // time-gated (Max on even nights, the midnight stranger)
       if (cutsceneRef.current?.hideNpc === npc.id) continue; // this NPC is currently a walking cutscene actor
       ents.push({
         y: npc.y * TILE,
@@ -3996,7 +4074,7 @@ const LittleApartmentGame: React.FC = () => {
       const feet = feetTile(p);
       const npcT = wanderersRef.current.some(w => Math.round(w.x / TILE) === faced.x && Math.round(w.y / TILE) === faced.y)
         || scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
-          && !(NIGHT_EVEN_IDS.has(n.id) && !davidActive(saveRef.current)));
+          && !npcHiddenNow(saveRef.current, n.id));
       const hit = (it: Interactable, tt: Vec) =>
         tt.x >= it.x && tt.x < it.x + (it.w ?? 1) && tt.y >= it.y && tt.y < it.y + (it.h ?? 1);
       const it = scene.interactables.find(i => hit(i, faced) || hit(i, feet));

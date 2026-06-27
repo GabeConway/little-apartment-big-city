@@ -151,12 +151,13 @@ const city: SceneDef = {
     'R': T('t-gh-roof', true),     // greenhouse pitched glass roof (over the facade)
     'G': T('t-gh-door'),           // greenhouse glass door (walk-in warp, gated)
     'J': T('t-board', true),       // odd-jobs notice board (errand giver)
+    'L': T('t-fire-escape', true), // fire-escape ladder up a building (secret rooftop; solid, faced from the sidewalk)
   },
   outdoor: true,
   grid: [
     'BBBBBBBBBBAAAAAAAAAACCCCCCCQQQQQ',
     'BBBBBBBBBBAAAAAAAAAACCCCCCCQQQQQ',
-    'bbbbDDbbbbaaaaDDaaaaCCCDDCCQDDQQ',
+    'bbbbDDbbbbaaaaDDaaaaCCCDDCCQDDLQ',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwVwwwwwwwwwwwwwwwwwVwwwww',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
@@ -202,10 +203,13 @@ const city: SceneDef = {
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
     { id: 'errand-board', x: 11, y: 13, label: 'Odd-jobs board' },
     { id: 'landlord', x: 9, y: 13, label: 'Lease office' },
+    { id: 'city-rooftop', x: 30, y: 2, label: 'Fire escape' },
   ],
   npcs: [
     { id: 'charlie', x: 17, y: 3, sprite: 'npc-charlie', dir: 'down' },
     { id: 'granny', x: 12, y: 16, sprite: 'npc-granny', dir: 'left' },
+    // The midnight stranger — only visible/interactive in the small hours (see strangerActive).
+    { id: 'stranger', x: 19, y: 16, sprite: 'npc-stranger', dir: 'down' },
     // Yakuza enforcers blocking the alley to Downtown (removed once paid off).
     { id: 'yakuza', x: 30, y: 7, sprite: 'npc-yakuza', dir: 'left' },
     { id: 'yakuza', x: 30, y: 8, sprite: 'npc-yakuza', dir: 'left' },
@@ -388,6 +392,8 @@ const shore: SceneDef = {
   interactables: [
     { id: 'boat', x: 2, y: 9, w: 2, h: 1, label: 'The skiff' },
     { id: 'fish-spot', x: 0, y: 9, w: 24, h: 1, label: 'Fish' },
+    // A quiet stargazing spot up on the dune grass — only rewards a look after dark (see handler).
+    { id: 'stargaze', x: 10, y: 1, w: 3, h: 1, label: 'Look up at the stars' },
   ],
   npcs: [
     { id: 'old-man', x: 4, y: 7, sprite: 'npc-oldman', dir: 'down' },
@@ -775,12 +781,13 @@ const island: SceneDef = {
     'K': T('t-tiki', true),
     'Z': T('t-zama-poster', true),  // ZamaZonk billboard
     'b': T('t-bottle'),             // message in a bottle (secret; walkable sand)
+    'c': T('t-cave-crack', true),   // hidden sea-cave crack in the volcanic rock (secret; solid, faced from the grass below)
   },
   outdoor: true,
   grid: [
     '~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
     '~~~~~~~ssssRRVVRRssss~~~~~~~',
-    '~~~~~ssssgggRRRRgggssss~~~~~',
+    '~~~~~ssssgggRRRcgggssss~~~~~',
     '~~~~ssgggggggHHgggggssss~~~~',
     '~~~sssgggPgggggggBgggsss~~~~',
     '~~ssgggggggggggggggsslll~~~~',
@@ -805,6 +812,7 @@ const island: SceneDef = {
     { id: 'banana', x: 17, y: 4, label: 'Banana palm' },
     { id: 'banana', x: 10, y: 9, label: 'Banana palm' },
     { id: 'island-bottle', x: 22, y: 12, label: 'A bottle in the sand' },
+    { id: 'island-cave', x: 15, y: 2, label: 'A crack in the rock' },
     { id: 'fish-tropical', x: 19, y: 4, w: 7, h: 7, label: 'Fish the lagoon' },
   ],
   npcs: [{ id: 'tiki', x: 7, y: 10, sprite: 'npc-hatvendor', dir: 'down' }],
