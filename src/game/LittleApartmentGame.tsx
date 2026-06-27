@@ -62,6 +62,7 @@ import {
   errandFor, errandDoneToday,
   canCook, canCookHere, cook, eatDish, ingredientCount, buyGrocery, keepProduce,
   buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend, meetFriend,
+  friendFlavorLine, allFriendsMet,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt, RUG_W, RUG_H,
   ROOM_PRICE, JUKEBOX_PRICE, skillLevel, skillProgress, addSkillXp,
 } from './state';
@@ -1198,6 +1199,31 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth({ type: 'dialog', lines, idx: 0, speaker, actions });
   }, [setOverlayBoth]);
 
+  // Capstone: the one-time "you know everyone now" payoff. Fires the first time
+  // every FRIENDS id is in your phone — a warm journal letter + a modest cash
+  // keepsake + the 'regular' achievement. Queued as a story-beat letter so it
+  // drains through the normal beat pipeline (after any open overlay closes); the
+  // reward + storySeen flag apply immediately. Safe to call repeatedly / anywhere.
+  const checkRegular = useCallback(() => {
+    const s = saveRef.current;
+    if (s.storySeen.includes('regular') || !allFriendsMet(s)) return;
+    s.storySeen.push('regular');
+    s.money += 6000; // a modest neighborhood keepsake
+    award('regular');
+    persistSave(s);
+    refreshHud();
+    pendingBeatsRef.current.push({
+      id: 'regular', title: 'A Full Phone', from: 'your journal', when: () => true,
+      lines: [
+        'Scrolling your phone tonight, you notice the Friends list has quietly, completely, filled up.',
+        'Every name is a face now. Every face was a stranger once, on some ordinary day, until it wasn\'t.',
+        'Kawamachi is ten million people and a train always arriving. But walk any street now and someone knows you — someone waves.',
+        'You came here with two boxes and a futon. Somewhere along the way the big city became a small town that happens to hold your whole life.',
+        'Tucked in with the thought, a little cash from nobody in particular — or everybody. A neighborhood looks after its regulars. (Got ¥6,000.)',
+      ],
+    });
+  }, [award, refreshHud]);
+
   // Typewriter: reveal the current dialog line char-by-char (~83 cps). Restarts
   // whenever the overlay (line/idx) changes; cleared on unmount/overlay change.
   useEffect(() => {
@@ -1302,7 +1328,8 @@ const LittleApartmentGame: React.FC = () => {
     refreshHud();
     playMusicFor(id);
     if (id === 'nightclub') award('club');
-  }, [computeSolids, refreshHud, playMusicFor, award]);
+    checkRegular(); // catches an all-cast save on scene enter (e.g. a loaded game)
+  }, [computeSolids, refreshHud, playMusicFor, award, checkRegular]);
 
   // ---- interactions ----------------------------------------------------------
 
@@ -1725,7 +1752,9 @@ const LittleApartmentGame: React.FC = () => {
       const ct = { x: Math.round(catRef.current.x / TILE), y: Math.round(catRef.current.y / TILE) };
       if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
         catRef.current.sitting = true; catRef.current.timer = 4; // he stops to address you
-        showDialog(WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)], 'David', giftActionFor('david'));
+        const catLines = WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)];
+        const catFlavor = friendFlavorLine(s, 'david'); // warmer as you bond with him
+        showDialog(catFlavor ? [...catLines, catFlavor] : catLines, 'David', giftActionFor('david'));
         return;
       }
     }
@@ -1891,7 +1920,13 @@ const LittleApartmentGame: React.FC = () => {
       // (see giftActionFor); merchants open their stalls.
       const friendId = FRIEND_OF_NPC[npc.id];
       meetFriendNotify(friendId); // first contact → into the Friends app + a buzz
+      checkRegular();             // meeting the last of the cast fires the capstone
       const giftAct = giftActionFor(friendId);
+      // A warmer, more personal closing line once you have hearts with them. Below
+      // the first threshold (or for non-keyed friends) it's null → conversation
+      // unchanged. `warm()` appends it to whatever a branch was going to say.
+      const flavor = friendId ? friendFlavorLine(s, friendId) : null;
+      const warm = (lines: string[]): string[] => (flavor ? [...lines, flavor] : lines);
       if (npc.id === 'yakuza') {
         if (s.gangPaid) return; // already paid; he's on his way out
         setOverlayBoth({ type: 'shop', shop: 'yakuza' });
@@ -1900,7 +1935,7 @@ const LittleApartmentGame: React.FC = () => {
       if (npc.id === 'campfire') { showDialog(['Driftwood crackles, though no one gathered it. The fire smells of the sea — and something older.']); return; }
       if (npc.id === 'david') {
         if (s.rares.includes('coffin')) {
-          showDialog(['Max smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."'], 'Max', giftAct);
+          showDialog(warm(['Max smiles, firelight catching his teeth. "Sleep well in your new bed, friend. I always do."']), 'Max', giftAct);
           return;
         }
         if ((s.sodas['conk'] ?? 0) > 0) {
@@ -1915,10 +1950,10 @@ const LittleApartmentGame: React.FC = () => {
           ], 'Max');
           return;
         }
-        showDialog([
+        showDialog(warm([
           'A pale man tends a driftwood fire, though the night is not cold. "Lovely evening. Care to sit?"',
           'His smile is all teeth. "You wouldn\'t happen to have a Conk on you? I have such a... thirst."',
-        ], 'Max', giftAct);
+        ]), 'Max', giftAct);
         return;
       }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
@@ -1934,21 +1969,21 @@ const LittleApartmentGame: React.FC = () => {
       // conversation, via an end-of-dialog action (Task: talk-first selling).
       if (npc.id === 'tex') {
         if (s.hat) {
-          showDialog([
+          showDialog(warm([
             '"Well howdy. That hat\'s ridin\' good on ya — knew it would the second I saw your head."',
             'Tex tips his own brim. "Out here it\'s just me, the hats, and the sea breeze. One hat, one price, one dream. Looks like you\'re livin\' it, partner."',
-          ], 'Tex', giftAct);
+          ]), 'Tex', giftAct);
         } else if (s.money < 6700) {
           showDialog([
             'Tex pulls a cowboy hat from a sack slung over his shoulder. "Genuine article, this. Sixty-seven dollars."',
             '"...That\'s ¥6,700 to you. Tex does not negotiate."',
             'He eyes your wallet, not unkindly. "Come back with more yen, partner. The hat ain\'t goin\' nowhere. Neither am I."',
-          ], 'Tex', giftAct);
+          ].concat(flavor ? [flavor] : []), 'Tex', giftAct);
         } else {
-          showDialog([
+          showDialog(warm([
             'Tex pulls a cowboy hat from a sack slung over his shoulder. "Genuine article, this. Sixty-seven dollars."',
             '"...That\'s ¥6,700. Tex does not negotiate. You\'ll wear it forever — and you\'ll thank me forever, too."',
-          ], 'Tex', [{ label: 'Buy · ¥6,700', onPick: buyHat }, ...(giftAct ?? [])]);
+          ]), 'Tex', [{ label: 'Buy · ¥6,700', onPick: buyHat }, ...(giftAct ?? [])]);
         }
         return;
       }
@@ -2023,7 +2058,7 @@ const LittleApartmentGame: React.FC = () => {
             ? `Here is one thing you could do for me: ${ask.ask}`
             : 'A few pieces are still out there in the world — alleys, shores, the deep places. You will know them when you see them.',
         ];
-        showDialog(lines, 'Bingus Doofelsmurt', giftAct);
+        showDialog(warm(lines), 'Bingus Doofelsmurt', giftAct);
         return;
       }
       // Granny Soto (out in the city): she gatekeeps the community greenhouse
@@ -2044,7 +2079,7 @@ const LittleApartmentGame: React.FC = () => {
       const voice = NPC_VOICES[npc.id];
       if (voice) {
         const set = voice.sets[Math.floor(Math.random() * voice.sets.length)];
-        showDialog([...set, ...npcDynamicLines(npc.id, s)], voice.speaker, giftAct);
+        showDialog(warm([...set, ...npcDynamicLines(npc.id, s)]), voice.speaker, giftAct);
       }
       return;
     }
@@ -2163,6 +2198,7 @@ const LittleApartmentGame: React.FC = () => {
           sfxCatch();
           persistSave(s); refreshHud();
           showToast('David — new contact', 'Saved to your phone’s Friends app.', '💛');
+          checkRegular(); // adopting the cat may complete the whole cast
           showDialog([
             'Something shifts in the dumpster. Two eyes, like old coins, blink open in the dark.',
             'A black cat unfolds itself onto the lip of the bin and regards you with ancient patience.',
@@ -4150,13 +4186,14 @@ const LittleApartmentGame: React.FC = () => {
     computeSolids();
     checkStory(); // queues the day-one journal entry on a fresh save
     syncMessages(s); // seed the welcome texts / any already-earned threads
+    checkRegular(); // a loaded/seeded save that already knows everyone fires the capstone
     persistSave(s);
     refreshHud();
     setScreen('playing');
     // Start music here — the New Game / Continue click is the user gesture
     // browsers require before audio can play.
     playMusicFor(s.scene);
-  }, [computeSolids, checkStory, refreshHud, setOverlayBoth, playMusicFor]);
+  }, [computeSolids, checkStory, refreshHud, setOverlayBoth, playMusicFor, checkRegular]);
 
   // Title → game with a cover transition (the "game has started" moment).
   const startGame = useCallback((fresh: boolean) => {

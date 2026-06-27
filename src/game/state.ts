@@ -11,6 +11,7 @@ import {
   CROP_REQUESTS, NON_MANAGER_RARES, FORAGE, ERRANDS,
   RECIPES, recipeById, STARTER_RECIPES, GIFT_POINTS, HEART_POINTS, MAX_HEARTS,
   friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
+  FRIENDS, FRIEND_HEART_LINES,
 } from './data';
 import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind } from './data';
 import type { CropRequest } from './data';
@@ -1111,6 +1112,18 @@ export const friendHearts = (s: GameSave, id: string): number =>
   Math.max(0, Math.min(MAX_HEARTS, Math.floor(friendPts(s, id) / HEART_POINTS)));
 export const canGiftToday = (s: GameSave, id: string): boolean => (s.friends[id]?.giftDay ?? -1) !== s.day;
 export const metFriend = (s: GameSave, id: string): boolean => id in s.friends;
+// True once EVERY befriendable NPC is in your phone (drives the one-time capstone).
+export const allFriendsMet = (s: GameSave): boolean => FRIENDS.every(f => f.id in s.friends);
+// The warmest heart-tiered greeting line the friend has unlocked, or null below
+// the first threshold / for friends with no line table. Appended to a chat.
+export const friendFlavorLine = (s: GameSave, id: string): string | null => {
+  const tiers = FRIEND_HEART_LINES[id];
+  if (!tiers) return null;
+  const h = friendHearts(s, id);
+  let pick: string | null = null;
+  for (const t of tiers) if (h >= t.hearts) pick = t.line;
+  return pick;
+};
 // First contact: the moment you actually talk to (or shop with) a befriendable
 // NPC, they enter your Friends app at 0 pts. Returns true the first time only, so
 // the caller can fire a one-time "new contact" notification.

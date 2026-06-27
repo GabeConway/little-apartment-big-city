@@ -14,10 +14,11 @@ import { BASE_MAX_ENERGY, FURNITURE, PAWN_STOCK_SIZE, SKETCHY_DISCOUNT, PAWN_DIS
 import {
   canCookHere, canCook, cook, eatDish, ingredientCount, buyGrocery, learnRecipe,
   buffActive, friendHearts, giftTo, canGiftToday, applyFriendPerks,
+  allFriendsMet, friendFlavorLine, meetFriend,
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt,
   skillLevel, addSkillXp, skillProgress, SKILL_XP, ROOM_PRICE,
 } from '../src/game/state';
-import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES } from '../src/game/data';
+import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS } from '../src/game/data';
 import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
@@ -653,6 +654,32 @@ describe('friendship', () => {
     s.friends['lulu'] = { pts: 300, giftDay: -1 }; // 3 hearts
     applyFriendPerks(s);
     expect(s.recipes).toContain('smoothie');
+  });
+  it('allFriendsMet: false until every FRIENDS id is present, then true', () => {
+    const s = newSave();
+    expect(allFriendsMet(s)).toBe(false);             // fresh save knows no one
+    // Meet all but the last one — still not complete.
+    for (const f of FRIENDS.slice(0, -1)) meetFriend(s, f.id);
+    expect(allFriendsMet(s)).toBe(false);
+    // Meet the final friend → complete.
+    meetFriend(s, FRIENDS[FRIENDS.length - 1].id);
+    expect(allFriendsMet(s)).toBe(true);
+    expect(FRIENDS.every(f => f.id in s.friends)).toBe(true);
+  });
+  it('friendFlavorLine: null below 2 hearts, picks the highest unlocked tier', () => {
+    const s = newSave();
+    s.friends['granny'] = { pts: 0, giftDay: -1 };
+    expect(friendFlavorLine(s, 'granny')).toBeNull();   // 0 hearts → neutral
+    s.friends['granny'].pts = 200;                      // 2 hearts
+    const t2 = friendFlavorLine(s, 'granny');
+    expect(typeof t2).toBe('string');
+    s.friends['granny'].pts = 800;                      // 8 hearts → warmest tier
+    const t8 = friendFlavorLine(s, 'granny');
+    expect(typeof t8).toBe('string');
+    expect(t8).not.toBe(t2);                            // a deeper, different line
+    // Shop-only friends have no line table → always null.
+    s.friends['lulu'] = { pts: 800, giftDay: -1 };
+    expect(friendFlavorLine(s, 'lulu')).toBeNull();
   });
 });
 

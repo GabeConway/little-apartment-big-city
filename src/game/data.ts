@@ -256,6 +256,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'curator', title: 'The Whole Collection', desc: 'Filled every display in the Kawamachi Museum.', hint: 'Twelve empty displays. Twelve curios, hidden across the city and beyond.' },
   { id: 'greenthumb', title: 'Green Thumb', desc: 'Grew a Moonflower in the community greenhouse.', hint: 'Earn the shrine\'s deepest favor — its seeds bloom only after midnight.' },
   { id: 'broke', title: 'i dont have enough money for chicken nugget', desc: 'Dropped under ¥100. The nuggets remain a dream.', hint: 'Spend almost all of it.' },
+  { id: 'regular', title: 'Everybody Knows Your Name', desc: 'Met everyone worth knowing in Kawamachi.', hint: 'A city is just strangers you have not met yet.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------
@@ -735,6 +736,53 @@ export const FRIENDS: FriendDef[] = [
     loved: ['flower', 'crop'], liked: ['dish'], disliked: ['mineral'] },
 ];
 export const friendById = (id: string): FriendDef | undefined => FRIENDS.find(f => f.id === id);
+
+// ---- Heart-tiered greetings -------------------------------------------------
+// As hearts rise, a friend layers ONE warmer, more personal line onto the END of
+// the conversation (after their random voice set / bespoke branch). The talk path
+// picks the highest tier whose heart threshold is met; below the first threshold
+// (2 ♥) there's no extra line, so early acquaintances stay neutral. Keyed by the
+// FRIENDS id, tiers listed low→high, each written in that character's voice.
+// Friends who only ever open a shop (Lulu/Manager/Genji) aren't keyed here — their
+// conversations don't surface a flavor line.
+export interface HeartLine { hearts: number; line: string }
+export const FRIEND_HEART_LINES: Record<string, HeartLine[]> = {
+  granny: [
+    { hearts: 2, line: 'You come round more than my own grandchildren, you know. I do not mind it one bit.' },
+    { hearts: 5, line: 'Sit a moment, dear — the kettle is on. A friend is only a neighbor you stopped being shy with.' },
+    { hearts: 8, line: 'I tell the other old women about you at the market. "My young one," I call you. They are terribly jealous.' },
+  ],
+  charlie: [
+    { hearts: 2, line: "Honestly? You're good people, I can tell. I've got a sense for it — it's a whole section of the documentary now." },
+    { hearts: 5, line: "Hey, real talk — you're a main character to me. Not in a weird way. In the best way." },
+    { hearts: 8, line: 'I\'ve got a whole reel of just... you, around the neighborhood. Gonna cut it together someday. Working title: "My Favorite Neighbor."' },
+  ],
+  max: [
+    { hearts: 2, line: 'Three centuries, and the nights still run long. You make one or two of them shorter. Thank you for that.' },
+    { hearts: 5, line: 'I outlived everyone I ever called a friend, and stopped collecting them. ...And then, you.' },
+    { hearts: 8, line: 'When you are as old as I am, you measure a life in the few who sat by your fire. You are one of mine now. Do not be a stranger.' },
+  ],
+  bingus: [
+    { hearts: 2, line: 'You keep COMING BACK. Do you know how rare that is? Most visitors flee. You, I have begun to expect — fondly!' },
+    { hearts: 5, line: 'I have decided you are a Patron. Capital P. There is no plaque yet. There WILL be a plaque.' },
+    { hearts: 8, line: 'When the collection is complete, I shall add one last placard: "Acquired with the help of a true friend." That is you, in case it was unclear.' },
+  ],
+  tex: [
+    { hearts: 2, line: "You keep moseyin' by to jaw with old Tex. Out here, partner, that's worth more'n any hat — and I sell HATS." },
+    { hearts: 5, line: "Y'know, I came to this shore a stranger with a sack of hats and a dream. You made it feel like home turf." },
+    { hearts: 8, line: "Partner, if I had a kid, I'd want 'em to turn out like you. ...Now don't go makin' it weird. Tex don't do weepy." },
+  ],
+  miko: [
+    { hearts: 2, line: 'The kami has begun to recognize your footstep on the stairs. So, I confess, have I.' },
+    { hearts: 5, line: 'I sweep these grounds alone most mornings. Lately I find I am listening for you. The cedar agrees it is nicer.' },
+    { hearts: 8, line: 'I drew your fortune without telling you. "A lasting bond." The kami does not say that lightly. Neither do I.' },
+  ],
+  david: [
+    { hearts: 2, line: 'David regards you for a long moment. "...You are tolerable. For a human. Sit. I permit it."' },
+    { hearts: 5, line: '"I have lived in a dumpster and lived in a palace," David says. "This is better than both. Do not let it go to your head."' },
+    { hearts: 8, line: 'David presses his head, once, against your hand — then pretends it never happened. "We will not speak of that. But know that I meant it."' },
+  ],
+};
 
 // ---- Decor: wallpaper / flooring / rugs ------------------------------------
 // Bought + applied right in Arrange mode. Wall & floor are room-wide swaps; rugs
