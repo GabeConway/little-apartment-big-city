@@ -11,8 +11,9 @@ DJ Tanuki purchase), **bigger apartment** upgrade, live **museum collectibles**;
 (fog + meteor-shower nights), **hidden secrets** (island sea cave /
 midnight stranger / shore stargazing), **random daily street events**, **Almanac**
 (unified discovery tracker), **NPC daily routines**, **mine treasure-vault floor**,
-**relationship events** (heart-threshold hangouts + friends visiting your apartment) —
-see games.md.)
+**relationship events** (heart-threshold hangouts + friends visiting your apartment),
+**Kojima driving-delivery minigame**, **courier gig terminal** (odd-jobs board reworked),
+**shore/beach overhaul** — see games.md.)
 
 ## Strong candidates
 
