@@ -104,8 +104,8 @@ const blip = (freqs: number[], dur = 0.09, vol = 0.05) => {
     });
   } catch { /* no audio */ }
 };
-const sfxCoin = () => blip([880, 1320], 0.07);
-const sfxBuy = () => blip([523, 659, 784], 0.08);
+const sfxCoin = () => playSfx('/sfx/coin.mp3');   // sampled (was a blip) — earnings/pickups
+const sfxBuy = () => playSfx('/sfx/buy.mp3');     // sampled (was a blip) — purchases
 const sfxCatch = () => blip([659, 880, 1175], 0.09);
 const sfxMiss = () => blip([330, 220], 0.12);
 const sfxBite = () => blip([1175, 1175], 0.06, 0.07);
@@ -234,6 +234,9 @@ const sfxUiClick = () => playSfx('/sfx/ui-click.mp3', 0.4);
 const sfxGameStart = () => playSfx('/sfx/game-start.mp3');
 const sfxPhone = () => playSfx('/sfx/phone-notification.mp3');
 const sfxLevelUp = () => playSfx('/sfx/level-up.mp3');
+const sfxCasinoWin = () => playSfx('/sfx/casino-win.mp3');
+const sfxHeartUp = () => playSfx('/sfx/heart-up.mp3');
+const sfxCarStart = () => playSfx('/sfx/car-start.mp3');
 
 // ---- background music -------------------------------------------------------
 // Per-scene tracks; everywhere unlisted (city, badtown, gacha) falls back to the
@@ -1663,7 +1666,7 @@ const LittleApartmentGame: React.FC = () => {
     refreshHud(); setShopTick(v => v + 1);
     setOverlayBoth(null);
     const lines = [GIFT_REACTION[res.tier](f.name)];
-    if (res.gainedHeart) lines.push(`You and ${f.name} are closer now. (${res.hearts}/10 ♥)`);
+    if (res.gainedHeart) { sfxHeartUp(); lines.push(`You and ${f.name} are closer now. (${res.hearts}/10 ♥)`); }
     if (f.perk && beforeHearts < f.perk.hearts && res.hearts >= f.perk.hearts)
       lines.push(`✦ ${f.name} perk unlocked: ${f.perk.text}`);
     showDialog(lines, f.name);
@@ -1883,7 +1886,7 @@ const LittleApartmentGame: React.FC = () => {
         s.driving = true;
         computeSolids();
         persistSave(s); refreshHud();
-        sfxBuy();
+        sfxCarStart();
         return;
       }
     }
@@ -4704,7 +4707,7 @@ const LittleApartmentGame: React.FC = () => {
     else { bj.result = 'push'; payout = bj.bet; } // includes BJ vs BJ
     bj.payout = payout;
     bj.phase = 'done';
-    if (payout > 0) { s.money += payout; sfxCoin(); }
+    if (payout > 0) { s.money += payout; sfxCasinoWin(); }
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
   };
   const dealBlackjack = () => {
@@ -4767,7 +4770,7 @@ const LittleApartmentGame: React.FC = () => {
         slot.phase = 'done';
         const win = slotPayout(slot.final, slot.bet);
         slot.win = win;
-        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCoin(); persistSave(s2); refreshHud(); }
+        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCasinoWin(); persistSave(s2); refreshHud(); }
         setShopTick(v => v + 1);
       }
     }, 80);
@@ -4812,7 +4815,7 @@ const LittleApartmentGame: React.FC = () => {
         roul.phase = 'done';
         const win = roulettePayout(roul.kind, roul.pick, roul.result, roul.bet);
         roul.win = win;
-        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCoin(); persistSave(s2); refreshHud(); }
+        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCasinoWin(); persistSave(s2); refreshHud(); }
         setShopTick(v => v + 1);
       } else {
         roul.display = Math.floor(Math.random() * 37); // flicker while it spins

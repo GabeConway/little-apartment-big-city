@@ -12,9 +12,11 @@ not hyper-realistic. Mute is global (music + sfx).
 
 ## ✅ Already in the game (no download needed)
 Sampled mp3s in `public/sfx/`: `achievement-unlocked`, `backrooms-teleport`
-(freezer warp), `game-start`, `phone-notification`, `ui-click`, **`level-up`**
-(plays on a skill level-up — just added). Everything else below is currently a
-tiny **synthesized WebAudio blip** — fine, but a real sample would feel nicer.
+(freezer warp), `game-start`, `phone-notification`, `ui-click` (menu/button click),
+`level-up` (skill level-up), **`coin`** (earnings), **`buy`** (purchases),
+**`casino-win`** (blackjack/slots/roulette win), **`heart-up`** (a friendship heart
+rises), **`car-start`** (boarding the kei car). The rest below are still synthesized
+WebAudio blips — fine, but a real sample would feel nicer.
 
 ---
 
@@ -23,12 +25,9 @@ These fire constantly; a good sample lifts the whole game.
 
 | Suggested file | Plays when… | Wanted character |
 |---|---|---|
-| `coin.mp3` | you earn money — shore forage pickup, sell at a shop, pawn, errand/street-event payout, shrine donation | soft bright "ka-ching"/coin clink, gentle |
-| `buy.mp3` | you spend money — buy furniture/seeds/sodas/pickaxes/decor | quick friendly register blip |
 | `catch.mp3` | you land a fish, shake a coconut/banana, adopt the cat, pick up an item | happy little "got it!" chime |
 | `fish-bite.mp3` | the bobber dips during fishing (the moment to reel) | a sharp "plip"/tug, attention-grabbing |
 | `fish-miss.mp3` | a cast fails / the fish gets away | soft downward "aw" tone, not punishing |
-| `menu-move.mp3` | moving the cursor between menu buttons (keyboard/controller) | very short tick (think Stardew menu blip) |
 | `dialogue-blip.mp3` | per-character typewriter text reveal (very frequent, very quiet) | ultra-short soft click; **must be subtle** |
 
 ## 🍳 Activities & life-sim
@@ -40,7 +39,6 @@ These fire constantly; a good sample lifts the whole game.
 | `cook.mp3` | cooking a dish at home | a quick sizzle/ding |
 | `eat.mp3` | eating a dish / drinking a soda for energy | soft munch or fizzy gulp |
 | `gift.mp3` | giving a friend a gift they like | warm twinkle |
-| `heart-up.mp3` | a friendship heart goes up | rising chime (1–4 notes) |
 | `sleep.mp3` | going to bed / fading to the next day | slow soft "whoosh"/yawn |
 
 ## ⛏️ Mining & combat
@@ -69,8 +67,6 @@ accents that remain; real samples would be lovely.
 | `onsen.mp3` | sinking into the island hot spring | a relaxed "ahh"/soft bubbling |
 | `wish.mp3` | making a wish during a meteor-shower night | a magical twinkle/sparkle |
 | `secret.mp3` | finding a hidden secret (sea cave, midnight stranger, stargazing, bottle) | a soft "ooh, discovery" chime |
-| `car-start.mp3` | boarding/starting the kei car (there's already a WebAudio motor loop) | a brief ignition turn-over |
-| `casino-win.mp3` | winning at blackjack/slots/roulette | a cheerful chip/jingle |
 | `casino-lose.mp3` | losing a casino bet | a soft "no luck" tone (gentle) |
 | `gacha.mp3` | a gachapon capsule pops open | a mechanical crank + capsule rattle |
 | `warp.mp3` | a normal door/scene transition (non-freezer) | a quiet "step through" whoosh |
