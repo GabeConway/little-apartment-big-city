@@ -6,7 +6,8 @@ import {
   WAKE_MIN, type GameSave,
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
-  mineChallengeFor, enterMineStreak, crackGeode, dayEventFor, shoreForageFor,
+  mineChallengeFor, enterMineStreak, crackGeode, lootVault, isVaultFloor, VAULT_MIN_FLOOR,
+  unlockGameAch, dayEventFor, shoreForageFor,
   isRainyDay, foggyDay, meteorNight,
   plantCrop, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
   streetEventFor, streetEventDoneToday,
@@ -299,6 +300,78 @@ describe('mineLayoutFor (daily mine generation)', () => {
       seen.add(`${down.x},${down.y}`);
     }
     expect(seen.size).toBeGreaterThan(1); // not always the same spot across floors
+  });
+
+  it('treasure vaults are deterministic per day+floor, rare, and only below the min floor', () => {
+    // Determinism: same day+floor → same vault flag (stable across reloads).
+    for (let day = 1; day <= 30; day++)
+      for (let floor = 1; floor <= 12; floor++)
+        expect(isVaultFloor({ ...newSave(), day }, floor)).toBe(isVaultFloor({ ...newSave(), day }, floor));
+    // Never above the minimum depth.
+    for (let day = 1; day <= 200; day++)
+      for (let floor = 1; floor < VAULT_MIN_FLOOR; floor++)
+        expect(isVaultFloor({ ...newSave(), day }, floor)).toBe(false);
+    // Rare: well under a quarter of qualifying floors.
+    let total = 0, vaults = 0;
+    for (let day = 1; day <= 200; day++)
+      for (let floor = VAULT_MIN_FLOOR; floor <= 12; floor++) { total++; if (isVaultFloor({ ...newSave(), day }, floor)) vaults++; }
+    expect(vaults).toBeGreaterThan(0);
+    expect(vaults / total).toBeLessThan(0.2);
+    // A known trigger: day 15, floor 3.
+    expect(isVaultFloor({ ...newSave(), day: 15 }, 3)).toBe(true);
+  });
+
+  it('a vault floor is flagged, stocks a chest + a geode, and is richer than a normal floor', () => {
+    // day 2 / floor 4 is a vault (see isVaultFloor seeding).
+    const v = newSave(); v.day = 2;
+    const layout = mineLayoutFor(v, 4);
+    expect(layout.vault).toBe(true);
+    expect(layout.chest).toBeDefined();
+    // chest is on walkable floor, away from the entry, and never under ore/the ladder.
+    expect(isFloor(layout.chest!.x, layout.chest!.y)).toBe(true);
+    expect(Math.abs(layout.chest!.x - 2) + Math.abs(layout.chest!.y - 1)).toBeGreaterThanOrEqual(4);
+    expect(layout.ore.some(n => n.x === layout.chest!.x && n.y === layout.chest!.y)).toBe(false);
+    expect(layout.chest!.x === layout.down.x && layout.chest!.y === layout.down.y).toBe(false);
+    expect(layout.ore.some(n => n.geode)).toBe(true); // a vault always seals a geode
+    // Averaged richness: a vault floor out-yields the same floor on non-vault days.
+    let vaultOre = mineLayoutFor(v, 4).ore.length, normSum = 0, normN = 0;
+    for (let day = 1; day <= 30; day++) {
+      if (isVaultFloor({ ...newSave(), day }, 4)) continue; // skip other vault days
+      normSum += mineLayoutFor({ ...newSave(), day }, 4).ore.length; normN++;
+    }
+    expect(vaultOre).toBeGreaterThan(normSum / normN);
+  });
+
+  it('lootVault pays a one-time haul (cash + ore + geode) and awards the achievement once', () => {
+    const s = newSave(); s.day = 2; s.money = 1000; s.geodes = 0;
+    const haul = lootVault(s, 4);
+    expect(haul).not.toBeNull();
+    expect(s.money).toBe(1000 + haul!.cash);
+    expect(haul!.cash).toBeGreaterThan(0);
+    expect(s.minerals['crystal']).toBe(haul!.crystals);
+    expect(s.minerals['opal']).toBe(haul!.opals);
+    expect(s.geodes).toBe(haul!.geodes);
+    expect(haul!.starstones).toBe(0); // floor 4 is too shallow for an astral stone
+    // Looting again the same day+floor returns nothing (already looted).
+    expect(lootVault(s, 4)).toBeNull();
+    // A deeper vault floor (6+) tucks in an astral stone.
+    const deep = newSave(); deep.day = 24;
+    expect(isVaultFloor(deep, 7)).toBe(true);
+    expect(lootVault(deep, 7)!.starstones).toBeGreaterThanOrEqual(1);
+    // The first vault opened unlocks the 'vault' achievement.
+    const a = newSave(); a.day = 15;
+    expect(a.gameAch.includes('vault')).toBe(false);
+    expect(unlockGameAch(a, 'vault')).toBe(true);
+    expect(a.gameAch.includes('vault')).toBe(true);
+    expect(unlockGameAch(a, 'vault')).toBe(false); // only once
+  });
+
+  it('the daily vault tracking resets when the day rolls over', () => {
+    const s = newSave(); s.day = 2;
+    lootVault(s, 4);
+    expect(s.vaultsLooted.length).toBe(1);
+    s.day = 3; mineLayoutFor(s, 1); // re-seeding for a new day clears the looted set
+    expect(s.vaultsLooted.length).toBe(0);
   });
 
   it('mineChallengeFor is deterministic per day', () => {

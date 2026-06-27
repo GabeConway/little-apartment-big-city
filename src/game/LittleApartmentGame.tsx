@@ -53,7 +53,7 @@ import {
   allRaresOwned, sketchyOfferFor, gachaComplete,
   clockLabel, nightT, morningT, COLLAPSE_MIN, routineTargetFor,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
-  mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey,
+  mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey, lootVault,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay, foggyDay, meteorNight, dayEventFor, DAY_EVENT_LABEL, type DayEvent, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
@@ -1101,6 +1101,9 @@ const LittleApartmentGame: React.FC = () => {
   const projectilesRef = useRef<Projectile[]>([]);
   const mineFloorRef = useRef(1);        // current mine depth (1 = top floor; reset on entry from surface)
   const mineDownRef = useRef<{ x: number; y: number } | null>(null); // this floor's seeded descend-ladder tile
+  const mineVaultRef = useRef(false);    // is this floor a rare treasure vault?
+  const mineChestRef = useRef<{ x: number; y: number } | null>(null); // the vault's chest tile
+  const mineChestOpenRef = useRef(false);// has the vault chest been looted (this visit / today)?
   const gunCooldownRef = useRef(0);      // AK-67 full-auto fire timer
   const nursedRef = useRef(false);
   // Jean-Pierre rescue cutscene (after a mines KO): he's stood in your apartment
@@ -1382,6 +1385,9 @@ const LittleApartmentGame: React.FC = () => {
       const layout = mineLayoutFor(s, mineFloorRef.current);
       oreNodesRef.current = layout.ore;
       mineDownRef.current = layout.down;
+      mineVaultRef.current = !!layout.vault;
+      mineChestRef.current = layout.chest ?? null;
+      mineChestOpenRef.current = !!layout.vault && s.vaultsLooted.includes(`${s.day}:${mineFloorRef.current}`);
       crawlersRef.current = layout.crawlers.map(c => ({
         x: c.x * TILE, y: c.y * TILE - 4, hp: CRAWLER_HP[c.kind], stepT: Math.random(), hurtT: 0, dir: 'down' as Dir, kind: c.kind,
       }));
@@ -1921,6 +1927,27 @@ const LittleApartmentGame: React.FC = () => {
         sfxDescend();
         reachFloor(nf);
         depthToastRef.current = { floor: nf, t: 2.2 };
+        return;
+      }
+      // Treasure vault chest — a rare, one-time-per-visit jackpot.
+      const vc = mineChestRef.current;
+      if (vc && ((faced.x === vc.x && faced.y === vc.y) || (feet.x === vc.x && feet.y === vc.y))) {
+        const haul = lootVault(s, mineFloorRef.current);
+        if (!haul) { showDialog(['The vault chest sits open and emptied. You already carried off everything that wasn\'t bolted down.']); return; }
+        mineChestOpenRef.current = true;
+        sfxMine(1600); sfxCoin();
+        sparkleRef.current = { x: vc.x * TILE, y: vc.y * TILE, t: 0.7 };
+        mineTextRef.current = { x: vc.x * TILE, y: vc.y * TILE, text: `+¥${haul.cash.toLocaleString()}`, color: '#ffd24a', t: 1.6 };
+        const loot = [`${haul.crystals}× Hum Crystal`, `${haul.opals}× Void Opal`];
+        if (haul.starstones) loot.push(`${haul.starstones}× Astral Stone`);
+        loot.push(`${haul.geodes}× geode`);
+        award('vault');
+        showDialog([
+          'The chest groans open — warm gold light spills across the cavern.',
+          `¥${haul.cash.toLocaleString()} in old coin, and a heap of ore: ${loot.join(', ')}.`,
+          'You stuff your bag until it creaks. The vault sighs shut behind you.',
+        ]);
+        persistSave(s); refreshHud();
         return;
       }
       const node = oreNodesRef.current.find(n => n.x === faced.x && n.y === faced.y);
@@ -3549,6 +3576,11 @@ const LittleApartmentGame: React.FC = () => {
       if (mineDownRef.current) {
         ctx.drawImage(atlas['t-ladder-down'], mineDownRef.current.x * TILE - cam.x, mineDownRef.current.y * TILE - cam.y);
       }
+      if (mineChestRef.current) {
+        const bob = mineChestOpenRef.current ? 0 : Math.round(Math.sin(t * 3) * 1); // closed chest breathes
+        ctx.drawImage(atlas[mineChestOpenRef.current ? 't-chest-open' : 't-chest'],
+          mineChestRef.current.x * TILE - cam.x, mineChestRef.current.y * TILE - cam.y + bob);
+      }
       for (const node of oreNodesRef.current) {
         const key = node.geode ? 'ore-geode' : `ore-${node.mineral.id}`;
         ctx.drawImage(atlas[key], node.x * TILE - cam.x, node.y * TILE - cam.y);
@@ -4110,6 +4142,25 @@ const LittleApartmentGame: React.FC = () => {
       ctx.fillRect(-pcx, -pcy, VIEW_PW, VIEW_PH);
       ctx.restore();
 
+      // Treasure vault: a warm gold wash over the gloom + a brighter additive glow
+      // pooling around the chest, so the floor reads as special. Reuses the cached
+      // glow() sprite (no per-frame gradient allocations).
+      if (mineVaultRef.current) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.05 + 0.012 * Math.sin(t * 2);   // faint floor-wide warm tint
+        ctx.fillStyle = '#ffc24a';
+        ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
+        const vc = mineChestRef.current;
+        if (vc) {
+          const gx = vc.x * TILE - cam.x + 8, gy = vc.y * TILE - cam.y + 8;
+          ctx.globalAlpha = 0.34 + 0.10 * Math.sin(t * 2.4); // pool of gold on the chest
+          ctx.drawImage(glow('255,200,90'), gx - 40, gy - 40, 80, 80);
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
       // Mine HUD: depth, the day's challenge, and your streak — top-left, above the dark.
       const sv1 = saveRef.current;
       const ch = mineChallengeFor(sv1);
@@ -4124,6 +4175,20 @@ const LittleApartmentGame: React.FC = () => {
       line(ch.name, 19, ch.color);
       if (sv1.mineStreak > 1) line(`Streak ×${sv1.mineStreak}`, 28, '#9ad0c0');
       ctx.restore();
+
+      // Treasure-vault banner — centered, gold, gently pulsing so it reads as special.
+      if (mineVaultRef.current) {
+        ctx.save();
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        const bx = VIEW_PW / 2, by = 12;
+        const pulse = 0.8 + 0.2 * Math.sin(t * 3);
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.strokeText('✦ TREASURE VAULT ✦', bx, by);
+        ctx.globalAlpha = pulse; ctx.fillStyle = '#ffd24a';
+        ctx.fillText('✦ TREASURE VAULT ✦', bx, by);
+        ctx.restore();
+      }
 
       // Depth toast — a brief banner when you drop a floor.
       if (depthToastRef.current) {
@@ -4179,8 +4244,10 @@ const LittleApartmentGame: React.FC = () => {
       if (it?.id === 'paris-portal' && !saveRef.current.parisRevealed) label = npcT ? 'Talk' : undefined;
       if (scene.id === 'mines') {
         const d = mineDownRef.current;
+        const vc = mineChestRef.current;
         const node = oreNodesRef.current.find(n => n.x === faced.x && n.y === faced.y);
         if (d && ((faced.x === d.x && faced.y === d.y) || (feet.x === d.x && feet.y === d.y))) label = 'Descend deeper';
+        else if (vc && ((faced.x === vc.x && faced.y === vc.y) || (feet.x === vc.x && feet.y === vc.y))) label = mineChestOpenRef.current ? 'Looted vault' : 'Open the vault';
         else if (node) label = node.geode ? 'Crack geode' : `Mine ${node.mineral.name}`;
         else {
           const cr = crawlersRef.current.find(c => {
@@ -4332,6 +4399,9 @@ const LittleApartmentGame: React.FC = () => {
       const layout = mineLayoutFor(s, 1);
       oreNodesRef.current = layout.ore;
       mineDownRef.current = layout.down;
+      mineVaultRef.current = !!layout.vault;
+      mineChestRef.current = layout.chest ?? null;
+      mineChestOpenRef.current = !!layout.vault && s.vaultsLooted.includes(`${s.day}:1`);
       crawlersRef.current = layout.crawlers.map(c => ({
         x: c.x * TILE, y: c.y * TILE - 4, hp: CRAWLER_HP[c.kind], stepT: Math.random(), hurtT: 0, dir: 'down' as Dir, kind: c.kind,
       }));
@@ -4558,6 +4628,15 @@ const LittleApartmentGame: React.FC = () => {
         day: saveRef.current.day,
         energy: saveRef.current.energy,
         timeMin: saveRef.current.timeMin,
+        // Mine runtime refs (not persisted) — let the harness navigate the seeded
+        // descend ladder / treasure-vault chest.
+        mine: sceneRef.current.id === 'mines' ? {
+          floor: mineFloorRef.current,
+          down: mineDownRef.current,
+          vault: mineVaultRef.current,
+          chest: mineChestRef.current,
+          chestOpen: mineChestOpenRef.current,
+        } : null,
         save: saveRef.current,
       }),
     };

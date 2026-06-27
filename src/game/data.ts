@@ -258,6 +258,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'broke', title: 'i dont have enough money for chicken nugget', desc: 'Dropped under ¥100. The nuggets remain a dream.', hint: 'Spend almost all of it.' },
   { id: 'regular', title: 'Everybody Knows Your Name', desc: 'Met everyone worth knowing in Kawamachi.', hint: 'A city is just strangers you have not met yet.' },
   { id: 'mid', title: "That's Mid", desc: 'Harvested a plain, normal-quality crop. It is fine. It is a crop.', hint: 'Not every harvest is silver or gold. Some are just... a vegetable.' },
+  { id: 'vault', title: 'X Marks the Floor', desc: 'Cracked open a treasure vault deep in the mines.', hint: 'Some floors down there glow gold. Bring it home.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------

@@ -1296,6 +1296,46 @@ const buildTiles = (atlas: Atlas) => {
     for (let y = 2; y < 16; y += 4) { ctx.fillStyle = '#a9805a'; ctx.fillRect(4, y, 8, 1); }
   });
 
+  // Treasure-vault chest (transparent bg, sits on the cave floor). Closed: a domed
+  // wooden chest with gold bands + a lock. Opened: lid flung back, gold spilling out.
+  atlas['t-chest'] = tile(ctx => {
+    ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fillRect(3, 14, 11, 2);          // contact shadow
+    // domed lid
+    ctx.fillStyle = '#7a5436'; ctx.fillRect(4, 3, 8, 1); ctx.fillRect(3, 4, 10, 4);
+    ctx.fillStyle = '#9a6c44'; ctx.fillRect(4, 3, 8, 1); ctx.fillRect(3, 4, 10, 1); // top light
+    // body
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 8, 10, 6);
+    ctx.fillStyle = '#7e552f'; ctx.fillRect(3, 8, 10, 1);                    // body top lit
+    ctx.fillStyle = '#54351f'; ctx.fillRect(3, 12, 10, 2);                   // body bottom shade
+    ctx.fillStyle = '#5a3a25'; ctx.fillRect(3, 10, 10, 1);                   // plank line
+    // gold rim across the lid seam
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 7, 10, 1);
+    // gold bands
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 3, 2, 11); ctx.fillRect(10, 3, 2, 11);
+    ctx.fillStyle = '#c79320'; ctx.fillRect(5, 4, 1, 10); ctx.fillRect(11, 4, 1, 10); // band shade
+    ctx.fillStyle = '#fff0b0'; ctx.fillRect(4, 3, 1, 1); ctx.fillRect(10, 3, 1, 1);   // band glints
+    // lock
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(7, 7, 2, 3);
+    ctx.fillStyle = '#7a5a10'; ctx.fillRect(7, 9, 2, 1);                     // keyhole
+  });
+  atlas['t-chest-open'] = tile(ctx => {
+    ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fillRect(3, 14, 11, 2);          // contact shadow
+    // lid flung back (top of tile, darker underside)
+    ctx.fillStyle = '#5a3a25'; ctx.fillRect(3, 1, 10, 3);
+    ctx.fillStyle = '#7a5436'; ctx.fillRect(3, 1, 10, 1);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 1, 1, 3); ctx.fillRect(10, 1, 1, 3); // band undersides
+    // body
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 7, 10, 7);
+    ctx.fillStyle = '#54351f'; ctx.fillRect(3, 12, 10, 2);
+    // dark interior + gold treasure spilling over the front
+    ctx.fillStyle = '#2a1c12'; ctx.fillRect(4, 6, 8, 3);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 6, 6, 2); ctx.fillRect(4, 7, 8, 1);
+    ctx.fillStyle = '#fff0b0'; ctx.fillRect(6, 6, 1, 1); ctx.fillRect(9, 6, 1, 1);   // glints
+    // gold bands on the body
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 9, 2, 5); ctx.fillRect(10, 9, 2, 5);
+    ctx.fillStyle = '#c79320'; ctx.fillRect(5, 9, 1, 5); ctx.fillRect(11, 9, 1, 5);
+  });
+
   // Pickaxe item icons — transparent bg (UI), wooden handle + metal head.
   const pick = (head: string, glint?: string) => tile(ctx => {
     ctx.fillStyle = '#8a6644'; for (let i = 0; i < 8; i++) ctx.fillRect(6 + i, 5 + i, 2, 2); // diagonal handle

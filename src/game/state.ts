@@ -73,6 +73,7 @@ export interface GameSave {
   donated: number;              // total yen offered at the shrine
   minedDay: number;             // day the mined-node list belongs to
   minedNodes: string[];         // "x,y" ore nodes already mined today
+  vaultsLooted: string[];       // "day:floor" treasure-vault chests already opened today
   canFish: boolean;             // learned to fish from Genji at the shore
   fishRod: number;              // fishing-rod tier (0 = Genji's starter; 1 = his upgraded rod)
   fishInv: string[];            // fish ids, unsold
@@ -244,6 +245,7 @@ export const newSave = (): GameSave => ({
   donated: 0,
   minedDay: 0,
   minedNodes: [],
+  vaultsLooted: [],
   canFish: false,
   fishRod: 0,
   fishInv: [],
@@ -854,7 +856,22 @@ export interface MineCrawler { x: number; y: number; kind: CrawlerKind }
 // a mining STREAK adds a small luck bonus. Mined-node keys are floor-scoped so the
 // same tile on different floors is tracked separately.
 
-export interface MineLayout { ore: OreNode[]; crawlers: MineCrawler[]; down: { x: number; y: number } }
+export interface MineLayout {
+  ore: OreNode[];
+  crawlers: MineCrawler[];
+  down: { x: number; y: number };
+  vault?: boolean;                       // rare jackpot floor (warm gold glow + banner)
+  chest?: { x: number; y: number };      // the vault's centerpiece treasure chest tile
+}
+
+// A treasure VAULT is a rare special floor on the descent: seeded purely by day +
+// floor (stable across reloads, independent of the ore/crawler rolls), only from
+// VAULT_MIN_FLOOR down, and uncommon enough to feel like a real event. It stocks
+// the floor richer and drops a centerpiece chest with a one-time haul.
+export const VAULT_MIN_FLOOR = 3;
+export const VAULT_CHANCE = 0.07;        // ~7% per qualifying floor
+export const isVaultFloor = (s: GameSave, floor: number): boolean =>
+  floor >= VAULT_MIN_FLOOR && mulberry32(s.day * 999983 + floor * 7919 + 31)() < VAULT_CHANCE;
 
 // Floor-scoped key for the mined-node set (so floor 1 and floor 2 don't collide).
 export const minedKey = (floor: number, x: number, y: number): string => `${floor}:${x},${y}`;
@@ -888,8 +905,9 @@ export const enterMineStreak = (s: GameSave): void => {
 };
 
 export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
-  if (s.minedDay !== s.day) { s.minedDay = s.day; s.minedNodes = []; }
+  if (s.minedDay !== s.day) { s.minedDay = s.day; s.minedNodes = []; s.vaultsLooted = []; }
   const ch = mineChallengeFor(s);
+  const vault = isVaultFloor(s, floor);
   const rand = mulberry32(s.day * 2654435761 + floor * 40503 + 97);
   const luck = shrineLuck(s);                          // 0 / 1 / 2 shrine tiers
   const grace = Math.min(0.35, s.donated / 120000);    // smooth nudge from total offered
@@ -910,6 +928,15 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   const down = tiles.find(t => Math.abs(t.x - MINE_ENTRY.x) + Math.abs(t.y - MINE_ENTRY.y) >= 7) ?? tiles[tiles.length - 1];
   const reserved = new Set<string>([`${down.x},${down.y}`]);
 
+  // Treasure vault: a centerpiece chest tile, away from the entry and never on the
+  // descend ladder. Reserved so no ore/crawler buries it.
+  let chest: { x: number; y: number } | undefined;
+  if (vault) {
+    chest = tiles.find(t => !reserved.has(`${t.x},${t.y}`)
+      && Math.abs(t.x - MINE_ENTRY.x) + Math.abs(t.y - MINE_ENTRY.y) >= 4) ?? tiles[Math.floor(tiles.length / 2)];
+    reserved.add(`${chest.x},${chest.y}`);
+  }
+
   // richness drives BOTH how many nodes and how rare they skew. Squared so lean
   // days are the norm; depth, the shrine, and your streak push toward the jackpot.
   let richness = rand() * rand();
@@ -918,7 +945,8 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre + mineSkill);
   if (ch.id === 'rich') richness = Math.min(1, richness + 0.2);
   if (ch.id === 'calm') richness = Math.min(1, richness + 0.05);
-  const oreCount = Math.round(3 + richness * 12 + depth);
+  if (vault) richness = Math.min(1, richness + 0.45);   // a vault floor runs rich
+  const oreCount = Math.round(3 + richness * 12 + depth + (vault ? 6 : 0));
 
   // Mineral pool is gated by floor — deep ore simply isn't here until you descend.
   const pool = MINERALS.filter(m => m.minFloor <= floor);
@@ -927,6 +955,7 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   // cheap coal & iron keep base weight so the shallows never go fully barren.
   let tilt = 1 + richness * 1.4 + luck * 0.8 + depth * 0.25;
   if (ch.id === 'deep') tilt += depth * 0.4;
+  if (vault) tilt += 2;                                  // vault veins skew to the good stuff
   const tiltedW = (m: Mineral) => {
     const base = (m.id === 'coal' || m.id === 'iron') ? m.weight : m.weight * tilt;
     return ch.id === 'crystal' && m.id === 'crystal' ? base * 4 : base;  // Crystal Rush
@@ -936,6 +965,7 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   // How often a node is a sealed geode instead of plain ore.
   let geodeChance = 0.05 + depth * 0.012;
   if (ch.id === 'geode') geodeChance += 0.18;
+  if (vault) geodeChance += 0.12;
 
   const ore: OreNode[] = [];
   const used = new Set<string>(reserved);   // the descend ladder tile stays clear
@@ -979,7 +1009,50 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
     crawlers.push({ x: t.x, y: t.y, kind });
   }
 
-  return { ore: ore.filter(n => !s.minedNodes.includes(minedKey(floor, n.x, n.y))), crawlers, down };
+  // A vault always seals at least one geode in among the haul.
+  if (vault && ore.length > 0 && !ore.some(n => n.geode)) {
+    ore[0] = { x: ore[0].x, y: ore[0].y, mineral: pool[0], amount: 1, geode: true };
+  }
+
+  return {
+    ore: ore.filter(n => !s.minedNodes.includes(minedKey(floor, n.x, n.y))),
+    crawlers, down,
+    vault, chest,
+  };
+};
+
+// ---- treasure vault chest ----------------------------------------------------------
+// Open the centerpiece chest on a vault floor for a one-time, generous haul (cash +
+// ore + a geode, scaled by depth and honoring shrine luck / streak / lucky-day). One
+// open per day+floor (tracked in s.vaultsLooted); a second look returns null so the
+// caller can show "already looted" flavor.
+export interface VaultHaul { cash: number; crystals: number; opals: number; starstones: number; geodes: number }
+export const lootVault = (s: GameSave, floor: number): VaultHaul | null => {
+  const key = `${s.day}:${floor}`;
+  if (!s.vaultsLooted) s.vaultsLooted = [];
+  if (s.vaultsLooted.includes(key)) return null;
+  s.vaultsLooted.push(key);
+
+  const depth = floor - 1;
+  const luck = shrineLuck(s);                           // 0 / 1 / 2 shrine tiers
+  const streakBonus = Math.min(0.4, s.mineStreak * 0.04);
+  const lucky = luckyToday(s) ? 1 : 0;
+  const mult = 1 + luck * 0.15 + streakBonus + lucky * 0.25;
+
+  const cash = Math.round((2500 + depth * 500) * mult);
+  s.money += cash;
+
+  const add = (id: string, n: number) => { s.minerals[id] = (s.minerals[id] ?? 0) + n; };
+  const crystals = 3 + Math.floor(depth / 2) + luck;
+  const opals = 1 + Math.floor(depth / 3) + lucky;
+  const starstones = floor >= 6 ? 1 : 0;
+  add('crystal', crystals);
+  add('opal', opals);
+  if (starstones) add('starstone', starstones);
+  const geodes = 1;
+  s.geodes += geodes;
+
+  return { cash, crystals, opals, starstones, geodes };
 };
 
 // ---- geodes ------------------------------------------------------------------------
