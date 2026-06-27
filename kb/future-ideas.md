@@ -5,8 +5,11 @@ Parking lot for features considered but not yet built. Each notes *why it fits*,
 as-built systems these would extend. (Built already, don't re-propose: Cooking,
 NPC friendship + gifting, wall/floor/rug decorating, home trophy shelf, ambient
 soundscapes, **skill levels** (fish/mine/farm), **home jukebox** (gated behind a
-DJ Tanuki purchase), **bigger apartment** upgrade, live **museum collectibles** —
-see games.md.)
+DJ Tanuki purchase), **bigger apartment** upgrade, live **museum collectibles**;
+**[2026-06-27]** endless game (no ending), **Fishopedia** collection log,
+**friendship-deepens** heart-tiered dialogue + all-met capstone, **weather variety**
+(fog + meteor-shower nights), **hidden secrets** (island sea cave / city rooftop /
+midnight stranger / shore stargazing), **random daily street events** — see games.md.)
 
 ## Strong candidates
 

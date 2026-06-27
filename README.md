@@ -1,6 +1,6 @@
 # Little Apartment, Big City
 
-> A cozy pixel life-sim. Fish the shore, work odd jobs, and furnish a tiny apartment one small thing at a time — one codebase running native on **Windows, macOS, Linux, iOS, and Android**.
+> A cozy pixel life-sim with no finish line. Fish the shore, work odd jobs, furnish a tiny apartment, befriend the neighbourhood, and turn up the city's hidden secrets at your own pace — one codebase running native on **Windows, macOS, Linux, iOS, and Android**.
 
 <p align="center">
   <img src="docs/shot-title.png" alt="Title screen — neon Tokyo skyline at night" width="640">
@@ -23,10 +23,13 @@ with keyboard, touch, or a game controller. Fully offline; saves live in the dev
 ## What you do
 - **Fish** the shore, the deep bay (from a skiff), and a tropical island — a catch-zone reel minigame, 8+ species, rarer the harder; the old fisherman Genji sells an upgraded rod.
 - **Earn yen** every way the town allows: fishing, **beach foraging** (washed-up finds you grab each morning), the **odd-jobs board** by home (a daily fetch errand), a **konbini shift minigame** ("Register Rush" — scan, bag, make change against the clock), the daily pawn stock, mining, and Jimmy's sketchy back-of-a-truck deals.
-- **Furnish the apartment** — buy furniture (or order it from **ZamaZonk** on your phone for next-morning delivery), then drag-and-drop it anywhere in the room from the phone's **Arrange** mode. A bed, fridge, AC and kotatsu only do anything once they're placed. Furnish all ten and you're home.
+- **Furnish the apartment** — buy furniture (or order it from **ZamaZonk** on your phone for next-morning delivery), then drag-and-drop it anywhere in the room from the phone's **Arrange** mode. A bed, fridge, AC and kotatsu only do anything once they're placed. Furnish all ten for a quiet little homecoming — but there's no "winning," just more city to find.
 - **Grow things** — do Granny Soto a favor (she loves a fresh fish) to unlock the **community greenhouse**, then plant, water, and harvest crops on the day/night cycle.
-- **Carry a smartphone** — bag, messages, a **Journal** of goals and next steps, the ZamaZonk store, trophies, and settings, all in a pocket phone (press **P**).
-- **Explore 18 hand-built scenes** — Kawamachi St., neon Downtown, Club Kaiju, the gachapon hall, the shrine, the greenhouse, the Kawamachi Museum, Kiwami Island, Paris, and the backrooms-and-mines under the konbini freezer.
+- **Make friends** — strike up a conversation with anyone in town and they're saved to your phone; bring them gifts they like to raise hearts, unlock perks, and hear them warm up to you. Meet everyone for a special send-off.
+- **Find what's hidden** — the real pull is discovery: a sea cave behind the island volcano, a rooftop up a downtown fire escape, a stranger who only walks at midnight, a message in a bottle, constellations over the shore, and rare **meteor-shower** nights you can wish on.
+- **Catch the day's happenings** — a different little **street event** turns up in the city most days (a ramen cart, a magician, a claw machine, a lost ferret), and the weather rolls between clear, rain, and fog.
+- **Carry a smartphone** — bag, messages, a **Journal**, **Friends**, a **Fishopedia** of everything you've caught, **Skills**, a jukebox, the ZamaZonk store, trophies, and settings, all in a pocket phone (press **P**).
+- **Explore 19 hand-built scenes** — Kawamachi St., neon Downtown, Club Kaiju, the gachapon hall, the shrine, the greenhouse, the Kawamachi Museum, a much bigger Kiwami Island (volcano, lagoon, hot spring), Paris, and the backrooms-and-mines under the konbini freezer.
 - **Donate to the museum** — Bingus Doofelsmurt's gallery has display cases waiting for objects of interest you find out in the world.
 - **Get around** — buy a kei car and an old skiff.
 - A living **day/night cycle**: energy, sleep, and a 2 AM collapse that carries you home anyway. **22 achievements**, dialogue portraits, a magical-girl wand for the crawlers in the mines, and per-scene music.

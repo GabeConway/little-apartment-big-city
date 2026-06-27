@@ -574,16 +574,6 @@ export const STORY_BEATS: StoryBeat[] = [
   },
 ];
 
-export const ENDING = {
-  title: 'Little Apartment, Big City',
-  lines: [
-    'The last piece slides into place, and you stand in the doorway and look at the whole tiny kingdom of it.',
-    'A bed with real sheets. A kitchen that hums. Warm light from the lamp instead of the bare bulb.',
-    'Out the window the city goes on forever, vending machines and train lines and ten million strangers.',
-    'But in here, nineteen square meters say, in a small clear voice: welcome home.',
-    'THE END — thanks for playing. Your apartment (and the fish) will still be here.',
-  ],
-};
 
 // ---- phone messages ---------------------------------------------------------
 // The smartphone's Messages app. Companies push promos; people (Grandma, the
