@@ -5204,6 +5204,8 @@ const LittleApartmentGame: React.FC = () => {
     gainSkill('farm', 16);
     sfxCatch(); persistSave(s); refreshHud();
     if (res.capstone) award('greenthumb');
+    if (res.quality === 0) award('mid'); // a plain, normal-quality crop — that's mid
+
     setOverlayBoth(null);
     const q = CROP_QUALITY[res.quality];
     const lines = keep

@@ -258,6 +258,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'broke', title: 'i dont have enough money for chicken nugget', desc: 'Dropped under ¥100. The nuggets remain a dream.', hint: 'Spend almost all of it.' },
   { id: 'regular', title: 'Everybody Knows Your Name', desc: 'Met everyone worth knowing in Kawamachi.', hint: 'A city is just strangers you have not met yet.' },
   { id: 'skyline', title: 'Rooftop, 3 A.M.', desc: 'Climbed the city fire escape and met the skyline.', hint: 'Some ladders go up, not down. One is bolted to a building downtown.' },
+  { id: 'mid', title: "That's Mid", desc: 'Harvested a plain, normal-quality crop. It is fine. It is a crop.', hint: 'Not every harvest is silver or gold. Some are just... a vegetable.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------
