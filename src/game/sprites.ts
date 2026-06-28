@@ -886,8 +886,11 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-counter'] = tile(ctx => {
     fill(ctx, '#6e4a2f');
-    ctx.fillStyle = '#8a6644'; ctx.fillRect(0, 0, 16, 5);
-    ctx.fillStyle = '#5a3c24'; ctx.fillRect(0, 5, 16, 1);
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(0, 0, 16, 5);                 // lit top surface
+    ctx.fillStyle = '#9a7450'; ctx.fillRect(0, 0, 16, 1);                 // top sheen (upper-left light)
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(0, 5, 16, 1);                 // top/front seam
+    ctx.fillStyle = '#5f4029'; ctx.fillRect(2, 8, 10, 1); ctx.fillRect(4, 11, 8, 1); // wood grain on front face
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(0, 15, 16, 1);               // base shadow
   });
   atlas['t-shelf'] = tile(ctx => {
     fill(ctx, '#7a6a58');
@@ -1026,9 +1029,12 @@ const buildTiles = (atlas: Atlas) => {
   // Garage
   atlas['t-garage-floor'] = tile(ctx => {
     fill(ctx, '#9a9aa0');
-    ctx.fillStyle = '#8a8a90'; ctx.fillRect(0, 7, 16, 1); ctx.fillRect(7, 0, 1, 16); // expansion joints
-    speckle(ctx, '#a6a6ac', 43, 6);
-    speckle(ctx, '#8e8e94', 47, 4);
+    ctx.fillStyle = '#a4a4aa'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 0, 1, 16); // upper-left warm-lit slab edge
+    ctx.fillStyle = '#8a8a90'; ctx.fillRect(0, 7, 16, 1); ctx.fillRect(7, 0, 1, 16); // slab expansion joints
+    ctx.fillStyle = '#7a7a82'; ctx.fillRect(0, 8, 16, 1); ctx.fillRect(8, 0, 1, 16); // joint shadow lip
+    ctx.fillStyle = '#90909a'; ctx.fillRect(2, 11, 4, 1); ctx.fillRect(10, 3, 3, 1); // tire scuffs
+    speckle(ctx, '#a6a6ac', 43, 7);  // light aggregate
+    speckle(ctx, '#8e8e94', 47, 5);  // dark aggregate
   });
   atlas['t-garage-stain'] = tile(ctx => {
     fill(ctx, '#9a9aa0');
@@ -1041,50 +1047,82 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-metal'] = tile(ctx => {
     fill(ctx, '#7a828e');
-    ctx.fillStyle = '#69707c';
-    for (let y = 1; y < 16; y += 3) ctx.fillRect(0, y, 16, 1);
-    ctx.fillStyle = '#8d95a1'; for (let y = 2; y < 16; y += 3) ctx.fillRect(0, y, 16, 1);
-    ctx.fillStyle = '#5a626e'; ctx.fillRect(0, 14, 16, 2);
+    ctx.fillStyle = '#838b97'; for (let y = 0; y < 16; y += 2) ctx.fillRect(0, y, 16, 1); // brushed striations (lit)
+    ctx.fillStyle = '#6e7682'; for (let y = 1; y < 16; y += 2) ctx.fillRect(0, y, 16, 1); // brushed striations (low)
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 0, 1, 15);       // panel top/left highlight
+    ctx.fillStyle = '#5a626e'; ctx.fillRect(0, 8, 16, 1); ctx.fillRect(8, 0, 1, 16);       // panel seams (cross)
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(0, 9, 16, 1);                                  // seam shadow
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(2, 2, 1, 1); ctx.fillRect(13, 2, 1, 1); ctx.fillRect(2, 12, 1, 1); ctx.fillRect(13, 12, 1, 1); // rivet heads
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(2, 3, 1, 1); ctx.fillRect(13, 3, 1, 1); ctx.fillRect(2, 13, 1, 1); ctx.fillRect(13, 13, 1, 1); // rivet shadows
   });
   atlas['t-toolbench'] = tile(ctx => {
     fill(ctx, '#5a4d42');
-    ctx.fillStyle = '#6e6055'; ctx.fillRect(0, 0, 16, 6);
-    ctx.fillStyle = '#c9a227'; ctx.fillRect(2, 1, 3, 2);
-    ctx.fillStyle = '#8a96a0'; ctx.fillRect(7, 1, 2, 4); ctx.fillRect(11, 2, 4, 1);
-    ctx.fillStyle = '#d05050'; ctx.fillRect(12, 4, 3, 1);
-    ctx.fillStyle = '#4a3f36'; ctx.fillRect(0, 6, 16, 1);
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(0, 0, 16, 7);                 // pegboard back panel
+    ctx.fillStyle = '#c4a366'; ctx.fillRect(0, 0, 16, 1);                 // pegboard lit top
+    ctx.fillStyle = '#8a6a3a'; for (let y = 2; y < 7; y += 2) for (let x = 1; x < 16; x += 2) ctx.fillRect(x, y, 1, 1); // peg holes
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(2, 1, 1, 5); ctx.fillRect(1, 1, 3, 1); // hung wrench
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(7, 2, 1, 4); ctx.fillStyle = '#9aa0a6'; ctx.fillRect(6, 1, 3, 2); // hammer
+    ctx.fillStyle = '#d05050'; ctx.fillRect(12, 1, 1, 2); ctx.fillStyle = '#c9a227'; ctx.fillRect(12, 3, 1, 3); // screwdriver
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(0, 7, 16, 2);                 // steel worktop
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(0, 7, 16, 1);                 // worktop sheen
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(0, 9, 16, 1);                 // worktop shadow lip
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(0, 10, 16, 6);                // wood body front face
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(0, 13, 16, 1);               // drawer seam
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(11, 11, 3, 1);               // drawer pull
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(0, 15, 16, 1);               // base shadow
   });
   atlas['t-lift'] = tile(ctx => {
     fill(ctx, '#9a9aa0');
-    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 0, 16, 2); ctx.fillRect(0, 14, 16, 2); // painted bay
-    ctx.fillStyle = '#6a6a72'; ctx.fillRect(1, 3, 14, 10);
-    ctx.fillStyle = '#7c7c84'; ctx.fillRect(2, 4, 12, 8);
-    ctx.fillStyle = '#5a5a62'; ctx.fillRect(7, 3, 2, 10); // hydraulic seam
+    for (let i = -1; i < 4; i++) {                                       // hazard accent border (top/bottom)
+      ctx.fillStyle = '#ffd24a'; ctx.fillRect(i * 6, 0, 3, 2); ctx.fillRect(i * 6 + 3, 14, 3, 2);
+      ctx.fillStyle = '#2c3038'; ctx.fillRect(i * 6 + 3, 0, 3, 2); ctx.fillRect(i * 6, 14, 3, 2);
+    }
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(1, 3, 14, 10);               // steel lift platform
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(1, 3, 14, 1); ctx.fillRect(1, 3, 1, 10); // lit top/left
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(1, 12, 14, 1); ctx.fillRect(14, 3, 1, 10); // shadow bottom/right
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(7, 3, 2, 9);                 // hydraulic cylinder
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(7, 3, 1, 9);                 // chrome highlight
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(9, 3, 1, 9);                 // cylinder shadow
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 5, 1, 1); ctx.fillRect(11, 5, 1, 1); ctx.fillRect(4, 10, 1, 1); ctx.fillRect(11, 10, 1, 1); // mount bolts
   });
   atlas['t-tires'] = tile(ctx => {
     fill(ctx, '#9a9aa0');
-    ctx.fillStyle = '#16181d'; ctx.fillRect(3, 8, 10, 7); ctx.fillRect(4, 3, 8, 6);
-    ctx.fillStyle = '#2c3038'; ctx.fillRect(5, 4, 6, 1); ctx.fillRect(5, 9, 6, 1) ; ctx.fillRect(4, 12, 8, 1);
-    ctx.fillStyle = '#3c424a'; ctx.fillRect(7, 5, 2, 2); ctx.fillRect(7, 10, 2, 2);
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(2, 8, 12, 7); ctx.fillRect(3, 7, 10, 1); // lower tire
+    ctx.fillStyle = '#16181d'; ctx.fillRect(2, 13, 12, 2);              // lower tire ground shadow
+    ctx.fillStyle = '#3c424a'; ctx.fillRect(3, 8, 10, 1);              // lower rubber sheen
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(3, 2, 10, 6); ctx.fillRect(4, 1, 8, 1); // upper tire
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(3, 6, 10, 2);              // upper tire shaded underside
+    ctx.fillStyle = '#4a525c'; ctx.fillRect(4, 2, 8, 1);              // upper rubber sheen (upper-left)
+    ctx.fillStyle = '#16181d'; ctx.fillRect(5, 3, 1, 2); ctx.fillRect(9, 3, 1, 2); ctx.fillRect(5, 13, 1, 1); ctx.fillRect(9, 13, 1, 1); // tread ticks
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(6, 3, 4, 3);              // steel rim hint (top tire)
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(6, 3, 3, 1);              // rim lit
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(7, 4, 2, 1);              // hub hole
   });
   // Dispatch board: a clipboard of delivery jobs bolted to the garage wall.
   atlas['t-dispatch'] = tile(ctx => {
-    fill(ctx, '#7a828e');                                                              // metal wall behind
-    ctx.fillStyle = '#69707c'; for (let y = 1; y < 16; y += 3) ctx.fillRect(0, y, 16, 1);
-    ctx.fillStyle = '#3a2f24'; ctx.fillRect(2, 1, 12, 14);                              // clipboard board
-    ctx.fillStyle = '#c9a227'; ctx.fillRect(2, 1, 12, 1); ctx.fillRect(2, 1, 1, 14);    // bright bevel (top/left)
-    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 4, 8, 9);                                // paper
-    ctx.fillStyle = '#9aa0a8'; ctx.fillRect(6, 1, 4, 2);                                // clip
-    ctx.fillStyle = '#5a626e'; ctx.fillRect(5, 6, 6, 1); ctx.fillRect(5, 8, 6, 1); ctx.fillRect(5, 10, 4, 1); // job lines
-    ctx.fillStyle = '#d05050'; ctx.fillRect(4, 4, 2, 1);                                // red "URGENT" tab
+    fill(ctx, '#7a828e');                                                              // brushed metal wall behind
+    ctx.fillStyle = '#838b97'; for (let y = 0; y < 16; y += 2) ctx.fillRect(0, y, 16, 1);
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(0, 9, 16, 1);                              // seam shadow
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(2, 1, 12, 14);                              // clipboard board
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 1, 12, 1); ctx.fillRect(2, 1, 1, 13);    // lit bevel (top/left)
+    ctx.fillStyle = '#2c2620'; ctx.fillRect(13, 2, 1, 13); ctx.fillRect(3, 14, 11, 1);  // shadow bevel (right/bottom)
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 3, 8, 10);                               // work-order paper
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(11, 3, 1, 10); ctx.fillRect(4, 12, 8, 1);   // paper shade (right/bottom)
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(6, 1, 4, 3);                                // metal clip
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(6, 1, 4, 1);                                // clip sheen
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(6, 3, 4, 1);                                // clip shadow
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(5, 6, 6, 1); ctx.fillRect(5, 8, 6, 1); ctx.fillRect(5, 10, 4, 1); // job lines
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(5, 4, 5, 1);                                // red URGENT stamp
   });
   atlas['t-hazard'] = tile(ctx => {
-    fill(ctx, '#9a9aa0');
-    for (let i = -2; i < 5; i++) {
-      ctx.fillStyle = '#ffd24a'; ctx.fillRect(i * 6 + 2, 12, 3, 4);
-      ctx.fillStyle = '#16181d'; ctx.fillRect(i * 6 + 5, 12, 3, 4);
+    fill(ctx, '#ffd24a');                                               // yellow base
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {        // diagonal hazard ramp
+      const m = (x + y) & 7;
+      const c = m === 0 ? '#ffe9a0' : m === 3 ? '#c9a227'
+        : m === 4 ? '#3a4250' : m === 7 ? '#16181d' : (m > 4 ? '#2c3038' : null);
+      if (c) { ctx.fillStyle = c; ctx.fillRect(x, y, 1, 1); }
     }
-    ctx.fillStyle = '#8a8a90'; ctx.fillRect(0, 11, 16, 1);
+    ctx.fillStyle = '#9a9aa0'; ctx.fillRect(4, 9, 3, 1); ctx.fillRect(11, 3, 2, 1); ctx.fillRect(8, 13, 2, 1); // worn-through paint
   });
 
   // Backrooms
@@ -1615,16 +1653,24 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-temizuya'] = tile(ctx => {                              // chozubachi: stone water basin w/ bamboo dipper
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 67, 5);
-    ctx.fillStyle = '#8a8d93'; ctx.fillRect(3, 6, 10, 8);         // stone basin
-    ctx.fillStyle = '#a8abb1'; ctx.fillRect(3, 6, 10, 1);         // sunlit rim
-    ctx.fillStyle = '#6e7178'; ctx.fillRect(3, 12, 10, 1);
-    ctx.fillStyle = '#5aa6c8'; ctx.fillRect(4, 7, 8, 4);         // water surface
-    ctx.fillStyle = '#9ad8ee'; ctx.fillRect(5, 7, 3, 1);        // glint
-    ctx.fillStyle = '#3a7e9e'; ctx.fillRect(4, 10, 8, 1);
-    ctx.fillStyle = '#9aa84a'; ctx.fillRect(2, 4, 9, 1);         // bamboo pole laid across
-    ctx.fillStyle = '#c9d27a'; ctx.fillRect(2, 4, 9, 1);
-    ctx.fillStyle = '#7a8a3a'; ctx.fillRect(9, 3, 3, 2);        // ladle cup
-    ctx.fillStyle = '#6e7178'; ctx.fillRect(4, 13, 8, 2);       // base
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 14, 9, 1);         // contact shadow on grass
+    ctx.fillStyle = '#8a8d93'; ctx.fillRect(3, 6, 10, 8);         // stone basin block
+    ctx.fillStyle = '#6e7178'; ctx.fillRect(3, 12, 10, 2);        // shadowed front face (fake-3D lip)
+    ctx.fillStyle = '#5d6470'; ctx.fillRect(12, 6, 1, 8);         // right-side shadow
+    ctx.fillStyle = '#a8abb1'; ctx.fillRect(3, 6, 10, 1); ctx.fillRect(3, 6, 1, 6); // sunlit rim (top + left)
+    // still water — 3-step blue ramp
+    ctx.fillStyle = '#50a0d0'; ctx.fillRect(4, 7, 8, 4);         // water surface (mid)
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(4, 10, 8, 1); ctx.fillRect(11, 7, 1, 4); // depth shadow (bottom/right)
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(4, 7, 5, 1); ctx.fillRect(4, 7, 1, 2);   // sky reflection (upper-left)
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(8, 9, 2, 1); ctx.fillStyle = '#3d6e9e'; ctx.fillRect(8, 10, 2, 1); // faint ripple
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(5, 7, 2, 1);         // bright surface glint
+    // bamboo dipper (hishaku) resting across the rim
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 4, 8, 1);         // handle (lit bamboo)
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(2, 5, 8, 1);         // handle underside
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(5, 4, 1, 1);         // bamboo node
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(9, 3, 4, 4);         // ladle cup
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(9, 3, 4, 1);         // cup rim (lit)
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(10, 4, 2, 2);        // cup hollow
   });
   atlas['t-shrine-wall'] = tile(ctx => {
     fill(ctx, '#b04a3a');                                          // vermillion timber
@@ -2146,15 +2192,15 @@ const buildTiles = (atlas: Atlas) => {
   });
   // Exterior facade (shrine-side entrance): a little glass house.
   // Glass wall of the community greenhouse. Seamless vertically (transom at the
-  // top edge) so stacked rows read as one tall glasshouse; aluminium frame,
-  // sun-glints, and lush planting visible through the panes.
+  // top edge) so stacked rows read as one tall glasshouse; aluminium frame and
+  // clean glazing — soft upper-left glare + faint reflection, no plants in the panes.
   atlas['t-gh-front'] = tile(ctx => {
-    fill(ctx, '#bfe3d0');                                                            // glass
-    ctx.fillStyle = '#d4efe2'; ctx.fillRect(1, 1, 6, 14); ctx.fillRect(9, 1, 6, 14); // two panes
-    ctx.fillStyle = '#eaf6ef'; ctx.fillRect(1, 1, 2, 5); ctx.fillRect(9, 1, 2, 5);   // sun-glints (upper-left)
-    ctx.fillStyle = '#4d7440'; ctx.fillRect(2, 9, 4, 5); ctx.fillRect(10, 8, 4, 6);  // foliage behind glass
-    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(3, 8, 2, 3); ctx.fillRect(11, 7, 2, 3);
-    ctx.fillStyle = '#d05050'; ctx.fillRect(4, 11, 1, 1); ctx.fillStyle = '#ffd24a'; ctx.fillRect(12, 9, 1, 1); // tomato + bloom
+    fill(ctx, '#bfe3d0');                                                            // glass (mid)
+    ctx.fillStyle = '#d4efe2'; ctx.fillRect(1, 1, 6, 14); ctx.fillRect(9, 1, 6, 14); // two panes (lit)
+    ctx.fillStyle = '#a6cdbe'; ctx.fillRect(1, 10, 6, 4); ctx.fillRect(9, 10, 6, 4); // lower pane shade (3-step ramp)
+    ctx.fillStyle = '#eaf6ef'; ctx.fillRect(1, 1, 2, 5); ctx.fillRect(9, 1, 2, 5);   // soft top-corner glare
+    ctx.fillStyle = '#f4faf6'; ctx.fillRect(1, 1, 1, 2); ctx.fillRect(9, 1, 1, 2);   // glare hotspot
+    ctx.fillStyle = '#cdeede'; ctx.fillRect(4, 3, 1, 6); ctx.fillRect(12, 3, 1, 6);  // faint diagonal reflection streak
     ctx.fillStyle = '#e8e0d0'; ctx.fillRect(0, 0, 1, 16); ctx.fillRect(7, 0, 2, 16); ctx.fillRect(15, 0, 1, 16); // mullions
     ctx.fillStyle = '#d8cdb0'; ctx.fillRect(0, 0, 16, 1);                            // top transom (seam line)
     ctx.fillStyle = '#cdbb8e'; ctx.fillRect(0, 14, 16, 2);                           // low cill / base

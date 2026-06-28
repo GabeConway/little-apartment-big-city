@@ -568,8 +568,9 @@ const garage: SceneDef = {
   ],
   interactables: [
     { id: 'shop-garage', x: 5, y: 5, w: 3, h: 1, label: 'Vehicles' },
-    // Delivery gig is taken in person now — talk to Kojima (the mechanic NPC).
-    // The dispatch clipboard tile (t-dispatch) stays as wall decor.
+    // Delivery gig can be taken either in person (talk to Kojima, the mechanic NPC)
+    // or off the dispatch clipboard on the wall (t-dispatch at col 10, row 1).
+    { id: 'job-dispatch', x: 10, y: 1, label: 'Delivery gig' },
   ],
   npcs: [{ id: 'mechanic', x: 6, y: 4, sprite: 'npc-mechanic', dir: 'down' }],
 };

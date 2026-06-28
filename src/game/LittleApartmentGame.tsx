@@ -113,6 +113,7 @@ const sfxMiss = () => blip([330, 220], 0.12);
 const sfxBite = () => blip([1175, 1175], 0.06, 0.07);
 const sfxLetter = () => blip([784, 988], 0.12, 0.04);
 const sfxType = (i: number) => blip([i % 2 ? 2050 : 1650], 0.012, 0.012); // faint click-clack as dialogue types
+const sfxBoop = () => blip([660], 0.05, 0.02); // soft short placement boop (Arrange drop / decor apply)
 // Mining chime — brighter, fuller arpeggio for the rarer (more valuable) ore.
 const sfxMine = (value: number) =>
   value >= 900 ? blip([784, 1175, 1568], 0.09, 0.06)
@@ -606,6 +607,7 @@ interface Hud {
   unread: number; // unread phone messages (badge on the 📱 button)
   event: DayEvent; // today's special day ('market' / 'lucky' / null) — HUD chip
   buff: { emoji: string; name: string; tag: string } | null; // active food buff today — HUD chip
+  weather: { emoji: string; label: string; title: string } | null; // today's weather / sky event — HUD chip
 }
 
 // Every named character has a voice: several line-sets, picked at random per
@@ -1000,7 +1002,7 @@ const LittleApartmentGame: React.FC = () => {
   // Mirrored into a ref so the keyboard/click advance path can read it synchronously.
   const [typed, setTyped] = useState(0);
   const typedRef = useRef(0);
-  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null });
+  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null, weather: null });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette() }); // live casino game state
   // Stop the slot reels / roulette wheel spinning if the player leaves the overlay (Esc, etc.).
@@ -1310,6 +1312,12 @@ const LittleApartmentGame: React.FC = () => {
       unread: unreadCount(s),
       event: dayEventFor(s),
       buff: s.buff && s.buff.day === s.day ? { emoji: BUFFS[s.buff.id].emoji, name: BUFFS[s.buff.id].name, tag: BUFFS[s.buff.id].tag } : null,
+      // Today's weather / sky event (priority matches state.ts: rain > fog > meteor).
+      weather:
+        isRainyDay(s) ? { emoji: '🌧', label: 'Rainy Day', title: 'Rainy day — the city glistens; some folk stay in' }
+        : foggyDay(s) ? { emoji: '🌫', label: 'Foggy Day', title: 'Foggy day — a soft grey mist hangs over town' }
+        : meteorNight(s) ? { emoji: '☄️', label: 'Meteor Night', title: 'Meteor shower tonight — step outside after dark to watch & make a wish' }
+        : null,
     });
   }, [award]);
 
@@ -1514,6 +1522,11 @@ const LittleApartmentGame: React.FC = () => {
       body: [todayEvent === 'market'
         ? "📣 MARKET DAY in Kawamachi! The pawn shop's stocked deep and even Jimmy on the corner is cutting prices. A good morning to go furniture-hunting. 🏷"
         : "📣 Word is today's a LUCKY DAY. The tide left extra on Sumikawa Shore and the mine veins are running rich. Press your luck while it holds. ✨"] });
+    // Meteor-shower herald: a clear night ahead. Tell the player in the morning so
+    // they head outside after dark — the shower draws over outdoor scenes at night,
+    // and you can make one wish per shower. Fresh id per day (pushMessage dedupes).
+    if (meteorNight(s)) pushMessage(s, { id: `meteor-${s.day}`, from: 'Kawamachi Bulletin 📣', avatar: '☄️', company: true,
+      body: ["☄️ CLEAR SKIES TONIGHT — a METEOR SHOWER is forecast over Kawamachi! Step outside after dark to watch the stars fall, and make a wish on one. 🌠"] });
     checkStory();
     checkMessages(); // new day can trigger date-gated texts (buzz if so)
     persistSave(s);
@@ -2631,6 +2644,7 @@ const LittleApartmentGame: React.FC = () => {
         break;
       case 'shop-pawn': setOverlayBoth({ type: 'shop', shop: 'pawn' }); break;
       case 'shop-garage': setOverlayBoth({ type: 'shop', shop: 'garage' }); break;
+      case 'job-dispatch': startDelivery(); break; // Kojima's wall clipboard also starts the delivery race
       case 'boat': setOverlayBoth({ type: 'shop', shop: 'boat' }); break;
       case 'boat-island': setOverlayBoth({ type: 'shop', shop: 'boat-island' }); break;
       case 'coconut': {
@@ -4219,37 +4233,50 @@ const LittleApartmentGame: React.FC = () => {
       const sM = saveRef.current;
       const nAmt = nightT(sM);
       if (scene.outdoor && nAmt > 0.15 && meteorNight(sM)) {
-        const SKY_H = VIEW_PH * 0.52; // upper sky band — meteors live here, fade as they cross it
+        const SKY_H = VIEW_PH * 0.6; // upper sky band — meteors live here, fade as they cross it
         ctx.save();
         ctx.lineCap = 'round';
-        const SLOTS = 4;
+        // Many more, faster, bigger streaks with glowing trails so a meteor night
+        // is unmistakable (still cozy — soft additive glow, no harsh strobing).
+        ctx.globalCompositeOperation = 'lighter';
+        const SLOTS = 10;
         for (let i = 0; i < SLOTS; i++) {
-          const period = 3.4 + i * 1.7;            // seconds between this slot's meteors
-          const TRAVEL = 0.9;                      // seconds a single streak is in flight
-          const flight = (t + i * 1.31) % period;  // time since this slot's last spawn
+          const period = 1.2 + i * 0.45;           // seconds between this slot's meteors (much more frequent)
+          const TRAVEL = 1.0;                      // seconds a single streak is in flight
+          const flight = (t + i * 0.73) % period;  // time since this slot's last spawn
           if (flight > TRAVEL) continue;           // dormant for the rest of the cycle
           const k = flight / TRAVEL;               // 0..1 progress of THIS streak
           const h = (i * 2654435761) >>> 0;        // cheap per-slot hash → start + slope
-          const sx = ((h % 1000) / 1000) * VIEW_PW * 0.7 + VIEW_PW * 0.12;
+          const sx = ((h % 1000) / 1000) * VIEW_PW * 0.8 + VIEW_PW * 0.06;
           const sy = (h >> 16) & 31;               // start near the top
-          const slopeX = 96 + ((h >> 10) & 63);    // px of travel (down-right)
-          const slopeY = 44 + ((h >> 6) & 31);
+          const slopeX = 120 + ((h >> 10) & 95);   // px of travel (down-right) — longer flights
+          const slopeY = 56 + ((h >> 6) & 47);
           const inv = 1 / Math.hypot(slopeX, slopeY);
           const hx = sx + k * slopeX, hy = sy + k * slopeY;        // streak head
           if (hy > SKY_H) continue;
           const fade = Math.sin(k * Math.PI);      // 0 → 1 → 0 over the flight
           const a = fade * nAmt;
           if (a <= 0.03) continue;
-          const LEN = 15;                          // tail length, pointing back along travel
+          const LEN = 30;                          // tail length (doubled), pointing back along travel
           const tx = hx - slopeX * inv * LEN, ty = hy - slopeY * inv * LEN;
           const mx = hx - slopeX * inv * LEN * 0.5, my = hy - slopeY * inv * LEN * 0.5;
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = `rgba(206, 224, 255, ${a * 0.45})`; // faint full tail
+          // soft glowing trail underlay (wide, dim) → tail → bright head → hot core
+          ctx.lineWidth = 3.5;
+          ctx.strokeStyle = `rgba(150, 188, 255, ${a * 0.3})`;  // wide glow halo around the trail
           ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
-          ctx.strokeStyle = `rgba(235, 244, 255, ${a * 0.9})`;  // brighter head half
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = `rgba(206, 224, 255, ${a * 0.7})`;  // full tail
+          ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+          ctx.strokeStyle = `rgba(240, 248, 255, ${a})`;        // brighter head half
           ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(hx, hy); ctx.stroke();
+          // glowing head: a soft radial bloom + a hot core pixel
+          const rg = ctx.createRadialGradient(hx, hy, 0, hx, hy, 5);
+          rg.addColorStop(0, `rgba(255, 255, 255, ${a})`);
+          rg.addColorStop(1, 'rgba(180, 210, 255, 0)');
+          ctx.fillStyle = rg;
+          ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = `rgba(255, 255, 255, ${a})`;          // hot leading pixel
-          ctx.fillRect(hx - 0.6, hy - 0.6, 1.6, 1.6);
+          ctx.fillRect(hx - 1, hy - 1, 2.4, 2.4);
         }
         ctx.restore();
       }
@@ -5151,7 +5178,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const bj = casinoRef.current.bj;
     if (bj.phase !== 'bet' || bj.bet <= 0 || s.money < bj.bet) return;
-    s.money -= bj.bet; sfxBuy();
+    s.money -= bj.bet; // no deal sfx — the win/coin sound is the only blackjack cue now
     bj.deck = makeDeck();
     bj.player = [bj.deck.pop()!, bj.deck.pop()!];
     bj.dealer = [bj.deck.pop()!, bj.deck.pop()!];
@@ -5979,7 +6006,7 @@ const LittleApartmentGame: React.FC = () => {
     const h = heldRef.current;
     if (!h?.rug) return;
     placeRug(saveRef.current, h.id, tx, ty);
-    sfxBuy(); refreshHud();
+    sfxBoop(); refreshHud();
     heldRef.current = null; ghostRef.current = null;
     setArrangeTick(t => t + 1);
   };
@@ -5992,7 +6019,7 @@ const LittleApartmentGame: React.FC = () => {
     blip([520, 392], 0.05);
   };
   // Decor shop / style panel (inside Arrange): apply an owned wall/floor, or buy.
-  const doApplyDecor = (id: string) => { if (applyDecor(saveRef.current, id)) { sfxCoin(); setArrangeTick(t => t + 1); } };
+  const doApplyDecor = (id: string) => { if (applyDecor(saveRef.current, id)) { sfxBoop(); setArrangeTick(t => t + 1); } };
   const doBuyDecor = (id: string) => {
     if (buyDecor(saveRef.current, id)) {
       sfxBuy();
@@ -6015,7 +6042,7 @@ const LittleApartmentGame: React.FC = () => {
     if (!h) return;
     const s = saveRef.current;
     placeItem(s, h.id, tx, ty);
-    sfxBuy();
+    sfxBoop();
     computeSolids();
     persistSave(s);
     refreshHud();
@@ -7387,6 +7414,16 @@ const LittleApartmentGame: React.FC = () => {
               <button className={btnCls} disabled={s.money < 500} onClick={towCar}>TOW ¥500</button>
             </div>
           )}
+          {/* Special Delivery gig — a third entry point alongside Kojima (NPC) and the
+              dispatch poster. startDelivery handles its own overlay (dialog → drive);
+              close the shop first so the hand-off reads clean, like the konbini shift. */}
+          <p className="text-base text-[#ffd24a]/80 mt-3">WORK</p>
+          <div className="flex items-center gap-3 py-1.5">
+            <p className="flex-grow text-lg opacity-80">One dirt-rally delivery run per day. Faster &amp; cleaner pays more.</p>
+            <button className={btnCls} disabled={deliveryDoneToday(s)} onClick={() => { close(); startDelivery(); }}>
+              {deliveryDoneToday(s) ? 'DELIVERED TODAY ✓' : '🚚 SPECIAL DELIVERY'}
+            </button>
+          </div>
         </ShopFrame>
       );
     }
@@ -7771,6 +7808,17 @@ const LittleApartmentGame: React.FC = () => {
             >
               <span className="text-base">{hud.buff.emoji}</span>
               <span className="hidden sm:inline text-[10px] font-pixel text-[#ffd2a0] whitespace-nowrap">{hud.buff.name} · {hud.buff.tag}</span>
+            </span>
+          )}
+
+          {/* weather / sky-event chip — rainy / foggy / meteor night */}
+          {hud.weather && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#6f9ad0]/20 leading-none"
+              title={hud.weather.title}
+            >
+              <span className="text-base">{hud.weather.emoji}</span>
+              <span className="hidden sm:inline text-[10px] font-pixel text-[#bfe0ff] whitespace-nowrap">{hud.weather.label}</span>
             </span>
           )}
 
