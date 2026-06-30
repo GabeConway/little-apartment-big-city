@@ -852,7 +852,7 @@ const buildTiles = (atlas: Atlas) => {
   // Authored neutral-daytime (engine tints night; a soft screen glow is added in
   // the city draw block). Replaces the old odd-jobs corkboard.
   atlas['t-terminal'] = tile(ctx => {
-    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 51, 6); speckle(ctx, '#4d7440', 23, 4); // grass base (no black edges)
+    // transparent base — the kiosk now lives indoors (konbini), so it sits on whatever floor it's placed over (no baked-in grass)
     // brushed-metal pedestal post + foot (light from upper-left)
     ctx.fillStyle = '#6a7079'; ctx.fillRect(6, 11, 4, 4);
     ctx.fillStyle = '#878d96'; ctx.fillRect(6, 11, 1, 4);                              // post highlight
@@ -1751,6 +1751,30 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 6, 6, 1);    // smile arrow
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 7, 1, 1); ctx.fillRect(12, 7, 1, 1); // sparkle
   });
+  atlas['t-island-sign'] = tile(ctx => {                    // weathered island signpost planted in sand/grass (transparent bg)
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(5, 15, 7, 1);   // ground contact shadow (reads as planted)
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(7, 9, 2, 7);    // post
+    ctx.fillStyle = '#a07a4f'; ctx.fillRect(7, 9, 1, 7);    // post lit edge (upper-left)
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(8, 9, 1, 7);    // post shadow edge (rounds the pole)
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 12, 2, 1);   // grain node
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(1, 0, 14, 11);  // dark wood silhouette / outline + front face
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(2, 1, 12, 9);   // plank frame face
+    ctx.fillStyle = '#c79a6e'; ctx.fillRect(2, 1, 12, 1);   // frame lit top edge
+    ctx.fillStyle = '#a07a4f'; ctx.fillRect(2, 1, 1, 8);    // frame lit left edge
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(13, 1, 1, 8); ctx.fillRect(2, 9, 12, 1); // frame shade (right + lower)
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(3, 2, 10, 6);   // sun-bleached recessed sign panel
+    ctx.fillStyle = '#a8916a'; ctx.fillRect(3, 2, 10, 1); ctx.fillRect(3, 2, 1, 6); // recess shadow (upper-left walls)
+    ctx.fillStyle = '#d8c48a'; ctx.fillRect(4, 7, 9, 1);    // recess catch-light (lower wall)
+    ctx.fillStyle = '#bda979'; ctx.fillRect(8, 4, 4, 1); ctx.fillRect(5, 6, 2, 1); // weathered grain streaks
+    ctx.fillStyle = '#5a3c24';                              // hand-painted lettering — two short lines (reads as writing)
+    ctx.fillRect(4, 3, 2, 1); ctx.fillRect(7, 3, 1, 1); ctx.fillRect(9, 3, 2, 1);
+    ctx.fillRect(4, 5, 1, 1); ctx.fillRect(6, 5, 2, 1); ctx.fillRect(9, 5, 1, 1); ctx.fillRect(11, 5, 1, 1);
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(10, 13, 1, 2); ctx.fillRect(11, 14, 2, 1); // tropical bloom at the base
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(11, 13, 1, 1);
+    ctx.fillStyle = '#d05050'; ctx.fillRect(12, 12, 2, 2);
+    ctx.fillStyle = '#e07a6a'; ctx.fillRect(12, 12, 1, 1);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(13, 13, 1, 1);  // flower center
+  });
   atlas['t-tiki'] = tile(ctx => {
     fill(ctx, '#5e8a4f');
     ctx.fillStyle = '#b5651d'; ctx.fillRect(0, 0, 16, 4);                            // thatch roof
@@ -1942,6 +1966,95 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#7e6e54'; ctx.fillRect(4, 0, 1, 16); ctx.fillRect(11, 0, 1, 16); // board joins
     ctx.fillStyle = '#5a4d3a'; ctx.fillRect(2, 3, 1, 1); ctx.fillRect(9, 11, 1, 1);   // nail heads
     speckle(ctx, '#8c7a5e', 67, 5);                                                    // grain
+  });
+
+  // ---- Matsuri festival decor (transparent props; overlay any ground) --------
+  atlas['t-fest-lanterns'] = tile(ctx => {                   // chōchin bunting: string of red/white paper lanterns, tiles along a top edge
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(0, 0, 16, 1);    // hanging cord (full width → tiles seamlessly)
+    const ramps: [string, string, string][] = [['#c0392b', '#d75a4a', '#9e3a3a'], ['#e0d8c4', '#f0ebdd', '#cdbb8e']]; // red / white
+    for (let i = 0; i < 4; i++) {                            // 4 lanterns alternating r,w,r,w → clean seam tiling
+      const bx = i * 4, [body, lit, shade] = ramps[i % 2];
+      ctx.fillStyle = '#2c3038'; ctx.fillRect(bx + 1, 1, 1, 1);   // top cap knot on the cord
+      ctx.fillStyle = body; ctx.fillRect(bx, 3, 3, 4); ctx.fillRect(bx + 1, 2, 1, 1); ctx.fillRect(bx + 1, 7, 1, 1); // rounded body
+      ctx.fillStyle = lit; ctx.fillRect(bx, 3, 1, 3);            // lit left
+      ctx.fillStyle = shade; ctx.fillRect(bx + 2, 4, 1, 3);      // shaded right
+      ctx.fillStyle = '#16121d'; ctx.fillRect(bx, 5, 3, 1);      // paper rib ring
+      ctx.fillStyle = '#16121d'; ctx.fillRect(bx + 1, 8, 1, 1);  // bottom tassel cap
+    }
+  });
+  atlas['t-fest-yatai'] = tile(ctx => {                      // matsuri game/food stall: striped awning, counter, warm bulbs
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(1, 4, 1, 10); ctx.fillRect(14, 4, 1, 10); // posts
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(1, 4, 1, 1); ctx.fillRect(14, 4, 1, 1);   // post tops lit
+    ctx.fillStyle = '#d05050'; ctx.fillRect(1, 0, 14, 4);                             // red awning
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(3, 0, 2, 4); ctx.fillRect(7, 0, 2, 4); ctx.fillRect(11, 0, 2, 4); // white stripes
+    ctx.fillStyle = '#e8746a'; ctx.fillRect(1, 0, 14, 1);                             // sunlit awning crest
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 4, 2, 1); ctx.fillRect(6, 4, 2, 1); ctx.fillRect(10, 4, 2, 1); // scalloped fringe
+    ctx.fillStyle = 'rgba(255,210,120,0.25)'; ctx.fillRect(4, 5, 8, 2);               // warm bulb glow
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 6, 1, 1); ctx.fillRect(8, 6, 1, 1); ctx.fillRect(11, 6, 1, 1); // hanging bulbs
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(8, 6, 1, 1);                              // brightest bulb
+    ctx.fillStyle = '#a9805a'; ctx.fillRect(2, 8, 12, 6);                             // counter body
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 8, 12, 1);                             // lit counter top
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 13, 12, 1); ctx.fillRect(7, 9, 1, 5);  // front-face shadow + plank seam
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(4, 9, 1, 1); ctx.fillRect(11, 9, 1, 1);   // candy-apple sticks
+    ctx.fillStyle = '#d05050'; ctx.fillRect(3, 10, 2, 2); ctx.fillRect(10, 10, 2, 2); // candy apples
+    ctx.fillStyle = '#e8746a'; ctx.fillRect(3, 10, 1, 1); ctx.fillRect(10, 10, 1, 1); // candy shine
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(6, 10, 3, 1);                             // grilled corn / skewers
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(7, 11, 1, 1);                             // garnish
+  });
+  atlas['t-fest-banner'] = tile(ctx => {                     // nobori: tall festival banner on a pole, kanji 祭, cloth caught in the breeze
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 0, 2, 16);                             // pole
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(2, 0, 1, 16);                             // pole lit edge
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(3, 0, 1, 16);                             // pole shade edge
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 0, 1, 1);                              // brass finial glint
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(4, 1, 4, 1);                              // crossbar holding the cloth out
+    ctx.fillStyle = '#e0d8c4'; ctx.fillRect(4, 1, 8, 13);                             // cloth body
+    ctx.fillStyle = '#e0d8c4'; ctx.fillRect(12, 2, 1, 3); ctx.fillRect(12, 9, 1, 3);  // breeze bulges (wavy fly edge)
+    ctx.fillStyle = '#f0ebdd'; ctx.fillRect(4, 1, 1, 13);                             // lit hoist edge
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(11, 2, 1, 11);                            // shaded fly edge (cloth curve)
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(4, 1, 8, 2); ctx.fillRect(12, 2, 1, 1);   // red header band
+    ctx.fillStyle = '#e8746a'; ctx.fillRect(4, 1, 8, 1);                              // header lit
+    ctx.fillStyle = '#2c3038';                                                        // kanji 祭 (matsuri) — bold strokes
+    ctx.fillRect(6, 4, 5, 1); ctx.fillRect(8, 3, 1, 2);                               // top cross
+    ctx.fillRect(6, 5, 1, 1); ctx.fillRect(10, 5, 1, 1);                              // shoulders
+    ctx.fillRect(5, 7, 7, 1);                                                         // middle bar
+    ctx.fillRect(8, 8, 1, 4); ctx.fillRect(6, 9, 5, 1);                               // stem + lower bar
+    ctx.fillRect(6, 11, 1, 1); ctx.fillRect(10, 11, 1, 1);                            // splayed feet
+  });
+  atlas['t-fest-tanabata'] = tile(ctx => {                   // Tanabata bamboo hung with colorful tanzaku wish strips + a streamer
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(7, 0, 2, 16);                             // bamboo stalk
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(7, 0, 1, 16);                             // lit edge
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(8, 0, 1, 16);                             // shade edge
+    ctx.fillStyle = '#3e5c33'; ctx.fillRect(7, 4, 2, 1); ctx.fillRect(7, 10, 2, 1);   // nodes
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(3, 1, 3, 1); ctx.fillRect(2, 2, 2, 1); ctx.fillRect(10, 2, 3, 1); ctx.fillRect(12, 3, 2, 1); // leaves
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(3, 1, 1, 1); ctx.fillRect(10, 2, 1, 1);   // leaf highlights
+    const strips: [number, number, string, string][] = [[3, 6, '#e857a8', '#f48fc6'], [5, 9, '#50a0d0', '#7cc4e8'], [11, 6, '#ffd24a', '#ffe9a0'], [12, 9, '#50c878', '#7ce8a0'], [4, 12, '#d05050', '#e8746a']];
+    for (const [x, y, body, lit] of strips) {                // tanzaku paper strips
+      ctx.fillStyle = '#2c3038'; ctx.fillRect(x, y - 1, 1, 1); // tie thread
+      ctx.fillStyle = body; ctx.fillRect(x, y, 2, 4);
+      ctx.fillStyle = lit; ctx.fillRect(x, y, 1, 2);          // lit edge
+    }
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 12, 1, 1); ctx.fillRect(10, 13, 1, 1); ctx.fillRect(9, 14, 1, 1); ctx.fillRect(10, 15, 1, 1); // wavy gold streamer
+  });
+  atlas['t-fest-goldfish'] = tile(ctx => {                   // kingyo-sukui: tub of water with goldfish + a paper scoop (poi) on the rim
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(2, 4, 12, 11);                            // tub rim / front face (shadowed)
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 4, 12, 2);                             // rim top band
+    ctx.fillStyle = '#e8746a'; ctx.fillRect(2, 4, 12, 1);                             // rim lit crest
+    ctx.clearRect(2, 4, 1, 1); ctx.clearRect(13, 4, 1, 1); ctx.clearRect(2, 14, 1, 1); ctx.clearRect(13, 14, 1, 1); // round the corners (oval tub)
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(3, 6, 10, 7);                             // deep water
+    ctx.fillStyle = '#50a0d0'; ctx.fillRect(3, 6, 10, 5);                             // lit water surface
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(4, 6, 8, 1); ctx.fillRect(4, 8, 2, 1); ctx.fillRect(8, 10, 2, 1); // ripple highlights
+    const fish: [number, number][] = [[5, 8], [9, 7], [6, 11]];
+    for (const [fx, fy] of fish) {                           // goldfish
+      ctx.fillStyle = '#e0702a'; ctx.fillRect(fx, fy, 3, 2);
+      ctx.fillStyle = '#f0a050'; ctx.fillRect(fx, fy, 2, 1);                          // lit back
+      ctx.fillStyle = '#c0392b'; ctx.fillRect(fx + 3, fy, 1, 2);                      // tail fin
+      ctx.fillStyle = '#2c3038'; ctx.fillRect(fx, fy, 1, 1);                          // eye
+    }
+    ctx.fillStyle = '#a9805a'; ctx.fillRect(11, 1, 1, 4);                             // poi handle
+    ctx.fillStyle = '#c79a6e'; ctx.fillRect(11, 1, 1, 1);                             // handle lit tip
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(12, 0, 3, 3);                             // paper scoop hoop
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(12, 2, 3, 1);                             // hoop shade
+    ctx.fillStyle = '#f0ebdd'; ctx.fillRect(12, 0, 1, 1);                             // hoop highlight
   });
 
   // ---- Paris (the secret arc) ------------------------------------------------
@@ -2604,6 +2717,113 @@ const buildDecorFood = (atlas: Atlas) => {
     ctx.fillStyle = '#a9805a'; ctx.fillRect(8, 10, 5, 1);
     ctx.fillStyle = '#5a3c24'; ctx.fillRect(10, 10, 1, 2);                             // char mark
   });
+  atlas['i-dish-ramen'] = tile(ctx => {
+    // shoyu ramen: cream bowl, amber broth, nori, egg half, chashu, scallion, steam.
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(6, 0, 1, 3); ctx.fillRect(10, 1, 1, 2);   // steam
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(8, 1, 1, 2);
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(3, 2, 2, 5);                              // nori sheet (standing)
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(3, 2, 1, 1);                              // nori sheen
+    ctx.fillStyle = '#9e6a4a'; ctx.fillRect(3, 6, 10, 2);                             // amber broth surface
+    ctx.fillStyle = '#b07a54'; ctx.fillRect(3, 6, 10, 1);                             // broth lit
+    ctx.fillStyle = '#a9805a'; ctx.fillRect(5, 5, 3, 2);                              // chashu slice
+    ctx.fillStyle = '#caa27c'; ctx.fillRect(5, 5, 1, 1);
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(6, 6, 1, 1);                              // chashu marbling
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(9, 5, 3, 2);                              // egg half (ajitama)
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(10, 5, 1, 1);                             // yolk
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(8, 5, 1, 1); ctx.fillRect(4, 7, 1, 1);    // scallion
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 7, 1, 1); ctx.fillRect(8, 7, 1, 1);    // noodles peeking
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 8, 12, 5); ctx.fillRect(3, 13, 10, 1); // bowl
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(2, 8, 12, 1);                             // bowl lit rim
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 11, 12, 2);                            // bowl shadow
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 9, 12, 1);                             // red rim band
+  });
+  atlas['i-dish-curry'] = tile(ctx => {
+    // katsu curry: plate, white rice (left), brown curry + sliced golden cutlet (right).
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(1, 13, 14, 1);                            // plate rim shadow
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(1, 5, 14, 8); ctx.fillRect(2, 4, 12, 1);  // plate
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(2, 5, 12, 1);                             // plate lit
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(1, 12, 14, 1);
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(2, 6, 5, 6); ctx.fillRect(3, 5, 3, 1);    // rice mound (left)
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 10, 5, 2);                             // rice shade
+    ctx.fillStyle = '#7a4a28'; ctx.fillRect(7, 6, 6, 6); ctx.fillRect(7, 5, 5, 1);    // curry pool (right)
+    ctx.fillStyle = '#9e6a4a'; ctx.fillRect(7, 6, 6, 1);                              // curry lit
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 11, 6, 1);                             // curry shadow
+    ctx.fillStyle = '#e0843a'; ctx.fillRect(12, 10, 1, 1);                            // carrot chunk
+    ctx.fillStyle = '#c98a3a'; ctx.fillRect(7, 6, 5, 4);                              // katsu crumb coat
+    ctx.fillStyle = '#e8b85c'; ctx.fillRect(7, 6, 5, 1);                              // crumb lit
+    ctx.fillStyle = '#d9a24a'; ctx.fillRect(7, 7, 5, 1);
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(8, 6, 1, 4); ctx.fillRect(10, 6, 1, 4);   // cut lines (slices)
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(7, 9, 1, 1);                              // pork core peek
+  });
+  atlas['i-dish-tempura'] = tile(ctx => {
+    // golden tempura (shrimp + veg) with a little dipping dish of tentsuyu.
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(1, 12, 10, 1);                            // plate rim shadow
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(1, 10, 10, 2); ctx.fillRect(2, 9, 8, 1);  // plate
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(1, 10, 5, 1);                             // plate lit
+    ctx.fillStyle = '#d05050'; ctx.fillRect(5, 2, 2, 2);                              // shrimp tail
+    ctx.fillStyle = '#e87a6a'; ctx.fillRect(5, 2, 1, 1);
+    ctx.fillStyle = '#d9a24a'; ctx.fillRect(2, 4, 4, 6);                              // shrimp batter
+    ctx.fillStyle = '#e8b85c'; ctx.fillRect(2, 4, 4, 1); ctx.fillRect(2, 4, 1, 4);    // batter lit
+    ctx.fillStyle = '#c98a3a'; ctx.fillRect(2, 8, 4, 2); ctx.fillRect(5, 6, 1, 3);    // batter shade
+    ctx.fillStyle = '#d9a24a'; ctx.fillRect(6, 5, 4, 5);                              // veg tempura piece
+    ctx.fillStyle = '#e8b85c'; ctx.fillRect(6, 5, 4, 1);
+    ctx.fillStyle = '#c98a3a'; ctx.fillRect(6, 9, 4, 1);
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(7, 5, 1, 1);                              // veg green peek
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(11, 10, 5, 3); ctx.fillRect(12, 13, 3, 1);// dipping dish
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(11, 10, 5, 1);                            // dish lit rim
+    ctx.fillStyle = '#7a4a28'; ctx.fillRect(12, 11, 3, 1);                            // tentsuyu sauce
+  });
+  atlas['i-dish-okonomiyaki'] = tile(ctx => {
+    // okonomiyaki: round savory pancake, sauce drizzle, mayo zigzag, bonito + aonori.
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 12, 12, 1);                            // plate rim shadow
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 11, 12, 1);                            // plate
+    ctx.fillStyle = '#a9805a';                                                        // round pancake
+    ctx.fillRect(5, 3, 6, 1); ctx.fillRect(3, 4, 10, 1); ctx.fillRect(3, 5, 10, 1);
+    ctx.fillRect(2, 6, 12, 1); ctx.fillRect(2, 7, 12, 1); ctx.fillRect(2, 8, 12, 1);
+    ctx.fillRect(3, 9, 10, 1); ctx.fillRect(4, 10, 8, 1);
+    ctx.fillStyle = '#caa27c'; ctx.fillRect(5, 3, 5, 1); ctx.fillRect(3, 4, 3, 1);    // pancake lit
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(4, 9, 8, 1); ctx.fillRect(4, 10, 8, 1);   // pancake shade
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(4, 5, 7, 1); ctx.fillRect(5, 7, 6, 1); ctx.fillRect(6, 9, 4, 1); // sauce
+    ctx.fillStyle = '#f4efe2';                                                        // mayo zigzag
+    ctx.fillRect(4, 6, 1, 1); ctx.fillRect(6, 5, 1, 1); ctx.fillRect(8, 6, 1, 1); ctx.fillRect(10, 6, 1, 1); ctx.fillRect(7, 8, 1, 1);
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(6, 4, 2, 1); ctx.fillRect(9, 7, 2, 1);    // bonito flakes
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(5, 8, 1, 1); ctx.fillRect(10, 5, 1, 1);   // aonori flecks
+  });
+  atlas['i-dish-mochi'] = tile(ctx => {
+    // pastel mochi on a small plate — soft pink, white, green rounds.
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 12, 12, 1);                            // plate rim shadow
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 10, 12, 2); ctx.fillRect(1, 11, 14, 1);// plate
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(2, 10, 6, 1);                             // plate lit
+    ctx.fillStyle = '#f6b4dc'; ctx.fillRect(2, 6, 2, 1); ctx.fillRect(1, 7, 4, 3); ctx.fillRect(2, 10, 2, 1); // pink mochi
+    ctx.fillStyle = '#a86b8a'; ctx.fillRect(2, 9, 3, 1);                              // pink shade
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(7, 6, 2, 1); ctx.fillRect(6, 7, 4, 3); ctx.fillRect(7, 10, 2, 1); // white mochi
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(7, 9, 3, 1);                              // white shade
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(12, 6, 2, 1); ctx.fillRect(11, 7, 4, 3); ctx.fillRect(12, 10, 2, 1); // green mochi
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(12, 9, 3, 1);                             // green shade
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(11, 7, 1, 1); ctx.fillRect(6, 7, 1, 1); ctx.fillRect(1, 7, 1, 1); // round highlights
+  });
+  atlas['i-dish-bento'] = tile(ctx => {
+    // bento box (capstone): rice + umeboshi | tamago, salmon, greens compartments.
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(1, 3, 14, 11);                            // lacquer box body
+    ctx.fillStyle = '#4a525c'; ctx.fillRect(1, 3, 14, 1);                             // box lit rim
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(1, 12, 14, 2);                            // box shadow base
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 4, 5, 8);                              // left: rice bed
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(2, 4, 5, 1); ctx.fillRect(2, 4, 1, 7);    // rice lit
+    ctx.fillStyle = '#d05050'; ctx.fillRect(3, 7, 2, 2);                              // umeboshi
+    ctx.fillStyle = '#e87a6a'; ctx.fillRect(3, 7, 1, 1);
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(5, 5, 1, 1); ctx.fillRect(4, 10, 1, 1);   // sesame
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 4, 6, 2);                              // tamago egg
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(8, 4, 6, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(10, 4, 1, 2); ctx.fillRect(12, 4, 1, 2);  // tamago roll lines
+    ctx.fillStyle = '#e07840'; ctx.fillRect(8, 7, 6, 2);                              // salmon
+    ctx.fillStyle = '#f0a060'; ctx.fillRect(8, 7, 6, 1);
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(9, 8, 1, 1); ctx.fillRect(12, 8, 1, 1);   // salmon marbling
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(8, 10, 6, 2);                             // greens
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(8, 10, 6, 1);
+    ctx.fillStyle = '#d05050'; ctx.fillRect(11, 10, 2, 1);                            // cherry tomato
+    ctx.fillStyle = '#e87a6a'; ctx.fillRect(11, 10, 1, 1);
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(7, 4, 1, 8); ctx.fillRect(8, 6, 6, 1); ctx.fillRect(8, 9, 6, 1); // dividers
+  });
   atlas['i-cook'] = tile(ctx => {
     // chunky cooking pot with a lid + rising steam (the Kitchen button).
     ctx.fillStyle = '#c4ccd4'; ctx.fillRect(5, 0, 1, 3); ctx.fillRect(8, 1, 1, 2); ctx.fillRect(10, 0, 1, 3); // steam
@@ -2692,6 +2912,101 @@ const buildDecorFood = (atlas: Atlas) => {
     ctx.fillRect(4, 3, 1, 1); ctx.fillRect(11, 3, 1, 1);
     ctx.fillStyle = '#ffe9a0'; ctx.fillRect(5, 2, 1, 1); ctx.fillRect(9, 2, 1, 1);     // bow hi
     ctx.fillStyle = '#c9a227'; ctx.fillRect(7, 3, 2, 2);                               // bow knot
+  });
+
+  // ===== C2. Keepsake item icons (16x16, transparent) =====================
+  atlas['i-plums'] = tile(ctx => {
+    // glass jar of sun-pickled plums: cloth-tied lid, reddish-purple plums in brine.
+    ctx.fillStyle = '#7fb0dc'; ctx.fillRect(4, 4, 9, 10); ctx.fillRect(5, 14, 7, 1);  // glass jar
+    ctx.fillStyle = '#a8cdee'; ctx.fillRect(4, 4, 1, 10);                             // lit left edge
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(12, 5, 1, 9); ctx.fillRect(5, 14, 7, 1);  // shadow side + base
+    const plum = (x: number, y: number) => {                                          // one reddish-purple plum
+      ctx.fillStyle = '#964a6e'; ctx.fillRect(x, y, 4, 4); ctx.fillRect(x + 1, y - 1, 2, 1); ctx.fillRect(x + 1, y + 4, 2, 1);
+      ctx.fillStyle = '#b86a92'; ctx.fillRect(x, y, 2, 1); ctx.fillRect(x, y, 1, 2);   // lit
+      ctx.fillStyle = '#6e3450'; ctx.fillRect(x + 3, y + 2, 1, 2); ctx.fillRect(x + 1, y + 3, 2, 1); // shade + cleft
+    };
+    plum(5, 6); plum(8, 8); plum(5, 10);                                              // three nestled
+    ctx.fillStyle = '#cfe6fb'; ctx.fillRect(5, 5, 1, 4);                              // glass highlight streak
+    ctx.fillStyle = '#e8f4ff'; ctx.fillRect(5, 5, 1, 1);
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(4, 1, 9, 3);                              // cloth cap
+    ctx.fillStyle = '#ddcc9c'; ctx.fillRect(4, 1, 9, 1);                             // lid lit
+    ctx.fillStyle = '#b8a578'; ctx.fillRect(4, 3, 9, 1);                             // lid shade
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(4, 2, 9, 1);                             // string tie
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(7, 2, 2, 1);                             // tie knot
+  });
+  atlas['i-demodisc'] = tile(ctx => {
+    // burned demo CD: silvery disc, faint rainbow sheen, sharpie-scrawled name.
+    const rows: number[][] = [[6, 9], [5, 10], [4, 11], [4, 11], [3, 12], [3, 12], [3, 12], [3, 12], [4, 11], [4, 11], [5, 10], [6, 9]];
+    ctx.fillStyle = '#d8e0e6';                                                        // base disc
+    rows.forEach((r, i) => ctx.fillRect(r[0], 2 + i, r[1] - r[0] + 1, 1));
+    ctx.fillStyle = '#aeb6c0';                                                        // lower-right shading
+    for (let i = 6; i < rows.length; i++) ctx.fillRect(rows[i][0], 2 + i, rows[i][1] - rows[i][0] + 1, 1);
+    ctx.fillStyle = '#eef4f8'; ctx.fillRect(5, 3, 4, 1); ctx.fillRect(4, 4, 3, 1); ctx.fillRect(4, 5, 2, 1); // lit crescent
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(6, 4, 2, 1);                             // rainbow sheen
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 5, 2, 1);
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(5, 6, 2, 1);
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(10, 7, 1, 1);
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(5, 9, 2, 1); ctx.fillRect(9, 9, 2, 1); ctx.fillRect(7, 10, 3, 1); ctx.fillRect(6, 11, 4, 1); // sharpie scrawl
+    ctx.fillStyle = '#aeb6c0'; ctx.fillRect(7, 7, 3, 3);                             // center hub
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(7, 7, 3, 1);
+    ctx.clearRect(8, 8, 1, 1);                                                        // spindle hole
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(6, 1, 4, 1); ctx.fillRect(6, 14, 4, 1); ctx.fillRect(2, 6, 1, 4); ctx.fillRect(13, 6, 1, 4); // rim
+  });
+  atlas['i-ring'] = tile(ctx => {
+    // ornate dark-silver ring with a small red gem (a vampire's heirloom).
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(5, 8, 7, 6); ctx.fillRect(4, 9, 9, 4); ctx.fillRect(6, 7, 5, 1); ctx.fillRect(6, 14, 5, 1); // band
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(5, 8, 6, 1); ctx.fillRect(4, 9, 1, 3);   // lit upper-left
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(11, 9, 1, 4); ctx.fillRect(6, 13, 5, 1); // shadow lower-right
+    ctx.clearRect(6, 10, 5, 3); ctx.clearRect(7, 9, 3, 1); ctx.clearRect(7, 13, 3, 1); // inner hole
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(5, 8, 1, 1); ctx.fillRect(11, 8, 1, 1);  // gold shoulder ornaments
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(6, 7, 1, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 4, 5, 3);                             // gold gem setting
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(7, 3, 3, 3);                             // gem base
+    ctx.fillStyle = '#d05050'; ctx.fillRect(7, 3, 2, 2);
+    ctx.fillStyle = '#e87a6a'; ctx.fillRect(7, 3, 1, 1);                             // gem glint
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 4, 1, 1); ctx.fillRect(10, 4, 1, 1);  // setting glints
+  });
+  atlas['i-omamori'] = tile(ctx => {
+    // Japanese omamori charm: brocade pouch, cord loop + knot, a gold kanji.
+    ctx.fillStyle = '#ddcc9c'; ctx.fillRect(7, 1, 3, 1); ctx.fillRect(7, 1, 1, 3); ctx.fillRect(9, 1, 1, 3); // cord loop
+    ctx.fillStyle = '#b8a578'; ctx.fillRect(9, 2, 1, 2);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(4, 5, 9, 9); ctx.fillRect(5, 14, 7, 1);  // pouch body
+    ctx.fillStyle = '#d8584a'; ctx.fillRect(4, 5, 9, 1); ctx.fillRect(4, 5, 1, 8);   // lit top/left
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(12, 6, 1, 8); ctx.fillRect(5, 13, 7, 1); // shadow
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(4, 4, 9, 1); ctx.fillRect(5, 5, 7, 1); ctx.fillRect(4, 12, 9, 1); // gold trim (neck + hem)
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(5, 6, 7, 1); ctx.fillRect(4, 13, 9, 1);
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(7, 3, 3, 2);                             // cord knot
+    ctx.fillStyle = '#ddcc9c'; ctx.fillRect(7, 3, 1, 1);
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 8, 5, 1); ctx.fillRect(8, 7, 1, 5); ctx.fillRect(7, 10, 3, 1); // gold kanji
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 11, 1, 1);
+  });
+  atlas['i-badge'] = tile(ctx => {
+    // hand-laminated "PATRON" pin badge, slightly crooked, a safety-pin glint.
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(3, 4, 10, 5); ctx.fillRect(4, 9, 10, 5);  // laminate card (leans 1px right)
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(3, 4, 10, 1); ctx.fillRect(3, 4, 1, 5); ctx.fillRect(4, 9, 1, 4); // lit
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(12, 5, 1, 4); ctx.fillRect(13, 9, 1, 5); ctx.fillRect(4, 13, 9, 1); // shade
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(4, 5, 8, 3);                             // red "PATRON" banner
+    ctx.fillStyle = '#d8584a'; ctx.fillRect(4, 5, 8, 1);
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(4, 7, 8, 1);
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(5, 6, 6, 1);                             // banner lettering
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(6, 10, 7, 1); ctx.fillRect(6, 12, 5, 1); // sub-text lines
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(10, 4, 1, 4);                            // laminate gloss streak
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(2, 3, 11, 1); ctx.fillRect(2, 3, 1, 2);  // safety pin, crooked
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(4, 3, 4, 1);                             // pin glint
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(12, 2, 2, 2);                            // clasp head
+  });
+  atlas['i-hatband'] = tile(ctx => {
+    // tooled leather hatband with a silver concho.
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 6, 14, 4); ctx.fillRect(0, 7, 1, 2); ctx.fillRect(15, 7, 1, 2); // leather strip
+    ctx.fillStyle = '#9a7350'; ctx.fillRect(1, 6, 14, 1);                            // lit top edge
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(1, 9, 14, 1); ctx.fillRect(0, 9, 16, 1); // shadow bottom edge
+    ctx.fillStyle = '#6e4a2f'; for (let x = 2; x < 15; x += 3) { ctx.fillRect(x, 7, 1, 1); ctx.fillRect(x + 1, 8, 1, 1); } // tooled stamps
+    ctx.fillStyle = '#a07a52'; for (let x = 3; x < 15; x += 3) ctx.fillRect(x, 7, 1, 1); // stamp highlights
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(6, 5, 5, 6); ctx.fillRect(7, 4, 3, 1); ctx.fillRect(7, 11, 3, 1); // silver concho
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(6, 5, 4, 1); ctx.fillRect(6, 5, 1, 4);   // lit
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(10, 6, 1, 5); ctx.fillRect(7, 10, 3, 1); // shade
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(7, 5, 1, 1);                             // glint
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(8, 7, 1, 2);                             // concho center dot
   });
 
   // ===== D. Wallpaper tiles (16x16, fill, seamless all directions) ========
@@ -3029,6 +3344,240 @@ const buildFurniture = (atlas: Atlas) => {
     ctx.fillStyle = '#d05050'; ctx.fillRect(8, 8, 2, 1);                               // red fish
     ctx.fillStyle = '#c7e0f4'; ctx.fillRect(10, 4, 1, 1); ctx.fillRect(9, 6, 1, 1);    // bubbles
   });
+  atlas['f-onsen'] = tile(ctx => {
+    // private hinoki hot-tub seen 3/4 from above: round wooden tub, steaming
+    // mineral water, a folded towel on the rim. Transparent bg (composites in-room).
+    // wooden tub silhouette (dark base)
+    ctx.fillStyle = '#5a3c24';
+    ctx.fillRect(4, 3, 8, 1); ctx.fillRect(3, 4, 10, 1); ctx.fillRect(2, 5, 12, 1);
+    ctx.fillRect(1, 6, 14, 6); ctx.fillRect(2, 12, 12, 2); ctx.fillRect(4, 14, 8, 1);
+    // staved wood front face
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 11, 11, 3);
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(2, 11, 11, 1);                              // lit stave tops
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(5, 11, 1, 3); ctx.fillRect(8, 11, 1, 3); ctx.fillRect(11, 11, 1, 3); // seams
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 6, 1, 5);                                // lit left rim
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(13, 6, 1, 6);                               // shadow right rim
+    ctx.fillStyle = '#a3825a'; ctx.fillRect(4, 3, 3, 1); ctx.fillRect(3, 4, 2, 1); ctx.fillRect(2, 5, 2, 1); // lit top-left rim
+    // mineral water surface (ellipse)
+    ctx.fillStyle = '#7ce8e0';
+    ctx.fillRect(5, 4, 6, 1); ctx.fillRect(4, 5, 8, 1); ctx.fillRect(3, 6, 10, 1);
+    ctx.fillRect(3, 7, 10, 1); ctx.fillRect(3, 8, 10, 1); ctx.fillRect(4, 9, 8, 1); ctx.fillRect(5, 10, 6, 1);
+    ctx.fillStyle = '#aef4ee'; ctx.fillRect(5, 4, 6, 1); ctx.fillRect(4, 5, 5, 1); ctx.fillRect(3, 6, 3, 1); ctx.fillRect(8, 7, 2, 1); // lit glints
+    ctx.fillStyle = '#4aa8a4'; ctx.fillRect(4, 9, 8, 1); ctx.fillRect(5, 10, 6, 1); ctx.fillRect(10, 8, 2, 1); // water shadow
+    // folded towel resting on the front rim
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(9, 11, 4, 2);
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(9, 11, 4, 1);
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(9, 12, 4, 1);
+    // rising steam
+    ctx.fillStyle = 'rgba(174,244,238,0.12)'; ctx.fillRect(3, 0, 9, 5);                 // warm bloom
+    ctx.fillStyle = 'rgba(232,240,244,0.5)';
+    ctx.fillRect(5, 2, 1, 1); ctx.fillRect(5, 1, 1, 1); ctx.fillRect(6, 0, 1, 1);       // left wisp
+    ctx.fillRect(9, 2, 1, 1); ctx.fillRect(10, 1, 1, 1); ctx.fillRect(9, 0, 1, 1);      // right wisp
+    ctx.fillRect(7, 1, 1, 1);
+  });
+
+  // Japanese-inspired furniture set + bathroom fixtures
+  atlas['f-shoji'] = tile(ctx => {
+    // shoji sliding screen: wood lattice frame, glowing translucent paper panes.
+    ctx.fillStyle = 'rgba(255,233,160,0.10)'; ctx.fillRect(1, 0, 14, 15);              // soft paper glow
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(1, 1, 14, 14);                             // outer frame
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 1, 14, 1); ctx.fillRect(1, 1, 1, 14);   // lit top+left
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(14, 1, 1, 14); ctx.fillRect(1, 14, 14, 1); // shadow right+bottom
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 2, 12, 10);                             // paper field
+    ctx.fillStyle = '#f2ecdf'; ctx.fillRect(2, 2, 12, 4);                              // lit upper paper
+    ctx.fillStyle = '#7a5232'; ctx.fillRect(5, 2, 1, 10); ctx.fillRect(10, 2, 1, 10); ctx.fillRect(2, 6, 12, 1); // lattice
+    ctx.fillStyle = '#a3825a'; ctx.fillRect(5, 2, 1, 1); ctx.fillRect(10, 2, 1, 1); ctx.fillRect(2, 6, 6, 1);    // lattice hi
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(2, 12, 12, 2);                             // bottom rail (kamachi)
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 12, 12, 1);                             // rail lit
+  });
+  atlas['f-chabudai'] = tile(ctx => {
+    // low round wooden tea table seen 3/4 from above, a matcha cup on top.
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(3, 11, 2, 3); ctx.fillRect(11, 11, 2, 3);  // legs
+    ctx.fillStyle = '#6e4a2f';                                                         // round top (edge/front)
+    ctx.fillRect(5, 4, 6, 1); ctx.fillRect(3, 5, 10, 1); ctx.fillRect(2, 6, 12, 4); ctx.fillRect(3, 10, 10, 1); ctx.fillRect(5, 11, 6, 1);
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(5, 5, 6, 1); ctx.fillRect(3, 6, 10, 2);    // lit top surface
+    ctx.fillStyle = '#a3825a'; ctx.fillRect(4, 6, 5, 1); ctx.fillRect(3, 7, 3, 1);     // sheen
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(3, 9, 10, 1); ctx.fillRect(4, 10, 8, 1);   // front rim shadow
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(7, 5, 3, 2);                               // tea cup
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(7, 5, 3, 1);
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(8, 6, 1, 1);                               // matcha
+  });
+  atlas['f-zabuton'] = tile(ctx => {
+    // flat square floor cushion: puffy indigo, gold center tuft, corner tassel.
+    ctx.fillStyle = '#27517c'; ctx.fillRect(2, 5, 12, 8);                              // cushion body (front)
+    ctx.fillStyle = '#2e5e8e'; ctx.fillRect(2, 4, 12, 8);                              // top surface
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(3, 4, 10, 3);                              // lit top
+    ctx.fillStyle = '#5b8cbe'; ctx.fillRect(3, 4, 9, 1);                               // highlight
+    ctx.fillStyle = '#27517c'; ctx.fillRect(2, 11, 12, 2);                             // front shadow
+    ctx.fillStyle = '#222831'; ctx.fillRect(2, 13, 12, 1);                             // contact line
+    ctx.fillStyle = '#5b8cbe'; ctx.fillRect(2, 5, 1, 7); ctx.fillRect(13, 5, 1, 7);    // seam piping
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(7, 7, 2, 2); ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 7, 1, 1); // center tuft
+    ctx.fillStyle = '#222831'; ctx.fillRect(5, 7, 1, 1); ctx.fillRect(10, 8, 1, 1);    // tuft dimples
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(13, 12, 1, 3); ctx.fillStyle = '#ffe9a0'; ctx.fillRect(13, 12, 1, 1); // tassel
+  });
+  atlas['f-byobu'] = tile(ctx => {
+    // folding paper screen: three gold panels, ink crane + red sun, pine sprig.
+    const px = [1, 11, 21];
+    for (let i = 0; i < 3; i++) {
+      const x = px[i];
+      const lit = i % 2 === 0;                                                         // zigzag fold: alt panels catch light
+      ctx.fillStyle = '#3a2716'; ctx.fillRect(x, 1, 10, 14);                           // panel frame
+      ctx.fillStyle = lit ? '#cdbb8e' : '#b08a50'; ctx.fillRect(x + 1, 2, 8, 12);      // gold paper
+      if (lit) { ctx.fillStyle = '#e8e0d0'; ctx.fillRect(x + 1, 2, 8, 4); }            // lit top wash
+      ctx.fillStyle = '#6e4a2f'; ctx.fillRect(x, 1, 10, 1);                            // frame lit top
+      ctx.fillStyle = '#222831'; ctx.fillRect(x + 9, 2, 1, 12);                        // fold shadow seam
+    }
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(4, 4, 4, 4); ctx.fillStyle = '#d75a4a'; ctx.fillRect(4, 4, 2, 2); // red sun
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(13, 9, 6, 1); ctx.fillRect(15, 8, 3, 1); ctx.fillRect(18, 7, 1, 2); ctx.fillRect(12, 9, 1, 2); // ink crane
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(14, 9, 3, 1);                              // crane underbelly
+    ctx.fillStyle = '#d05050'; ctx.fillRect(18, 7, 1, 1);                              // crest
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(24, 10, 4, 1); ctx.fillRect(25, 9, 2, 1); ctx.fillRect(26, 8, 1, 1); // pine sprig
+  }, 32, 16);
+  atlas['f-kamidana'] = tile(ctx => {
+    // household shrine shelf: wood plank, mini vermilion torii, offering cups + sprig.
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(2, 9, 12, 2);                              // shelf plank (front)
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(2, 9, 12, 1);                              // lit top edge
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(3, 11, 1, 2); ctx.fillRect(12, 11, 1, 2);  // brackets
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(4, 3, 8, 1); ctx.fillRect(5, 3, 1, 6); ctx.fillRect(10, 3, 1, 6); // torii lintel + posts
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(5, 5, 6, 1);                               // second rail (nuki)
+    ctx.fillStyle = '#d75a4a'; ctx.fillRect(4, 3, 4, 1); ctx.fillRect(5, 3, 1, 2);     // lit highlights
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(7, 5, 1, 3); ctx.fillRect(8, 6, 1, 2);     // sakaki sprig
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(7, 5, 1, 1);
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(3, 7, 2, 2); ctx.fillRect(11, 7, 2, 2);    // offering cups
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(3, 7, 2, 1); ctx.fillRect(11, 7, 2, 1);
+  });
+  atlas['f-kakejiku'] = tile(ctx => {
+    // hanging scroll: silk mounting, ink-wash + calligraphy, red seal, wood rollers.
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(8, 0, 1, 2);                               // hanging cord
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(4, 1, 8, 14);                              // silk mounting
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 1, 8, 1);                               // lit top
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(11, 1, 1, 14);                             // shadow side
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(5, 3, 6, 9);                               // paper field
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(5, 3, 6, 1); ctx.fillRect(5, 3, 1, 9);     // lit
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(6, 8, 4, 1); ctx.fillRect(7, 7, 2, 1);     // misty hill (ink-wash)
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(7, 5, 1, 2); ctx.fillRect(8, 4, 1, 3);     // calligraphy strokes
+    ctx.fillStyle = '#16181d'; ctx.fillRect(8, 9, 1, 1);                               // ink dot
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(9, 10, 1, 1);                              // red seal (hanko)
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(3, 1, 10, 1); ctx.fillRect(3, 13, 10, 2);  // wooden rollers
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(3, 13, 10, 1);                             // roller lit
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(3, 14, 1, 1); ctx.fillRect(12, 14, 1, 1);  // knob ends
+  });
+  atlas['f-chochin'] = tile(ctx => {
+    // hanging paper lantern: glowing red body, paper ribs, a kanji, gold tassel.
+    ctx.fillStyle = 'rgba(255,150,80,0.16)'; ctx.fillRect(2, 1, 12, 14);               // warm glow
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(6, 0, 4, 1);                               // top cap + cord
+    ctx.fillStyle = '#16181d'; ctx.fillRect(7, 0, 2, 1);
+    ctx.fillStyle = '#c0392b';                                                         // body (oval)
+    ctx.fillRect(5, 1, 6, 1); ctx.fillRect(4, 2, 8, 1); ctx.fillRect(3, 3, 10, 9); ctx.fillRect(4, 12, 8, 1); ctx.fillRect(5, 13, 6, 1);
+    ctx.fillStyle = '#d75a4a'; ctx.fillRect(4, 2, 5, 2); ctx.fillRect(3, 4, 3, 4);     // lit left
+    ctx.fillStyle = '#e87a6a'; ctx.fillRect(4, 3, 2, 1);                               // glow highlight
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(9, 9, 4, 3);                               // shadow right
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(3, 5, 10, 1); ctx.fillRect(3, 8, 10, 1); ctx.fillRect(4, 11, 8, 1); // paper ribs
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(6, 6, 4, 2);                               // white center band
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(7, 6, 2, 1); ctx.fillRect(7, 7, 1, 1);     // kanji
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(6, 13, 4, 1); ctx.fillStyle = '#c9a227'; ctx.fillRect(7, 14, 2, 2); // bottom cap + tassel
+  });
+  atlas['f-bonsai'] = tile(ctx => {
+    // bonsai in a shallow glazed pot: gnarled trunk, layered green canopy pads.
+    ctx.fillStyle = '#3e5c33'; ctx.fillRect(3, 3, 6, 3); ctx.fillRect(9, 4, 4, 3); ctx.fillRect(5, 6, 7, 2); // canopy
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(3, 3, 5, 2); ctx.fillRect(9, 4, 3, 2); ctx.fillRect(5, 6, 5, 1);
+    ctx.fillStyle = '#6f9e5e'; ctx.fillRect(3, 3, 3, 1); ctx.fillRect(9, 4, 2, 1);     // lit tops
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(4, 3, 1, 1);                               // leaf glint
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 6, 2, 5); ctx.fillRect(6, 8, 1, 2);     // gnarled trunk
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(7, 6, 1, 5);                               // lit trunk side
+    ctx.fillStyle = '#27517c'; ctx.fillRect(3, 11, 10, 3);                             // shallow glazed pot
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(3, 11, 10, 1);                             // glazed lit rim
+    ctx.fillStyle = '#5b8cbe'; ctx.fillRect(4, 11, 4, 1);                              // glaze highlight
+    ctx.fillStyle = '#222831'; ctx.fillRect(3, 13, 10, 1);                             // base shadow
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(4, 14, 2, 1); ctx.fillRect(10, 14, 2, 1);  // little feet
+  });
+  atlas['f-zengarden'] = tile(ctx => {
+    // zen garden tray: wooden frame, raked white sand, two grey stones.
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(1, 3, 14, 11);                             // tray frame
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(1, 3, 14, 1); ctx.fillRect(1, 3, 1, 11);   // lit edges
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(14, 3, 1, 11); ctx.fillRect(1, 13, 14, 1); // shadow edges
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 4, 12, 9);                              // sand
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(2, 4, 12, 2);                              // lit sand
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 8, 12, 1); ctx.fillRect(2, 11, 12, 1); ctx.fillRect(3, 6, 5, 1); // raked lines
+    ctx.fillStyle = '#222831'; ctx.fillRect(4, 8, 3, 1); ctx.fillRect(10, 7, 2, 1);    // stone contact shadow
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(4, 6, 3, 2);                               // big stone
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 6, 2, 1);                               // lit
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(10, 5, 2, 2);                              // small stone
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(10, 5, 1, 1);                              // lit
+  });
+  atlas['f-tansu'] = tile(ctx => {
+    // tansu chest of drawers: warm wood, iron handle plates + pulls.
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(1, 1, 14, 14);                             // body (front)
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 1, 14, 1); ctx.fillRect(1, 1, 1, 14);   // lit top+left
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(14, 1, 1, 14); ctx.fillRect(1, 14, 14, 1); // shadow side+bottom
+    ctx.fillStyle = '#3a2716'; ctx.fillRect(1, 5, 14, 1); ctx.fillRect(1, 9, 14, 1); ctx.fillRect(8, 9, 1, 6); // drawer seams
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(2, 6, 12, 1); ctx.fillRect(2, 10, 5, 1); ctx.fillRect(9, 10, 5, 1); // drawer lit edges
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(7, 2, 2, 2); ctx.fillRect(7, 6, 2, 2); ctx.fillRect(4, 11, 2, 2); ctx.fillRect(10, 11, 2, 2); // iron fittings
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(7, 2, 2, 1); ctx.fillRect(7, 6, 2, 1); ctx.fillRect(4, 11, 2, 1); ctx.fillRect(10, 11, 2, 1); // pull hi
+    ctx.fillStyle = '#a3825a'; ctx.fillRect(2, 2, 3, 1);                               // wood grain hi
+  });
+  atlas['f-noren'] = tile(ctx => {
+    // doorway curtain: wooden rod, split indigo cloth panels, white crest, ragged hem.
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(0, 1, 16, 1);                              // rod
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 1, 6, 1);                               // rod lit
+    ctx.fillStyle = '#2e5e8e'; ctx.fillRect(1, 2, 7, 12); ctx.fillRect(9, 2, 6, 12);   // cloth panels (split)
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(1, 2, 7, 2); ctx.fillRect(9, 2, 6, 2);     // lit tops
+    ctx.fillStyle = '#5b8cbe'; ctx.fillRect(1, 2, 6, 1);                               // highlight
+    ctx.fillStyle = '#27517c'; ctx.fillRect(1, 12, 7, 2); ctx.fillRect(9, 12, 6, 2);   // hem shadow
+    ctx.fillStyle = '#27517c'; ctx.fillRect(2, 14, 2, 1); ctx.fillRect(5, 14, 2, 1); ctx.fillRect(10, 14, 2, 1); ctx.fillRect(13, 14, 1, 1); // ragged hem
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 6, 3, 3); ctx.fillRect(11, 6, 2, 3);    // white crest motif
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(4, 8, 3, 1);                               // motif shade
+  });
+  atlas['f-ricecooker'] = tile(ctx => {
+    // retro rice cooker: domed lid, cream body, indicator lights, steam wisp.
+    ctx.fillStyle = 'rgba(232,240,244,0.5)'; ctx.fillRect(7, 1, 1, 1); ctx.fillRect(8, 0, 1, 1); ctx.fillRect(7, 3, 1, 1); // steam
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(4, 4, 8, 1); ctx.fillRect(3, 5, 10, 2);    // domed lid
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 4, 6, 1); ctx.fillRect(3, 5, 7, 1);     // lit
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(3, 6, 10, 1);                              // lid rim shadow
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(7, 3, 2, 1);                               // steam vent
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(2, 7, 12, 7);                              // body (front)
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(2, 7, 12, 4);                              // lit upper
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(2, 7, 11, 1);                              // highlight
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(2, 13, 12, 1);                             // base shadow
+    ctx.fillStyle = '#d05050'; ctx.fillRect(2, 11, 12, 1);                             // retro accent stripe
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(9, 8, 4, 2);                               // little display
+    ctx.fillStyle = '#50c878'; ctx.fillRect(10, 8, 1, 1); ctx.fillStyle = '#ffd24a'; ctx.fillRect(12, 8, 1, 1); // indicator lights
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(1, 9, 1, 2); ctx.fillRect(14, 9, 1, 2);    // side handles
+  });
+  atlas['f-toilet'] = tile(ctx => {
+    // washlet toilet seen 3/4: ceramic bowl + lid, tank, side control panel.
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(3, 1, 8, 4);                               // tank (back)
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(3, 1, 8, 2); ctx.fillStyle = '#f4f8fb'; ctx.fillRect(3, 1, 7, 1);
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(3, 4, 8, 1);
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 5, 7, 1); ctx.fillRect(3, 6, 9, 5); ctx.fillRect(4, 11, 7, 1); // seat lid (oval)
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 6, 7, 3);                               // lit lid top
+    ctx.fillStyle = '#f4f8fb'; ctx.fillRect(4, 6, 6, 1);                               // highlight
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(3, 10, 9, 1);                              // lid front shadow
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(5, 11, 5, 3);                              // pedestal base
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(5, 13, 5, 1);
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(5, 14, 5, 1);                              // floor contact
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(11, 6, 4, 5);                              // washlet control panel
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(11, 6, 1, 5);                              // panel shadow side
+    ctx.fillStyle = '#50a0d0'; ctx.fillRect(12, 7, 1, 1); ctx.fillStyle = '#50c878'; ctx.fillRect(14, 7, 1, 1); // buttons
+    ctx.fillStyle = '#d05050'; ctx.fillRect(13, 9, 1, 1); ctx.fillStyle = '#3a4250'; ctx.fillRect(12, 9, 1, 1); // stop + button
+  });
+  atlas['f-sink'] = tile(ctx => {
+    // washbasin: wall mirror, chrome faucet, white ceramic basin on a pedestal.
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(4, 0, 8, 5);                               // mirror frame
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(5, 1, 6, 3);                               // glass
+    ctx.fillStyle = '#c7e0f4'; ctx.fillRect(5, 1, 3, 1); ctx.fillRect(5, 1, 1, 3);     // reflection glint
+    ctx.fillStyle = '#5b8cbe'; ctx.fillRect(8, 2, 3, 2);                               // glass shade
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(7, 5, 2, 3); ctx.fillRect(7, 7, 3, 1);     // faucet
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(7, 5, 1, 3);                               // chrome hi
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(3, 8, 10, 1); ctx.fillRect(2, 9, 12, 3); ctx.fillRect(3, 12, 10, 1); // basin
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(3, 8, 10, 2);                              // lit rim
+    ctx.fillStyle = '#f4f8fb'; ctx.fillRect(3, 8, 8, 1);                               // highlight
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(5, 10, 6, 1);                              // water sheen
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(2, 11, 12, 1);                             // bowl front shadow
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(6, 12, 4, 3);                              // pedestal
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(6, 14, 4, 1);
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(11, 9, 2, 1);                              // soap
+  });
   atlas['f-arcade'] = tile(ctx => {
     // upright cabinet: pink marquee, game screen, control panel with joystick.
     ctx.fillStyle = '#27517c'; ctx.fillRect(2, 1, 12, 15);                             // cabinet
@@ -3158,6 +3707,62 @@ const buildFurniture = (atlas: Atlas) => {
     ctx.fillStyle = '#222'; ctx.fillRect(5, 11, 6, 4); ctx.fillRect(21, 11, 6, 4); // wheels
     ctx.fillStyle = '#8a8a8e'; ctx.fillRect(7, 12, 2, 2); ctx.fillRect(23, 12, 2, 2);
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 7, 1, 2); ctx.fillStyle = '#d05050'; ctx.fillRect(29, 7, 1, 2);
+  }, 32, 16);
+  atlas['v-bicycle'] = tile(ctx => {
+    // mama-chari city bike, side profile facing left: two spoked wheels with
+    // silver fenders, swoopy step-through teal frame, handlebars + front basket
+    // (a leek poking out), brown saddle, crank + pedal.
+    const wheel = (cx: number) => {
+      const cy = 9;
+      const spans: [number, number][] = [
+        [-5, 1], [-4, 3], [-3, 4], [-2, 4], [-1, 5], [0, 5], [1, 5], [2, 4], [3, 4], [4, 3], [5, 1],
+      ];
+      ctx.fillStyle = '#2c3038';                                        // tire
+      for (const [dy, hw] of spans) {
+        const y = cy + dy;
+        if (Math.abs(dy) >= 4) ctx.fillRect(cx - hw, y, hw * 2 + 1, 1); // top/bottom caps
+        else { ctx.fillRect(cx - hw, y, 2, 1); ctx.fillRect(cx + hw - 1, y, 2, 1); } // side walls
+      }
+      ctx.fillStyle = '#8a96a0';                                        // spokes
+      ctx.fillRect(cx, cy - 3, 1, 7); ctx.fillRect(cx - 3, cy, 7, 1);
+      ctx.fillRect(cx - 2, cy - 2, 1, 1); ctx.fillRect(cx + 2, cy - 2, 1, 1);
+      ctx.fillRect(cx - 2, cy + 2, 1, 1); ctx.fillRect(cx + 2, cy + 2, 1, 1);
+      ctx.fillStyle = '#6e7682'; ctx.fillRect(cx - 1, cy - 1, 3, 3);    // hub
+      ctx.fillStyle = '#c4ccd4'; ctx.fillRect(cx - 1, cy - 1, 1, 1);    // lit hub
+      ctx.fillRect(cx - 3, cy - 6, 7, 1);                               // silver fender over top
+      ctx.fillStyle = '#9aa0a6'; ctx.fillRect(cx - 3, cy - 5, 1, 1); ctx.fillRect(cx + 3, cy - 5, 1, 1);
+    };
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(4, 14, 22, 1); ctx.fillRect(6, 15, 18, 1); // ground shadow
+    wheel(8); wheel(24);
+    // frame (teal) — drawn mid, then lit/shadow accents
+    ctx.fillStyle = '#50a0d0';
+    ctx.fillRect(8, 4, 1, 6);                                           // front fork
+    ctx.fillRect(8, 5, 1, 1); ctx.fillRect(9, 6, 1, 1); ctx.fillRect(10, 7, 1, 1); ctx.fillRect(11, 8, 1, 1);
+    ctx.fillRect(12, 9, 2, 1); ctx.fillRect(14, 10, 2, 1);             // swoop tube head -> bottom bracket
+    ctx.fillRect(15, 8, 1, 2); ctx.fillRect(16, 6, 1, 2); ctx.fillRect(17, 5, 1, 1); ctx.fillRect(18, 4, 1, 1); // seat tube
+    ctx.fillRect(16, 10, 4, 1); ctx.fillRect(20, 9, 4, 1);             // chainstay -> rear hub
+    ctx.fillRect(22, 8, 1, 1); ctx.fillRect(21, 7, 1, 1); ctx.fillRect(20, 6, 1, 1); ctx.fillRect(19, 5, 1, 1); // seat stay
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(8, 4, 1, 1); ctx.fillRect(9, 6, 1, 1); ctx.fillRect(16, 6, 1, 1); // tube highlights
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(16, 10, 4, 1); ctx.fillRect(8, 9, 1, 1);                          // tube shadow
+    // crank + pedal
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(14, 10, 2, 2);             // chainring
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(15, 12, 1, 2);            // crank arm
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(13, 13, 3, 1);           // pedal
+    // saddle
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(15, 2, 7, 2);
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(15, 2, 7, 1);
+    ctx.fillStyle = '#8a6440'; ctx.fillRect(16, 2, 3, 1);            // saddle lit
+    // handlebars
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(8, 2, 1, 2);            // stem
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 2, 6, 1);            // bar
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(4, 2, 2, 1);          // grip
+    // front basket (wire) over the front wheel
+    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(2, 3, 6, 1); ctx.fillRect(2, 3, 1, 5); ctx.fillRect(7, 3, 1, 5); ctx.fillRect(2, 7, 6, 1);
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 4, 1, 3); ctx.fillRect(3, 5, 4, 1); // mesh
+    ctx.fillStyle = '#50c878'; ctx.fillRect(3, 1, 2, 2); ctx.fillStyle = '#7ce8a0'; ctx.fillRect(3, 1, 1, 1); // leek leaves
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 3, 1, 1);          // leek stalk
+    // little headlight
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 7, 1, 1);
   }, 32, 16);
   atlas['v-boat'] = tile(ctx => {
     // hull: white with blue waterline, pointed bow (right)

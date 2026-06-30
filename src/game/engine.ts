@@ -173,17 +173,17 @@ export class Input {
       return;
     }
     // E / Space / Enter interact in-world (pick up finds, talk to NPCs, advance
-    // dialogs/sleep overlays). When a DOM menu (data-navroot) is open, useUiNav
-    // handles these keys in the capture phase and STOPS propagation, so this
-    // bubble-phase listener never fires for them — no double-handling, no
-    // re-interacting after a menu closes.
+    // dialogs/sleep overlays, hold to reel). When a DOM menu (data-navroot) is
+    // open, useUiNav handles these keys in the capture phase and STOPS
+    // propagation, so this bubble-phase listener never fires for them — no
+    // double-handling, no re-interacting after a menu closes.
     if (k === 'e' || k === ' ' || k === 'enter') {
       e.preventDefault();
       if (!e.repeat) this.interactQueued = true;
       this.actionHeld = true;
     }
     if (k === 'escape') { this.cancelQueued = true; }
-    if (k === 'p' && !e.repeat) { this.inventoryQueued = true; } // P opens the phone
+    if ((k === 'p' || k === 'q') && !e.repeat) { this.inventoryQueued = true; } // P or Q opens the phone
   };
 
   readonly onKeyUp = (e: KeyboardEvent) => {

@@ -150,7 +150,7 @@ const city: SceneDef = {
     'E': T('t-gh-front', true),    // community greenhouse glass facade (east of home)
     'R': T('t-gh-roof', true),     // greenhouse pitched glass roof (over the facade)
     'G': T('t-gh-door'),           // greenhouse glass door (walk-in warp, gated)
-    'J': T('t-terminal', true),    // courier gig terminal (deposit-kiosk errand giver)
+    'k': T('t-boardwalk'),         // beach-access boardwalk gate at the SW shore seam (matches the shore boardwalk)
   },
   outdoor: true,
   grid: [
@@ -167,11 +167,11 @@ const city: SceneDef = {
     'gTggggwwggggggRRRRggggggggggggfg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
-    'ggHHHHDDHHgJggEGGEggTgggggggggfg',
-    'gggggpwwpggggggggggfgfgggggggggg',
-    'wwwwwwwwgggggggggggggggnmmnggggg',
-    'wwwwwwwwggggggggggggggojggjo~~gg',
-    'ggggFgggggggggFggggggggggggg~~gg',
+    'ggHHHHDDHHggggEGGEggTgggggggggfg',
+    'sggggpwwpggggggggggfgfgggggggggg',
+    'kwwwwwwwgggggggggggggggnmmnggggg',
+    'kwwwwwwwggggggggggggggojggjo~~gg',
+    'ssggFgggggggggFggggggggggggg~~gg',
   ],
   warps: [
     { x: 4, y: 2, to: 'denden', tx: 8, ty: 8, dir: 'up' },
@@ -200,7 +200,6 @@ const city: SceneDef = {
   interactables: [
     { id: 'vending', x: 8, y: 4, label: 'Vending machine' },
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
-    { id: 'gig-terminal', x: 11, y: 13, label: 'Courier terminal' },
     { id: 'landlord', x: 9, y: 13, label: 'Lease office' },
   ],
   npcs: [
@@ -235,7 +234,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'ガチャ', x: 27, y: 0, color: '#fff', bg: '#e857a8', border: '#ffd5ec', blink: true, font: 8 },
     { text: 'GACHA!', x: 27, y: 1, color: '#e857a8', bg: 'rgba(0,0,0,0.55)' },
     { text: '⛩ SHRINE', x: 22, y: 14, color: '#e8a0a0', bg: 'rgba(0,0,0,0.35)' },
-    { text: '< SHORE', x: 1, y: 15, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
+    { text: '← BEACH', x: 1, y: 15, color: '#cfe6ff', bg: '#16304a', border: '#2e5e8e' },
     { text: 'DOWNTOWN >', x: 26, y: 8, color: '#e857a8', bg: 'rgba(0,0,0,0.55)', blink: true },
   ],
   // Signs sit over the four venue facades of the 28-wide strip:
@@ -258,16 +257,17 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'バー', x: 1, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', font: 8, blink: true },
     { text: '☄ KAIJU ☄', x: 9, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 7, blink: true },
   ],
-  shore: [],
+  shore: [
+    // Mirror of the city's '← BEACH' gate — the boardwalk at the NE corner leads back to town.
+    { text: 'TOWN →', x: 19, y: 2, color: '#cfe6ff', bg: '#16304a', border: '#2e5e8e' },
+  ],
   garage: [
     { text: 'こじまモータース せいび', x: 2, y: 0, color: '#ffd24a', bg: '#33302a', border: '#c9a227', font: 8 },
     { text: 'オイル OIL', x: 14, y: 0, color: '#d05050', bg: '#e8e0d0', border: '#9e3a3a', font: 7 },
   ],
   shrine: [],
   greenhouse: [],
-  island: [
-    { text: 'きわみじま KIWAMI', x: 7, y: 3, color: '#16181d', bg: '#ffe9a0', border: '#b08a50', font: 8 },
-  ],
+  island: [],
   deepsea: [
     { text: '↓ HOME / SHORE', x: 5, y: 10, color: '#9fc4e8', bg: 'rgba(0,0,0,0.5)' },
   ],
@@ -310,7 +310,7 @@ const denden: SceneDef = {
 const konbini: SceneDef = {
   id: 'konbini',
   name: 'Konbini 24h',
-  legend: { ...SHOP, 'Z': T('t-freezer', true) },
+  legend: { ...SHOP, 'Z': T('t-freezer', true), 'J': T('t-terminal', true) },
   grid: [
     '################',
     '#FFFZ......SSSS#',
@@ -318,7 +318,7 @@ const konbini: SceneDef = {
     '#...CCC........#',
     '#..............#',
     '#SSSS......SSSS#',
-    '#..............#',
+    '#.............J#',
     '#..............#',
     '#######DD#######',
   ],
@@ -330,6 +330,7 @@ const konbini: SceneDef = {
     { id: 'shop-konbini', x: 4, y: 3, w: 3, h: 1, label: 'Counter' },
     // The walk-in freezer. No prompt until you've been through once.
     { id: 'portal', x: 4, y: 1, label: 'Walk-in freezer' },
+    { id: 'gig-terminal', x: 14, y: 6, label: 'Courier terminal' },
   ],
   npcs: [{ id: 'clerk-konbini', x: 5, y: 2, sprite: 'npc-konbini', dir: 'down' }],
 };
@@ -391,8 +392,8 @@ const shore: SceneDef = {
     'PgdvggPddvggdPvdggPdvggP',
     'gdvddvgddvddgddvvddvgddv',
     'vddvUdJddvddvddvdvddPddd',
-    'ddsddsdsddsssddssdsddkkk',
-    'sssossssssUsssssLsssssss',
+    'ddsddsdsddsssddssdsdkkkk',
+    'sssossssssUsssssLssssskk',
     'ssssssssssssssssssssssss',
     'ssssssssssssssssssssssss',
     'ssssssssssssssssssssssss',
@@ -810,6 +811,7 @@ const island: SceneDef = {
     'Z': T('t-zama-poster', true),  // ZamaZonk billboard
     'b': T('t-bottle'),             // message in a bottle (secret; walkable sand)
     'c': T('t-cave-crack', true),   // hidden sea-cave crack in the volcanic rock (secret; solid, faced from the grass below)
+    'I': T('t-island-sign', true),  // Kiwami Island signpost (solid; greets the player by the west dock)
   },
   outdoor: true,
   grid: [
@@ -822,7 +824,7 @@ const island: SceneDef = {
     '~~sgggggPgggggggggggslllll~~',
     '~DDsgggggggggggggggslllll~~~',
     '~~sggggggggggggggggDDDll~~~~',
-    '~~ssggggggBgggggggggsslll~~~',
+    '~~sIggggggBgggggggggsslll~~~',
     '~~~sssgggggggggggggsssll~~~~',
     '~~~~ssKKKssssssZsssssss~~~~~',
     '~~~~ssssssssssssssssssbs~~~~',
@@ -832,6 +834,7 @@ const island: SceneDef = {
   warps: [],
   interactables: [
     { id: 'boat-island', x: 1, y: 7, w: 2, h: 1, label: 'The skiff' },
+    { id: 'island-sign', x: 3, y: 9, label: 'Kiwami Island' },
     { id: 'tiki', x: 6, y: 11, w: 3, h: 1, label: 'Tiki bar' },
     { id: 'zama-poster', x: 15, y: 11, label: 'Read the poster' },
     { id: 'onsen', x: 13, y: 3, w: 2, h: 1, label: 'Hot spring' },
@@ -840,10 +843,44 @@ const island: SceneDef = {
     { id: 'banana', x: 17, y: 4, label: 'Banana palm' },
     { id: 'banana', x: 10, y: 9, label: 'Banana palm' },
     { id: 'island-bottle', x: 22, y: 12, label: 'A bottle in the sand' },
-    { id: 'island-cave', x: 15, y: 2, label: 'A crack in the rock' },
+    { id: 'island-cave', x: 15, y: 2, label: 'Enter the crack' },
     { id: 'fish-tropical', x: 19, y: 4, w: 7, h: 7, label: 'Fish the lagoon' },
   ],
   npcs: [{ id: 'tiki', x: 7, y: 10, sprite: 'npc-hatvendor', dir: 'down' }],
+};
+
+// ---- Sea cave (squeeze through the crack in the island's volcanic rock) ---------------
+// A small hand-authored cave the island forgot it had. Reuses the mine's cave tiles
+// ('#' = wall, '.' = floor). The player drops in just above the daylight crack ('X',
+// the walk-on warp back out); a little alcove at the top hides the one-time nest egg
+// (the 'seacave-niche' interactable, gated by storySeen 'island-cave').
+
+const seacave: SceneDef = {
+  id: 'seacave',
+  name: 'Sea Cave',
+  legend: {
+    '#': T('t-cave-wall', true),   // reused from the mines
+    '.': T('t-cave-floor'),        // reused from the mines
+    'X': T('t-cave-crack'),        // daylight crack — walkable, warps back to the island
+  },
+  grid: [
+    '############',
+    '#..........#',
+    '#...####...#',
+    '#...#..#...#',
+    '#...#..#...#',
+    '#..........#',
+    '#....XX....#',
+    '############',
+  ],
+  warps: [
+    { x: 5, y: 6, to: 'island', tx: 15, ty: 3, dir: 'down' },
+    { x: 6, y: 6, to: 'island', tx: 15, ty: 3, dir: 'down' },
+  ],
+  interactables: [
+    { id: 'seacave-niche', x: 5, y: 2, label: 'A niche in the rock' },
+  ],
+  npcs: [],
 };
 
 // ---- Open water (take the skiff out from the shore) -----------------------------------
@@ -1010,5 +1047,5 @@ const museum: SceneDef = {
 };
 
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, deepsea, casino, paris, museum,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, deepsea, casino, paris, museum,
 };

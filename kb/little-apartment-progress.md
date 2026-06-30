@@ -8,6 +8,26 @@ Cross-session state. Full design/as-built: [kb/games.md](games.md). `[ ]` todo, 
 
 > History below (Parts A–v3.6) = as-built record from `personalsite` era. Part A ("Games section") portfolio-only, no longer applies to standalone repo.
 
+## Session 2026-06-30 — economy rebalance + endgame sinks + festivals/derby/karaoke (on `DEV`)
+Content + balance pass: money is harder-won, the late game has real sinks, and the town runs three new recurring live events. Full as-built detail in [games.md](games.md) (2026-06-30 block + the in-place section edits). New save fields documented in games.md ("New save fields"): `shrineRestored`, `charliePatron`, `homeOnsen`, `homeOnsenDay`, `keepsakes`.
+- [x] **Economy rebalance** — ore values trimmed (Void Opal 900→750, Astral Stone 2200→1600); `oreCount` cut (fewer nodes → mining is an *event*); vaults rarer/deeper (`VAULT_MIN_FLOOR` 3→4, `VAULT_CHANCE` 0.07→0.05, chest `1800+depth*350`); geode jackpot 5000→3000. **Car** 75k→100k and **gated** (boat owned + `first-delivery` ach); new **bicycle** ¥9k entry vehicle (`v-bicycle`, in `VEHICLES`).
+- [x] **Luxury money sinks** — **shrine restoration** ¥80k (`shrineRestored` → permanent +1 luck tier via `shrineLuck`), **Charlie sponsorship** ¥40k (`charliePatron`), **private home onsen** ¥70k (`homeOnsen`, bought via landlord; drawn at apt 13,1; `homeSoak` ~once/day +60% energy + warm buff). Helpers `restoreShrine`/`sponsorCharlie`/`buyHomeOnsen`/`homeSoak`.
+- [x] **Lease office → phone text thread** — the `landlord` interactable opens a reply-chip text thread (expand ¥120k / onsen ¥70k), replacing the intercom shop. Adds the Nakatomi "whole town in one building" flavor (Whittier/Begich Towers nod).
+- [x] **Mine combat auto-defend** — wand/gun auto-targets the nearest crawler (`autoFireRef`), freeing the action button for mining.
+- [x] **14 optional furniture pieces** — Japanese decor set (shoji/chabudai/zabuton/byobu/kamidana/kakejiku/chochin/bonsai/zengarden/tansu/noren/ricecooker) + washlet toilet + sink, all `optional:true` (don't gate allFurnished).
+- [x] **Mission rewards → Keepsakes** — `KEEPSAKES` catalog + `save.keepsakes`; capstones grant items (plums/demodisc/ring/omamori/badge/hatband), paired money halved; Bag "Keepsakes" section (Eat/Sell); `omamori` → passive mining luck.
+- [x] **Cooking 2.0** — 6 Institute recipes (ramen/curry/tempura/okonomiyaki/mochi/bento) via a one-time Kawamachi Cooking Institute phone enrollment (fridge+microwave placed); new **Recipe Book** phone app.
+- [x] **Festivals** — `FESTIVALS`/`festivalFor(day)`, every 14 days (Summer Matsuri / Tanabata / Hatsumōde): transient decor, 3 minigames (goldfish/wish/omikuji), night fireworks, morning bulletin.
+- [x] **Fishing tournament** — "Sumikawa Shore Fishing Derby" on `day%10===5`; townsfolk gather on shore, live `tournamentScore`, 4 prize tiers (`tournamentTierFor`).
+- [x] **Karaoke at Club Kaiju** — DJ Tanuki → SING single-lane rhythm minigame (`karaokeRef`); tips ¥50–1,600; reuses the club track (no double audio).
+- [x] **NPC schedules deepened** — 9 new `ROUTINES` (3 dancers, kaiju, mechanic, bingus, tiki, casino-host, collector) + richer tex/granny; `WANDER_IDS` expanded.
+- [x] **Racing rotates 4 tracks** — `DRIVE_TRACKS` (Riverside Loop / Switchback Climb / Coastal Sweep / Harbor Figure-8), daily-seeded, per-track time limits; `drivePayout(elapsed, grass, timeLimit?)`.
+- [x] **Sea cave** — new scene `seacave` (**20 scenes** now): E to enter, walk-out warp back to island; one-time ¥5,000 nest-egg niche (`seacave-niche`).
+- [x] **Island signpost + shore↔city seam** — real `t-island-sign` tile (was floating text); mirrored boardwalk threshold with `← BEACH`/`TOWN →` signs.
+- [x] **Courier gig terminal moved into the konbini** (tile 14,6) + one-time `gig-intro` explainer (deposit-for-collection loop).
+- [x] **Store sick-days** — `storeClosedToday` (~10%/day): denden/pawn/gacha randomly shut; door shows a sign + bounces you.
+- [x] **Controls** — WASD+arrows move; E/Space/Enter interact (+hold to reel); P/Q open the phone; Space selects/advances in menus.
+
 ## Session 2026-06-27 — hardcore playtest + review + harness upgrades (on `dev`)
 Full QA sweep: playtested every system, code+perf review (incl. parallel compressed
 subagents), tooling upgrades. No softlocks, dead-ends, or economy exploits found.

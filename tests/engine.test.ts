@@ -166,7 +166,7 @@ describe('Input', () => {
 
   it('queues and consumes interact exactly once', () => {
     const i = new Input();
-    i.onKeyDown(key('e'));
+    i.onKeyDown(key('e')); // E/Space/Enter all interact
     expect(i.consumeInteract()).toBe(true);
     expect(i.consumeInteract()).toBe(false);
   });

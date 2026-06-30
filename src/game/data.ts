@@ -7,6 +7,7 @@ export interface Furniture {
   blurb: string;          // shop description (also states the gameplay effect)
   sprite: string;         // atlas key
   pawnable: boolean;      // can appear used at the pawn shop
+  optional?: boolean;     // optional decor — purchasable/placeable but NOT required for the allFurnished ending
 }
 
 // Apartment slots are defined in maps.ts; every item has exactly one slot.
@@ -31,6 +32,37 @@ export const FURNITURE: Furniture[] = [
     blurb: 'Warm light beats the bare ceiling bulb.' },
   { id: 'plant', name: 'Potted Plant', price: 1500, sprite: 'f-plant', pawnable: false,
     blurb: 'Something alive to look after.' },
+  // ---- Optional decor (NOT required for the "fully furnished" ending) --------
+  // Japanese-inspired touches, plus a toilet & sink for laughs. Each is `optional`
+  // so allFurnished ignores them — buy and place purely for the vibe.
+  { id: 'shoji', name: 'Shoji Screen', price: 3500, sprite: 'f-shoji', pawnable: true, optional: true,
+    blurb: 'A paper-and-wood sliding screen. Softens the light, divides the room, says home.' },
+  { id: 'chabudai', name: 'Low Tea Table', price: 3000, sprite: 'f-chabudai', pawnable: true, optional: true,
+    blurb: 'Sit on the floor, sip your tea. Knees optional.' },
+  { id: 'zabuton', name: 'Floor Cushion', price: 1200, sprite: 'f-zabuton', pawnable: true, optional: true,
+    blurb: 'A plump little cushion for sitting the proper way. Cat-approved.' },
+  { id: 'byobu', name: 'Folding Screen', price: 6000, sprite: 'f-byobu', pawnable: true, optional: true,
+    blurb: 'A painted folding screen — cranes over gold. Hides the laundry pile in style.' },
+  { id: 'kamidana', name: 'House Shrine', price: 5000, sprite: 'f-kamidana', pawnable: true, optional: true,
+    blurb: 'A small wooden shelf-shrine. A pinch of rice, a clap, a little luck of your own.' },
+  { id: 'kakejiku', name: 'Hanging Scroll', price: 4000, sprite: 'f-kakejiku', pawnable: true, optional: true,
+    blurb: 'A calligraphy scroll for the wall. It reads "patience." Or maybe "noodles."' },
+  { id: 'chochin', name: 'Paper Lantern', price: 1800, sprite: 'f-chochin', pawnable: true, optional: true,
+    blurb: 'A red paper lantern glowing like a festival you never want to end.' },
+  { id: 'bonsai', name: 'Bonsai Tree', price: 4500, sprite: 'f-bonsai', pawnable: true, optional: true,
+    blurb: 'A tiny tree that asks for nothing but your patience. A whole forest in a dish.' },
+  { id: 'zengarden', name: 'Zen Rock Garden', price: 7000, sprite: 'f-zengarden', pawnable: true, optional: true,
+    blurb: 'Rake the sand, find the calm. The cat will un-find it by morning.' },
+  { id: 'tansu', name: 'Tansu Chest', price: 6500, sprite: 'f-tansu', pawnable: true, optional: true,
+    blurb: 'A handsome stepped wooden chest of drawers. Heirloom energy, storage included.' },
+  { id: 'noren', name: 'Noren Curtain', price: 2000, sprite: 'f-noren', pawnable: true, optional: true,
+    blurb: 'A split fabric curtain for the doorway. Makes every room feel like a cozy little shop.' },
+  { id: 'ricecooker', name: 'Rice Cooker', price: 3500, sprite: 'f-ricecooker', pawnable: true, optional: true,
+    blurb: 'It plays a little song when the rice is done. Best roommate you will ever have.' },
+  { id: 'toilet', name: 'Washlet Toilet', price: 4000, sprite: 'f-toilet', pawnable: false, optional: true,
+    blurb: 'Heated seat. Too many buttons. A throne fit for a tiny apartment. No questions.' },
+  { id: 'sink', name: 'Washbasin', price: 3000, sprite: 'f-sink', pawnable: false, optional: true,
+    blurb: 'A little washbasin to round out the, ahem, facilities. Now you can wash your hands.' },
 ];
 
 // Rare furniture — sold only by the monster in the backrooms. Separate list so
@@ -119,12 +151,20 @@ export const furnitureById = (id: string): Furniture => allFurnitureById(id);
 // Vehicles — Kojima Motors in the bad side of town.
 export interface Vehicle { id: string; name: string; price: number; blurb: string; sprite: string }
 export const VEHICLES: Vehicle[] = [
-  { id: 'car', name: 'Used Kei Car', price: 75000, sprite: 'v-car',
+  { id: 'bicycle', name: 'City Bicycle', price: 9000, sprite: 'v-bicycle',
+    blurb: 'A trusty mama-chari. Beats waiting on the trains, and the basket holds your groceries.' },
+  { id: 'car', name: 'Used Kei Car', price: 100000, sprite: 'v-car',
     blurb: 'The endgame on four wheels. Drive anywhere outdoors, park anywhere, very fast.' },
   { id: 'boat', name: 'Old Skiff', price: 22000, sprite: 'v-boat',
     blurb: 'Floats, mostly. Deep water, and — they say — a tropical island.' },
 ];
 export const vehicleById = (id: string): Vehicle => VEHICLES.find(v => v.id === id)!;
+
+// One-time prestige purchases (paid from the late-game pile). Defined here so the
+// price + the matching state.ts helper share a single source of truth.
+export const SHRINE_RESTORE_PRICE = 80000;  // fund the shrine's restoration → a permanent extra luck tier
+export const CHARLIE_PATRON_PRICE = 40000;  // become Charlie's patron
+export const HOME_ONSEN_PRICE = 70000;      // install a private hot spring at the apartment
 
 // Sketchy street dealer — deep discount, fifty-fifty the thing is cardboard.
 export const SKETCHY_DISCOUNT = 0.35;
@@ -282,8 +322,8 @@ export const MINERALS: Mineral[] = [
   { id: 'iron',      name: 'Iron Chunk',   value: 110,  weight: 14, color: '#c0a890', minFloor: 1, hardness: 1 },
   { id: 'shard',     name: 'Yellow Shard', value: 150,  weight: 12, color: '#ffd24a', minFloor: 1, hardness: 1 },
   { id: 'crystal',   name: 'Hum Crystal',  value: 400,  weight: 6,  color: '#7ce8e0', minFloor: 2, hardness: 2 },
-  { id: 'opal',      name: 'Void Opal',    value: 900,  weight: 2,  color: '#b06ad0', minFloor: 4, hardness: 3 },
-  { id: 'starstone', name: 'Astral Stone', value: 2200, weight: 1,  color: '#ff7cc4', minFloor: 6, hardness: 4 },
+  { id: 'opal',      name: 'Void Opal',    value: 750,  weight: 2,  color: '#b06ad0', minFloor: 4, hardness: 3 },
+  { id: 'starstone', name: 'Astral Stone', value: 1600, weight: 1,  color: '#ff7cc4', minFloor: 6, hardness: 4 },
 ];
 export const mineralById = (id: string): Mineral => MINERALS.find(m => m.id === id)!;
 
@@ -710,6 +750,10 @@ export const GROCERIES: Grocery[] = [
 ];
 export const groceryById = (id: string): Grocery | undefined => GROCERIES.find(g => g.id === id);
 
+// Shared `learn` flavor for every Cooking 2.0 dish, so the curriculum can be
+// derived (INSTITUTE_RECIPES) without a separate learn-enum.
+export const INSTITUTE_RECIPE_LEARN = "From the Kawamachi Cooking Institute's correspondence course.";
+
 export const RECIPES: Recipe[] = [
   { id: 'onigiri', name: 'Onigiri', sprite: 'i-dish-onigiri', energy: 25, learn: 'start',
     ingredients: [{ kind: 'rice', n: 1 }],
@@ -735,9 +779,31 @@ export const RECIPES: Recipe[] = [
   { id: 'hotpot', name: 'Nabe Hot Pot', sprite: 'i-dish-hotpot', energy: 80, buff: 'hearty', learn: "Granny Sato's reward for true friendship.",
     ingredients: [{ kind: 'fish', n: 1 }, { kind: 'veg', n: 1 }, { kind: 'rice', n: 1 }],
     blurb: 'Everything in one bubbling pot. The meal you make for someone you like.' },
+  // Cooking 2.0 — the Kawamachi Cooking Institute correspondence course (INSTITUTE_RECIPE_LEARN).
+  { id: 'ramen', name: 'Shoyu Ramen', sprite: 'i-dish-ramen', energy: 70, buff: 'hearty', learn: INSTITUTE_RECIPE_LEARN,
+    ingredients: [{ kind: 'fish', n: 1 }, { kind: 'veg', n: 1 }, { kind: 'egg', n: 1 }],
+    blurb: 'Springy noodles, soy broth, a soft egg on top. The bowl you slurp standing up.' },
+  { id: 'curry', name: 'Katsu Curry', sprite: 'i-dish-curry', energy: 75, buff: 'hearty', learn: INSTITUTE_RECIPE_LEARN,
+    ingredients: [{ kind: 'veg', n: 1 }, { kind: 'rice', n: 1 }, { kind: 'egg', n: 1 }],
+    blurb: 'Golden curry over rice with a crisp cutlet. Comfort with a little crunch.' },
+  { id: 'tempura', name: 'Tempura', sprite: 'i-dish-tempura', energy: 60, buff: 'warm', learn: INSTITUTE_RECIPE_LEARN,
+    ingredients: [{ kind: 'fish', n: 1 }, { kind: 'veg', n: 1 }],
+    blurb: 'Lacy, feather-light batter. The trick is oil hot enough to whisper.' },
+  { id: 'okonomiyaki', name: 'Okonomiyaki', sprite: 'i-dish-okonomiyaki', energy: 65, buff: 'hearty', learn: INSTITUTE_RECIPE_LEARN,
+    ingredients: [{ kind: 'veg', n: 1 }, { kind: 'egg', n: 1 }, { kind: 'crop', n: 1 }],
+    blurb: 'A savory griddle pancake — "however you like it." Yours, with extra greens.' },
+  { id: 'mochi', name: 'Mochi', sprite: 'i-dish-mochi', energy: 30, buff: 'lucky', learn: INSTITUTE_RECIPE_LEARN,
+    ingredients: [{ kind: 'rice', n: 1 }, { kind: 'crop', n: 1 }],
+    blurb: 'Pounded rice gone soft and chewy, hiding a sweet little surprise inside.' },
+  { id: 'bento', name: 'Homemade Bento', sprite: 'i-dish-bento', energy: 90, buff: 'hearty', learn: INSTITUTE_RECIPE_LEARN,
+    ingredients: [{ kind: 'fish', n: 1 }, { kind: 'rice', n: 1 }, { kind: 'veg', n: 1 }, { kind: 'egg', n: 1 }],
+    blurb: 'A whole box packed with care — the graduation dish, everything you learned in one lid.' },
 ];
 export const recipeById = (id: string): Recipe | undefined => RECIPES.find(r => r.id === id);
 export const STARTER_RECIPES = RECIPES.filter(r => r.learn === 'start').map(r => r.id);
+// The Kawamachi Cooking Institute's curriculum (Cooking 2.0) — the wiring agent
+// unlocks these as the player progresses through the correspondence course.
+export const INSTITUTE_RECIPES = RECIPES.filter(r => r.learn === INSTITUTE_RECIPE_LEARN).map(r => r.id);
 
 // ---- Friendship & gifting --------------------------------------------------
 // Give an NPC something they like (one gift/NPC/day) to raise friendship. Hearts
@@ -785,6 +851,8 @@ export const FRIENDS: FriendDef[] = [
     loved: ['fish'], liked: ['dish'], disliked: ['peepis', 'soda'] },
   { id: 'miko', name: 'Yoshi', emoji: '⛩️', blurb: 'The miko who keeps the shrine.',
     loved: ['flower', 'crop'], liked: ['dish'], disliked: ['mineral'] },
+  { id: 'jean', name: 'Jean-Pierre', emoji: '🥖', blurb: 'The very lost French tourist who mistook the backrooms for an art exhibition.',
+    loved: ['dish'], liked: ['crop', 'fish'], disliked: ['peepis'] },
 ];
 export const friendById = (id: string): FriendDef | undefined => FRIENDS.find(f => f.id === id);
 
@@ -835,6 +903,39 @@ export const FRIEND_HEART_LINES: Record<string, HeartLine[]> = {
   ],
 };
 
+// ---- Keepsakes --------------------------------------------------------------
+// Physical mementos handed over at a friendship CAPSTONE (a deep hangout scene).
+// Each is a one-of-a-kind object, not cash: a jar of plums to eat, a demo disc to
+// display, a vampire's ring to pawn, a charm to carry for luck. The capstone sets
+// `keepsake` on its reward and the wiring layer grants it via grantKeepsake.
+//   effect 'display' — a keepsake you simply keep / show off (no mechanical use)
+//   effect 'food'    — consumable: restores energy + grants a buff when eaten
+//   effect 'sell'    — can be pawned for `value` yen if you're ever desperate
+//   effect 'luck'    — passive: nudges your luck a little while it's in your bag
+export interface Keepsake {
+  id: string;
+  name: string;
+  sprite: string;                                   // atlas key
+  flavor: string;                                   // one-line charm
+  effect: 'display' | 'food' | 'sell' | 'luck';
+  value?: number;                                   // pawn yen (effect 'sell')
+}
+export const KEEPSAKES: Keepsake[] = [
+  { id: 'plums', name: 'Jar of Sun-Pickled Plums', sprite: 'i-plums', effect: 'food',
+    flavor: "Granny's own umeboshi. Sour enough to wake the dead and warm you through." },
+  { id: 'demodisc', name: 'Demo Disc', sprite: 'i-demodisc', effect: 'display',
+    flavor: 'First copy, your name in sharpie. The neighborhood, on a disc.' },
+  { id: 'ring', name: "Vampire's Ring", sprite: 'i-ring', effect: 'sell', value: 3000,
+    flavor: 'Older than the country. It hums faintly, like it remembers being loved.' },
+  { id: 'omamori', name: 'Omamori Charm', sprite: 'i-omamori', effect: 'luck',
+    flavor: 'Hand-tied at the shrine, for you. The kami keeps half an eye on your roads.' },
+  { id: 'badge', name: 'Patron Badge', sprite: 'i-badge', effect: 'display',
+    flavor: '"PATRON — LEVEL ONE," hand-laminated and slightly sticky. Wear with terrifying pride.' },
+  { id: 'hatband', name: 'Silver Concho Hatband', sprite: 'i-hatband', effect: 'display',
+    flavor: "Real silver conchos from a cowboy who don't do weepy. Worth more than the hat." },
+];
+export const keepsakeById = (id: string): Keepsake | undefined => KEEPSAKES.find(k => k.id === id);
+
 // ---- Heart-event hangouts ---------------------------------------------------
 // One-time, deeper scenes that play the next time you TALK to a friend once you
 // cross a heart threshold (4 ♥ and 8 ♥). Each is storySeen-gated by `flag`, so it
@@ -847,8 +948,9 @@ export interface HangoutScene {
   flag: string;          // storySeen id, e.g. 'hang-granny-4'
   speaker: string;       // dialog speaker (matches a portrait where one exists)
   lines: string[];
-  money?: number;        // a small keepsake handed over during the scene
+  money?: number;        // a small token of cash handed over during the scene
   buff?: BuffId;         // an optional day-long buff the scene grants
+  keepsake?: string;     // a KEEPSAKES id — the real reward at a capstone (granted in code)
   rewardLine?: string;   // a closing line describing the keepsake / buff
 }
 export const HANGOUTS: HangoutScene[] = [
@@ -858,7 +960,7 @@ export const HANGOUTS: HangoutScene[] = [
       'Granny Sato waves you over to a folding stool she keeps tucked by the tomatoes. "Sit, sit. The plants can wait. Old women cannot."',
       '"When my husband passed, the neighbors stopped knocking. Folk get shy around grief, like it might be catching. This glass house was the only thing that still needed me every single morning."',
       '"And then you turned up, smelling of fish, asking an old woman for a key. Best thing to happen to this place in years."',
-    ], money: 800, rewardLine: 'She presses a jar of sun-pickled plums into your bag. "For later. Do not argue." (+¥800 of plums — and a grandmother.)' },
+    ], money: 400, keepsake: 'plums', rewardLine: 'She presses a jar of sun-pickled plums into your bag. "For later. Do not argue." (A jar of plums to keep — and a grandmother. +¥400 besides.)' },
   { friend: 'granny', hearts: 8, flag: 'hang-granny-8', speaker: 'Granny Sato',
     lines: [
       '"I have something to say, and I will only say it once, so listen." Granny Sato sets down her watering can with great ceremony.',
@@ -877,7 +979,7 @@ export const HANGOUTS: HangoutScene[] = [
       'Charlie\'s got his guitar out and, for once, the camera off. "Wrote something. Don\'t make it weird."',
       'He plays — rough, half-finished, but real. It\'s the konbini at 2am, the train hum, neon in the puddles. It\'s the whole neighborhood. It\'s, somehow, you.',
       '"Working title\'s \'Big City, Little Apartment.\' ...The little apartment\'s the good part. That\'s where the people are."',
-    ], money: 1500, rewardLine: 'He hands you a sharpie-scrawled demo disc with your name on it. "First copy. Don\'t flip it on auction when I\'m famous." (A keepsake, +¥1,500.)' },
+    ], money: 750, keepsake: 'demodisc', rewardLine: 'He hands you a sharpie-scrawled demo disc with your name on it. "First copy. Don\'t flip it on auction when I\'m famous." (A keepsake to display, +¥750.)' },
   // — Max (the shore vampire) —
   { friend: 'max', hearts: 4, flag: 'hang-max-4', speaker: 'Max',
     lines: [
@@ -890,14 +992,14 @@ export const HANGOUTS: HangoutScene[] = [
       'Max is quiet a long while. Then: "I am going to give you something, and you will NOT make it sentimental, because I cannot bear it."',
       'He works a heavy iron ring off his finger — older than the city, older than the country. "The man who built my coffin made this. He has been dead two hundred years. I have no one left to leave it to."',
       '"So. You. Pawn it if you are ever truly desperate; it is worth a fortune. But I would rather you kept it, and remembered an old monster kindly."',
-    ], money: 3000, rewardLine: 'You pocket the ring. It hums faintly, like it remembers being loved. (A vampire\'s keepsake — worth ¥3,000 if you ever must.)' },
+    ], money: 1500, keepsake: 'ring', rewardLine: 'You pocket the ring. It hums faintly, like it remembers being loved. (A vampire\'s keepsake — worth ¥3,000 at the pawn shop if you ever must. +¥1,500 he forces on you besides.)' },
   // — Bingus the curator —
   { friend: 'bingus', hearts: 4, flag: 'hang-bingus-4', speaker: 'Bingus Doofelsmurt',
     lines: [
       'Bingus seizes your sleeve and hauls you behind the velvet rope. "You — YOU — get to see the Vault. Nobody sees the Vault."',
       'The "Vault" is a broom closet with one cracked teacup on a silk pillow, lit like a coronation. "My first acquisition. Worthless. Priceless. The day I decided this town deserved a museum."',
       '"Everyone laughed, of course. They still laugh. But you keep COMING BACK. You make the laughing quieter."',
-    ], money: 1200, rewardLine: 'He presses a "PATRON — LEVEL ONE" badge into your palm, hand-laminated, slightly sticky. "Wear it with terrifying pride." (+¥1,200 endowment.)' },
+    ], money: 600, keepsake: 'badge', rewardLine: 'He presses a "PATRON — LEVEL ONE" badge into your palm, hand-laminated, slightly sticky. "Wear it with terrifying pride." (A keepsake badge, +¥600 endowment.)' },
   { friend: 'bingus', hearts: 8, flag: 'hang-bingus-8', speaker: 'Bingus Doofelsmurt',
     lines: [
       'Bingus waits at the door with a brass plaque and the air of a man about to commit emotion. "Stand there. Do not move. Posterity is watching."',
@@ -910,7 +1012,7 @@ export const HANGOUTS: HangoutScene[] = [
       'Tex sits you down on an upturned bait bucket and goes quiet, which for Tex is an event. "Lemme tell ya how I wound up sellin\' hats on a beach in Japan."',
       '"Had a ranch. Had a whole life, big as the sky. Lost the lot to a bad year and a worse handshake. Packed one sack — hats, mostly — and kept goin\' east till the land ran out."',
       '"Figured I\'d be a stranger here forever. Then folks like you started sayin\' howdy back." He clears his throat, aggressively.',
-    ], money: 900, rewardLine: '"Aw, hell. Take a hat band, on the house — real silver concho." He won\'t meet your eye. (A keepsake, +¥900.)' },
+    ], money: 450, keepsake: 'hatband', rewardLine: '"Aw, hell. Take a hat band, on the house — real silver concho." He won\'t meet your eye. (A keepsake to display, +¥450.)' },
   { friend: 'tex', hearts: 8, flag: 'hang-tex-8', speaker: 'Tex',
     lines: [
       'Tex is holding his oldest hat, the brim sweat-dark and shapeless with years. "This one rode the ranch with me. Through the good and the losin\' of it. Ain\'t for sale. Never was."',
@@ -923,7 +1025,7 @@ export const HANGOUTS: HangoutScene[] = [
       'Yoshi stops you at the temizuya and ladles the cold water herself. "Today you are not a visitor. Today you help me sweep. The kami does not mind an extra pair of hands, and neither do I."',
       'You sweep the sando in companionable quiet. She tells you the shrine is older than the city\'s name; that she is its ninth keeper; that some mornings the loneliness of that is a real weight.',
       '"And some mornings," she says, not looking at you, "a friend arrives with the dawn, and it is not heavy at all."',
-    ], money: 1000, rewardLine: 'She ties a small omamori to your bag — handmade this morning, for you. "For safe roads. Carry it." (A blessed keepsake, +¥1,000.)' },
+    ], money: 500, keepsake: 'omamori', rewardLine: 'She ties a small omamori to your bag — handmade this morning, for you. "For safe roads. Carry it." (A blessed charm — a little luck while you carry it. +¥500 besides.)' },
   { friend: 'miko', hearts: 8, flag: 'hang-miko-8', speaker: 'Yoshi',
     lines: [
       'Yoshi leads you behind the honden, where visitors never go, to a plum tree her grandmother planted. "I have shown this to no one. It did not feel right — until you."',
@@ -1021,3 +1123,135 @@ export const DECOR: DecorItem[] = [
 export const decorById = (id: string): DecorItem | undefined => DECOR.find(d => d.id === id);
 export const DEFAULT_DECOR = { wall: 'wall-default', floor: 'floor-default' };
 export const STARTER_DECOR = ['wall-default', 'floor-default'];
+
+// ---- Festivals -------------------------------------------------------------
+// Seasonal matsuri the city throws every so often. Each is a special DAY (not a
+// span) anchored to an outdoor scene, with a little stall-side minigame and,
+// sometimes, fireworks once the sky goes dark. The wiring agent reads this
+// catalog + `festivalFor(day)` to spawn the in-world event; nothing here mutates
+// state — these are PURE, deterministic helpers keyed only on the calendar `day`.
+export interface Festival {
+  id: string;
+  name: string;
+  blurb: string;                                       // marquee line, told the morning of
+  scene: string;                                       // outdoor scene the festival takes over ('city' | 'shrine')
+  nightFireworks: boolean;                             // does the sky bloom with hanabi after dark?
+  minigame: 'goldfish' | 'ringtoss' | 'wish' | 'omikuji';
+  rewardLine: string;                                  // flavor shown when you collect your festival keepsake
+}
+
+// Three festivals, rotated through in this order (see `festivalFor`).
+export const FESTIVALS: Festival[] = [
+  {
+    id: 'summer-matsuri',
+    name: 'Summer Festival',
+    blurb: 'The city lane is strung with paper lanterns tonight — yatai stalls, the smell of grilled corn, and goldfish darting in shallow tubs. Stay till dark for the fireworks.',
+    scene: 'city',
+    nightFireworks: true,
+    minigame: 'goldfish',
+    rewardLine: 'You scoop one last goldfish before your paper net gives out, and someone hands you a candy apple "for trying so hard." Worth every yen.',
+  },
+  {
+    id: 'tanabata',
+    name: 'Star Festival (Tanabata)',
+    blurb: 'Bamboo branches lean against the shrine gate, heavy with paper wishes. Write yours on a tanzaku strip and hang it high — they say the stars read the ones nearest the top.',
+    scene: 'shrine',
+    nightFireworks: false,
+    minigame: 'wish',
+    rewardLine: 'You tie your strip to the topmost branch and step back. The wind takes it gently. Tomorrow feels a little luckier already.',
+  },
+  {
+    id: 'hatsumode',
+    name: "New Year's Visit",
+    blurb: 'The first shrine visit of the year. Bell-rope, two bows, two claps — then draw an omikuji and see what fortune the new year has folded up for you.',
+    scene: 'shrine',
+    nightFireworks: false,
+    minigame: 'omikuji',
+    rewardLine: 'Your omikuji reads 中吉 — middling-good luck. You tie the bad parts to the rack and keep the good parts in your pocket.',
+  },
+];
+
+export const festivalById = (id: string): Festival | undefined => FESTIVALS.find(f => f.id === id);
+
+// Cadence: a festival lands on every `FESTIVAL_PERIOD`-th day (one roughly every
+// two weeks), and they rotate through `FESTIVALS` in order. The scheme is a clean
+// deterministic modulo window — a given `day` ALWAYS resolves to the same result,
+// no RNG needed — and it never fires on day 1 (the first festival is day 14).
+//   day 14 → FESTIVALS[0]  summer-matsuri
+//   day 28 → FESTIVALS[1]  tanabata
+//   day 42 → FESTIVALS[2]  hatsumode
+//   day 56 → FESTIVALS[0]  summer-matsuri  … and so on, wrapping forever.
+// Every other day returns null, which is what makes a festival day feel special.
+export const FESTIVAL_PERIOD = 14;
+export function festivalFor(day: number): Festival | null {
+  if (day < FESTIVAL_PERIOD) return null;          // never on day 1 (and no festival before the first window)
+  if (day % FESTIVAL_PERIOD !== 0) return null;    // most days: ordinary
+  const nth = day / FESTIVAL_PERIOD;               // 1st, 2nd, 3rd … festival so far
+  return FESTIVALS[(nth - 1) % FESTIVALS.length];
+}
+
+// Festival rewards are about charm, not income — modest by design.
+export const FESTIVAL_REWARD_YEN = 600;            // small cash keepsake for playing a festival minigame
+export const FESTIVAL_LUCKY_DAYS = 1;              // tanabata wish / hatsumode fortune grant a 1-day 'lucky' glow
+
+// ---- Fishing Tournament ----------------------------------------------------
+// The whole town wanders down to the waterline to fish elbow-to-elbow against a
+// live scoreboard. Like festivals, a tournament is a special DAY (not a span)
+// anchored to the `shore` scene, and everything here is PURE & deterministic —
+// keyed only on the calendar `day` and on fish yen `value`s. The wiring agent
+// reads these to spawn the in-world derby, tally a run, and pay out a tier.
+export const TOURNAMENT_NAME = 'Sumikawa Shore Fishing Derby';
+export const TOURNAMENT_BLURB =
+  'The whole town has hauled tackle boxes down to the waterline — Genji is keeping score on a chalkboard by the skiff. Reel in your biggest haul before the tide turns and see where you land on the board.';
+export const TOURNAMENT_SCENE = 'shore';            // the waterline scene the derby takes over (maps.ts `shore`)
+
+// Cadence: a derby lands every `TOURNAMENT_PERIOD`-th day on a fixed phase so it
+// reads as "roughly every ~10 days." The phase (`TOURNAMENT_PHASE`) is chosen so
+// tournament days are ALWAYS ≡ 5 (mod 10) — i.e. they end in 5 and are odd —
+// while festivals are multiples of `FESTIVAL_PERIOD` (14), which are always even.
+// Odd vs. even means the two events can NEVER coincide, at any day, forever. As
+// with festivals it's a clean modulo window (no RNG, same `day` → same answer)
+// and it never fires on day 1.
+//   day 5  → derby      day 15 → derby      day 25 → derby   …
+//   festival days 14 / 28 / 42 / 56 stay derby-free (even, never ≡ 5 mod 10).
+export const TOURNAMENT_PERIOD = 10;
+export const TOURNAMENT_PHASE = 5;                  // offset within the period; keeps derbies clear of festivals
+export function fishingTournamentDay(day: number): boolean {
+  if (day <= 1) return false;                       // never on day 1
+  return day % TOURNAMENT_PERIOD === TOURNAMENT_PHASE;
+}
+
+// Scoring: a caught fish's yen `value` maps to derby POINTS at a tidy 1-per-¥10,
+// so the leaderboard reads in small, friendly numbers while still honoring rarity
+// (a Tiny Minnow ¥80 → 8 pts; a Golden Carp ¥1800 → 180 pts; a Blue Marlin
+// ¥4000 → 400 pts). The wiring agent sums a run's catches into a best score and
+// feeds it to `tournamentTierFor`.
+export function tournamentScore(fishValue: number): number {
+  return Math.max(1, Math.round(fishValue / 10));
+}
+
+export interface TournamentTier {
+  name: string;
+  minScore: number;   // lowest run score that earns this tier (inclusive)
+  prize: number;      // yen handed over at the dock for placing here
+}
+
+// Four cozy placement tiers keyed off a run's best score. Bronze sits at 0 so
+// everyone who casts a line takes something home; prizes climb to feel special
+// without breaking the economy — Grand (¥2200) is about one Golden Carp's worth,
+// a great-run bonus on TOP of the fish you keep, not a windfall. Tiers are listed
+// low→high; `tournamentTierFor` walks them and returns the best one earned.
+export const TOURNAMENT_TIERS: TournamentTier[] = [
+  { name: 'Bronze Lure',  minScore: 0,   prize: 200  },
+  { name: 'Silver Reel',  minScore: 150, prize: 500  },
+  { name: 'Gold Hook',    minScore: 320, prize: 1100 },
+  { name: 'Grand Marlin', minScore: 550, prize: 2200 },
+];
+
+export function tournamentTierFor(score: number): TournamentTier {
+  let earned = TOURNAMENT_TIERS[0];
+  for (const tier of TOURNAMENT_TIERS) {
+    if (score >= tier.minScore) earned = tier;      // tiers are ascending, so the last match is the highest
+  }
+  return earned;
+}

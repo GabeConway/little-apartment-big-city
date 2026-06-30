@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   newSave, freshDayLog, maxEnergy, energyCost, sleep, clockLabel, nightT,
   buyFurniture, shrineLuck, gachaComplete, pawnStockFor, sketchyOfferFor,
+  restoreShrine, buyHomeOnsen, homeSoak,
+  grantKeepsake, hasKeepsake, omamoriLuck, OMAMORI_LUCK,
   allFurnished, itemFootprintW, placeItem, unplaceItem,
   WAKE_MIN, type GameSave,
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
@@ -22,7 +24,7 @@ import {
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt,
   skillLevel, addSkillXp, skillProgress, SKILL_XP, ROOM_PRICE,
 } from '../src/game/state';
-import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS, HANGOUTS, HOME_VISITS } from '../src/game/data';
+import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS, HANGOUTS, HOME_VISITS, KEEPSAKES, keepsakeById } from '../src/game/data';
 import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
@@ -158,6 +160,70 @@ describe('shrineLuck', () => {
     expect(shrineLuck({ ...newSave(), donated: 5000 })).toBe(1);
     expect(shrineLuck({ ...newSave(), donated: 19999 })).toBe(1);
     expect(shrineLuck({ ...newSave(), donated: 20000 })).toBe(2);
+  });
+  it('a restored shrine adds a permanent extra tier (capped at 3)', () => {
+    expect(shrineLuck({ ...newSave(), donated: 0, shrineRestored: true })).toBe(1);
+    expect(shrineLuck({ ...newSave(), donated: 5000, shrineRestored: true })).toBe(2);
+    expect(shrineLuck({ ...newSave(), donated: 20000, shrineRestored: true })).toBe(3);
+  });
+});
+
+describe('restoreShrine', () => {
+  it('charges once and sets the permanent flag', () => {
+    const s = newSave(); s.money = 90000;
+    expect(restoreShrine(s)).toBe(true);
+    expect(s.shrineRestored).toBe(true);
+    expect(s.money).toBe(10000);
+    expect(restoreShrine(s)).toBe(false);   // already restored
+    const poor = newSave(); poor.money = 100;
+    expect(restoreShrine(poor)).toBe(false); // can't afford
+  });
+});
+
+describe('keepsakes (friendship capstone rewards)', () => {
+  it('grantKeepsake adds once and reports whether it was newly added', () => {
+    const s = newSave();
+    expect(s.keepsakes).toEqual([]);
+    expect(hasKeepsake(s, 'plums')).toBe(false);
+    expect(grantKeepsake(s, 'plums')).toBe(true);   // newly added
+    expect(hasKeepsake(s, 'plums')).toBe(true);
+    expect(grantKeepsake(s, 'plums')).toBe(false);  // already held — no duplicate
+    expect(s.keepsakes).toEqual(['plums']);
+  });
+  it('every capstone keepsake id resolves to a real KEEPSAKE', () => {
+    const ids = new Set(KEEPSAKES.map(k => k.id));
+    for (const h of HANGOUTS) {
+      if (h.keepsake) expect(ids.has(h.keepsake)).toBe(true);
+    }
+    // the six expected mappings are all present
+    for (const id of ['plums', 'demodisc', 'ring', 'omamori', 'badge', 'hatband']) {
+      expect(keepsakeById(id)).toBeDefined();
+    }
+  });
+  it("the omamori grants a small passive luck bonus only while it's held", () => {
+    const s = newSave();
+    expect(omamoriLuck(s)).toBe(0);
+    grantKeepsake(s, 'omamori');
+    expect(omamoriLuck(s)).toBe(OMAMORI_LUCK);
+    expect(OMAMORI_LUCK).toBeGreaterThan(0);
+    expect(OMAMORI_LUCK).toBeLessThan(0.2); // stays gentle — caps stay sane
+  });
+});
+
+describe('homeSoak', () => {
+  it('needs the home onsen, soaks once a day, restores energy + warms', () => {
+    const s = newSave();
+    expect(homeSoak(s)).toBe(false);        // no onsen yet
+    s.money = 70000;
+    expect(buyHomeOnsen(s)).toBe(true);
+    s.energy = 10;
+    expect(homeSoak(s)).toBe(true);
+    expect(s.homeOnsenDay).toBe(s.day);
+    expect(s.energy).toBeGreaterThan(10);
+    expect(s.buff).toEqual({ id: 'warm', day: s.day });
+    expect(homeSoak(s)).toBe(false);        // already soaked today
+    sleep(s);
+    expect(homeSoak(s)).toBe(true);          // a new day, soak again
   });
 });
 
@@ -318,8 +384,8 @@ describe('mineLayoutFor (daily mine generation)', () => {
       for (let floor = VAULT_MIN_FLOOR; floor <= 12; floor++) { total++; if (isVaultFloor({ ...newSave(), day }, floor)) vaults++; }
     expect(vaults).toBeGreaterThan(0);
     expect(vaults / total).toBeLessThan(0.2);
-    // A known trigger: day 15, floor 3.
-    expect(isVaultFloor({ ...newSave(), day: 15 }, 3)).toBe(true);
+    // A known trigger: day 12, floor 4.
+    expect(isVaultFloor({ ...newSave(), day: 12 }, 4)).toBe(true);
   });
 
   it('a vault floor is flagged, stocks a chest + a geode, and is richer than a normal floor', () => {
@@ -356,7 +422,7 @@ describe('mineLayoutFor (daily mine generation)', () => {
     // Looting again the same day+floor returns nothing (already looted).
     expect(lootVault(s, 4)).toBeNull();
     // A deeper vault floor (6+) tucks in an astral stone.
-    const deep = newSave(); deep.day = 24;
+    const deep = newSave(); deep.day = 66;
     expect(isVaultFloor(deep, 7)).toBe(true);
     expect(lootVault(deep, 7)!.starstones).toBeGreaterThanOrEqual(1);
     // The first vault opened unlocks the 'vault' achievement.
@@ -960,6 +1026,8 @@ describe('NPC daily routines', () => {
   // Which scene each routine NPC lives in (matches maps.ts npcs[]).
   const NPC_SCENE: Record<string, string> = {
     granny: 'city', charlie: 'city', miko: 'shrine', tex: 'shore', 'old-man': 'shore',
+    dancer2: 'nightclub', dancer3: 'nightclub', dancer4: 'nightclub', kaiju: 'nightclub',
+    mechanic: 'garage', bingus: 'museum', tiki: 'island', 'casino-host': 'casino', collector: 'gacha',
   };
   const tileSolidAt = (sceneId: string, x: number, y: number): boolean => {
     const sc = SCENES[sceneId];
@@ -1014,7 +1082,7 @@ describe('NPC daily routines', () => {
   });
 });
 
-import { drivePayout, deliveryDoneToday, DELIVERY_TIME_LIMIT, DELIVERY_BASE } from '../src/game/state';
+import { drivePayout, driveAceTime, deliveryDoneToday, DELIVERY_TIME_LIMIT, DELIVERY_BASE } from '../src/game/state';
 
 describe('Kojima Motors delivery race', () => {
   it('gates to once per day via deliveryDay', () => {
@@ -1059,5 +1127,20 @@ describe('Kojima Motors delivery race', () => {
     expect(late.cleanBonus).toBe(0);
     expect(late.total).toBe(Math.round(DELIVERY_BASE * 0.4));
     expect(late.total).toBeGreaterThan(0); // cozy: never zero
+  });
+
+  it('honors a per-track time limit (the default stays 60)', () => {
+    // The same elapsed time is on-time under a long limit but late under a short one.
+    expect(drivePayout(70, 0, 75).onTime).toBe(true);  // 70s on a 75s course = fine
+    expect(drivePayout(70, 0, 60).onTime).toBe(false); // 70s on a 60s course = late
+    expect(drivePayout(70, 0).onTime).toBe(false);     // default limit is still 60
+    // Time bonus is measured against the track's own limit (slack from THAT limit).
+    expect(drivePayout(50, 0, 75).timeBonus).toBeGreaterThan(drivePayout(50, 0, 60).timeBonus);
+  });
+
+  it('ace time scales with the track limit (proportional, capped under the limit)', () => {
+    expect(driveAceTime(60)).toBe(34);                 // matches the legacy default
+    expect(driveAceTime(74)).toBeGreaterThan(driveAceTime(56)); // longer course → later ace cut
+    for (const lim of [56, 62, 67, 74]) expect(driveAceTime(lim)).toBeLessThan(lim);
   });
 });

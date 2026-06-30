@@ -12,6 +12,7 @@ import {
   RECIPES, recipeById, STARTER_RECIPES, GIFT_POINTS, HEART_POINTS, MAX_HEARTS,
   friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
   FRIENDS, FRIEND_HEART_LINES, HANGOUTS, HOME_VISITS,
+  SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
 } from './data';
 import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind } from './data';
 import type { HangoutScene, HomeVisit } from './data';
@@ -50,6 +51,10 @@ export interface GameSave {
   palmDay: number;              // day the shaken-palm list belongs to
   palmsShaken: string[];        // "x,y" palms/bananas already shaken today
   onsenDay: number;             // last day you soaked in the island hot spring (0 = never)
+  shrineRestored: boolean;      // funded the shrine's restoration → permanent extra luck tier
+  charliePatron: boolean;       // became Charlie's patron
+  homeOnsen: boolean;           // bought the private home onsen (a hot spring at the apartment)
+  homeOnsenDay: number;         // last day you soaked in the home onsen (0 = never)
   gacha: Record<string, number>; // figure name -> count
   hat: boolean;                 // Tex's $67 cowboy hat (worn on the sprite)
   peepis: number;               // cans of "Diet Doctor Peepis" in your pocket
@@ -103,6 +108,7 @@ export interface GameSave {
   greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
   cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
   collectibles: string[];       // museum collectible item ids found but not yet donated (in your bag)
+  keepsakes: string[];          // friendship-capstone keepsake ids held (see KEEPSAKES in data.ts)
   almanac: { minerals: string[]; forage: string[] }; // Almanac app: ever-discovered sets (ore struck / shore finds grabbed) — survives selling
   // --- Cooking / Friendship / Decor (all default-safe; see kb/games.md) ---
   friends: Record<string, { pts: number; giftDay: number }>; // npc id -> friendship points + last day gifted
@@ -236,6 +242,10 @@ export const newSave = (): GameSave => ({
   palmDay: 0,
   palmsShaken: [],
   onsenDay: 0,
+  shrineRestored: false,
+  charliePatron: false,
+  homeOnsen: false,
+  homeOnsenDay: 0,
   gacha: {},
   hat: false,
   peepis: 0,
@@ -289,6 +299,7 @@ export const newSave = (): GameSave => ({
   greenhouse: freshGreenhouse(),
   cat: { found: false, name: '' },
   collectibles: [],
+  keepsakes: [],
   almanac: { minerals: [], forage: [] },
   friends: {},
   pantry: {},
@@ -394,6 +405,17 @@ export const sleep = (s: GameSave): void => {
 export const isRainyDay = (s: GameSave): boolean =>
   !s.rainCleared && (s.forceRain || (s.day > 1 && mulberry32(s.day * 1013904223 + 53)() < 0.2));
 
+// Even shopkeepers take a sick day. ~10% chance a given retail shop is shut for
+// the day — seeded per day + shop so it's stable across reloads but a surprise.
+// The konbini (24h) and service venues never close; only the proper storefronts.
+const CLOSEABLE_STORES = new Set(['denden', 'pawn', 'gacha']);
+export const storeClosedToday = (day: number, sceneId: string): boolean => {
+  if (day <= 1 || !CLOSEABLE_STORES.has(sceneId)) return false;
+  let h = 0;
+  for (let i = 0; i < sceneId.length; i++) h = (h * 31 + sceneId.charCodeAt(i)) | 0;
+  return mulberry32(day * 2654435761 + h * 40503 + 17)() < 0.1;
+};
+
 // Extra outdoor weather, layered on top of (and mutually exclusive with) rain.
 // Each is its own per-day seeded roll — stable across reloads, never day 1 — but
 // priority is enforced by construction: rain wins over fog, and a meteor shower
@@ -479,19 +501,29 @@ export const timeBlock = (timeMin: number): RoutineBlock => {
 
 export interface RoutineStop { block: RoutineBlock; tile: { x: number; y: number } }
 
-// Scene-local tiles (verified walkable + reachable against maps.ts). Each NPC id
-// matches its `npcs[]` entry in maps.ts. Cover folk with a clear scene + role:
-//   granny  — city: greenhouse in the morning, the torii-garden pond by midday
-//   charlie — city: loiters by the konbini, drifts west then down to the garden
-//   miko    — shrine: works the forecourt around the honden, gate, and lanterns
-//   tex     — shore: dune grass up top, then down to the waterline and along it
-//   old-man — shore: Genji the angler hugs the waterline, rests up on the sand
+// Scene-local tiles (verified walkable + reachable against maps.ts: cross-checked
+// each tile against the scene's grid + legend, avoiding solids/warps/props). Each
+// NPC id matches its `npcs[]` entry in maps.ts, and must also be in WANDER_IDS in
+// the monolith so it's spawned as a live, routine-steered wanderer. Folk with a
+// clear scene + role:
+//   granny      — city: greenhouse at dawn, the torii-garden pond by midday, home at night
+//   charlie     — city: loiters by the konbini, drifts west then down to the garden
+//   miko        — shrine: works the forecourt around the honden, gate, and lanterns
+//   tex         — shore: dune grass up top, down to the waterline, then by the boardwalk
+//   old-man     — shore: Genji the angler hugs the waterline, rests up on the sand
+//   dancer2/3/4 — nightclub: drift the dancefloor + bar across the night
+//   kaiju       — nightclub: the club mascot prowls the floor edges
+//   mechanic    — garage: lifts at open, the counter midday, the bays, the toolbench
+//   bingus      — museum: the curator does the rounds of the gallery floor
+//   tiki        — island: the tiki host works the bar, the sands, then up among the palms
+//   casino-host — casino: greets the floor, slots → roulette → blackjack side
+//   collector   — gacha: browses the cabinets corner to corner
 export const ROUTINES: Record<string, RoutineStop[]> = {
   granny: [
     { block: 'morning', tile: { x: 15, y: 14 } }, // outside the greenhouse door
     { block: 'midday', tile: { x: 24, y: 14 } },  // open grass by the torii garden (not the boxed-in pocket)
     { block: 'evening', tile: { x: 12, y: 16 } }, // back toward home/the planters
-    { block: 'night', tile: { x: 12, y: 16 } },
+    { block: 'night', tile: { x: 8, y: 16 } },    // pottering the home-block grass after dark
   ],
   charlie: [
     { block: 'morning', tile: { x: 15, y: 3 } },  // sidewalk outside the konbini
@@ -509,13 +541,73 @@ export const ROUTINES: Record<string, RoutineStop[]> = {
     { block: 'morning', tile: { x: 9, y: 3 } },   // up on the dune grass
     { block: 'midday', tile: { x: 10, y: 7 } },   // down on the warm sand
     { block: 'evening', tile: { x: 16, y: 6 } },  // strolling east along the beach
-    { block: 'night', tile: { x: 9, y: 3 } },
+    { block: 'night', tile: { x: 18, y: 3 } },    // packing the stand up by the boardwalk gate
   ],
   'old-man': [
     { block: 'morning', tile: { x: 4, y: 8 } },   // Genji at the waterline
     { block: 'midday', tile: { x: 12, y: 8 } },   // working the tide further along
     { block: 'evening', tile: { x: 6, y: 6 } },   // up on the sand
     { block: 'night', tile: { x: 4, y: 4 } },     // resting on the grass
+  ],
+  // --- Club Kaiju patrons (dancefloor = 'd' tiles, surrounding floor = '.') ----
+  dancer2: [
+    { block: 'morning', tile: { x: 11, y: 7 } },  // far corner of the floor
+    { block: 'midday', tile: { x: 8, y: 4 } },    // up toward the front of the floor
+    { block: 'evening', tile: { x: 5, y: 7 } },   // back-left of the floor
+    { block: 'night', tile: { x: 10, y: 5 } },    // mid-floor, peak hours
+  ],
+  dancer3: [
+    { block: 'morning', tile: { x: 6, y: 4 } },
+    { block: 'midday', tile: { x: 10, y: 6 } },
+    { block: 'evening', tile: { x: 4, y: 7 } },
+    { block: 'night', tile: { x: 8, y: 5 } },
+  ],
+  dancer4: [
+    { block: 'morning', tile: { x: 9, y: 7 } },
+    { block: 'midday', tile: { x: 5, y: 4 } },
+    { block: 'evening', tile: { x: 11, y: 4 } },
+    { block: 'night', tile: { x: 7, y: 6 } },
+  ],
+  kaiju: [
+    { block: 'morning', tile: { x: 13, y: 3 } },  // by the DJ side
+    { block: 'midday', tile: { x: 6, y: 7 } },    // down across the floor
+    { block: 'evening', tile: { x: 3, y: 1 } },   // prowling the back wall
+    { block: 'night', tile: { x: 13, y: 5 } },    // right edge of the floor
+  ],
+  // --- Kojima Motors (avoids lifts P / benches T / counter C / tires Y / B) ----
+  mechanic: [
+    { block: 'morning', tile: { x: 3, y: 3 } },   // by the hydraulic lifts at open
+    { block: 'midday', tile: { x: 4, y: 5 } },    // at the parts counter
+    { block: 'evening', tile: { x: 13, y: 4 } },  // out on the oil-stained bay floor
+    { block: 'night', tile: { x: 11, y: 1 } },    // tidying the toolbench wall
+  ],
+  // --- Kawamachi Museum (floor only; avoids pedestals 'p' + wall frames 'A') ---
+  bingus: [
+    { block: 'morning', tile: { x: 2, y: 1 } },   // opens up the west gallery
+    { block: 'midday', tile: { x: 13, y: 3 } },   // the east wall of frames
+    { block: 'evening', tile: { x: 7, y: 6 } },   // centre of the hall
+    { block: 'night', tile: { x: 3, y: 7 } },     // closing rounds, south-west
+  ],
+  // --- Kiwami Island (sand 's' + grass 'g'; avoids water/lagoon/palms/tiki) ----
+  tiki: [
+    { block: 'morning', tile: { x: 7, y: 10 } },  // tending the tiki bar
+    { block: 'midday', tile: { x: 15, y: 12 } },  // along the south sands
+    { block: 'evening', tile: { x: 18, y: 6 } },  // up among the palm grove
+    { block: 'night', tile: { x: 5, y: 9 } },     // back by the island signpost
+  ],
+  // --- Kinryū Lounge (carpet only; avoids slots S / blackjack B / roulette R r) -
+  'casino-host': [
+    { block: 'morning', tile: { x: 2, y: 4 } },   // greets near the west slots
+    { block: 'midday', tile: { x: 7, y: 7 } },    // working the centre floor
+    { block: 'evening', tile: { x: 13, y: 2 } },  // the east side, top
+    { block: 'night', tile: { x: 7, y: 4 } },     // by the roulette, peak hours
+  ],
+  // --- Gacha Gacha (floor only; avoids the cabinets 'G') -----------------------
+  collector: [
+    { block: 'morning', tile: { x: 3, y: 2 } },   // first cabinets of the day
+    { block: 'midday', tile: { x: 9, y: 3 } },    // east bank of machines
+    { block: 'evening', tile: { x: 6, y: 5 } },   // the back row
+    { block: 'night', tile: { x: 3, y: 6 } },     // last pulls, south-west corner
   ],
 };
 
@@ -604,22 +696,26 @@ export const errandDoneToday = (s: GameSave): boolean => s.errandDay === s.day;
 // The minigame physics/draw live in LittleApartmentGame.tsx (driveRef, like the
 // shift game) — only the daily gate + the payout math live here so they're unit-
 // testable and default-safe across saves.
-export const DELIVERY_TIME_LIMIT = 60;      // seconds — deliver under this for the full bonus
+export const DELIVERY_TIME_LIMIT = 60;      // seconds — the DEFAULT limit (each track sets its own; see DRIVE_TRACKS)
 export const DELIVERY_BASE = 900;           // flat fee for a completed delivery
-export const DELIVERY_ACE_TIME = 34;        // deliver under this (seconds) → the "ace driver" achievement
+export const DELIVERY_ACE_FRAC = 0.57;      // "ace driver" = finishing under ~57% of the track's limit
+// Ace threshold for a given track limit (proportional, so it's fair on long + short courses).
+export const driveAceTime = (timeLimit: number = DELIVERY_TIME_LIMIT): number => Math.round(timeLimit * DELIVERY_ACE_FRAC);
+export const DELIVERY_ACE_TIME = driveAceTime(); // 34s on the default limit (legacy/default)
 export const deliveryDoneToday = (s: GameSave): boolean => s.deliveryDay === s.day;
 export interface DrivePayout { total: number; base: number; timeBonus: number; cleanBonus: number; onTime: boolean }
-// elapsedSec = run time; grassSec = seconds spent off the dirt (the clean-driving penalty).
+// elapsedSec = run time; grassSec = seconds spent off the dirt (the clean-driving penalty);
+// timeLimit = the active track's limit (longer courses get more seconds — see DRIVE_TRACKS).
 // On-time runs earn base + a big time bonus (faster is more, capped) + a clean bonus.
 // A late delivery still pays — just a smaller flat "late" fee (cozy: never fail-hard).
-export const drivePayout = (elapsedSec: number, grassSec: number): DrivePayout => {
-  const onTime = elapsedSec <= DELIVERY_TIME_LIMIT;
+export const drivePayout = (elapsedSec: number, grassSec: number, timeLimit: number = DELIVERY_TIME_LIMIT): DrivePayout => {
+  const onTime = elapsedSec <= timeLimit;
   if (!onTime) {
     const late = Math.round(DELIVERY_BASE * 0.4);
     return { total: late, base: late, timeBonus: 0, cleanBonus: 0, onTime: false };
   }
   const base = DELIVERY_BASE;
-  const timeBonus = Math.min(2000, Math.round(Math.max(0, DELIVERY_TIME_LIMIT - elapsedSec) * 42));
+  const timeBonus = Math.min(2000, Math.round(Math.max(0, timeLimit - elapsedSec) * 42));
   const cleanBonus = Math.round(Math.max(0, 1 - grassSec / 8) * 450);
   return { total: base + timeBonus + cleanBonus, base, timeBonus, cleanBonus, onTime: true };
 };
@@ -648,8 +744,9 @@ export const buyFurniture = (s: GameSave, itemId: string, price: number): boolea
 };
 
 // The ending wants the furniture actually IN the apartment, not in boxes.
+// Optional decor (f.optional) is ignored — only the core, non-optional set gates it.
 export const allFurnished = (s: GameSave): boolean =>
-  FURNITURE.every(f => Boolean(s.placed[f.id]));
+  FURNITURE.filter(f => !f.optional).every(f => Boolean(s.placed[f.id]));
 
 // True once every one of The Manager's rare furniture pieces has been acquired
 // (owned, boxed or placed). Drives the Manager's Paris reveal. The coffin is
@@ -686,9 +783,70 @@ export const museumComplete = (s: GameSave): boolean =>
   MUSEUM_SLOTS.every(sl => s.museum.donated.includes(sl.id));
 
 // Shrine luck: tier 1 at ¥5,000 donated, tier 2 at ¥20,000. Each tier makes
-// the rarer (valuable) fish noticeably more willing to bite.
-export const shrineLuck = (s: GameSave): number =>
-  s.donated >= 20000 ? 2 : s.donated >= 5000 ? 1 : 0;
+// the rarer (valuable) fish noticeably more willing to bite. Funding the shrine's
+// full restoration (see restoreShrine) grants a PERMANENT extra tier on top of the
+// donation tiers, capped at 3.
+export const SHRINE_LUCK_MAX = 3;
+export const shrineLuck = (s: GameSave): number => {
+  const base = s.donated >= 20000 ? 2 : s.donated >= 5000 ? 1 : 0;
+  return Math.min(SHRINE_LUCK_MAX, base + (s.shrineRestored ? 1 : 0));
+};
+
+// ---- Keepsakes ---------------------------------------------------------------
+// One-of-a-kind mementos earned at friendship capstones (see KEEPSAKES in
+// data.ts). Held forever once granted. Pure + testable — the wiring layer reads
+// reward.keepsake and calls grantKeepsake; effects (food/sell/luck/display) read
+// hasKeepsake. Yoshi's omamori adds a small PASSIVE luck nudge while carried.
+export const hasKeepsake = (s: GameSave, id: string): boolean => s.keepsakes.includes(id);
+export const grantKeepsake = (s: GameSave, id: string): boolean => {
+  if (s.keepsakes.includes(id)) return false;   // already held — no duplicate
+  s.keepsakes.push(id);
+  return true;
+};
+// The omamori charm's passive luck: a small, permanent richness/finds bump while
+// it's in your bag. Deliberately gentle so it stacks with shrine luck without
+// blowing the caps (the mine richness/forage paths still clamp).
+export const OMAMORI_LUCK = 0.06;
+export const omamoriLuck = (s: GameSave): number => hasKeepsake(s, 'omamori') ? OMAMORI_LUCK : 0;
+
+// ---- One-time prestige purchases ---------------------------------------------
+// Each charges once, sets its flag, and returns true on success (false if already
+// owned or short on money). Pure + testable — the wiring agent just CALLs these.
+
+// Fund the shrine's full restoration → a permanent extra shrineLuck tier.
+export const restoreShrine = (s: GameSave): boolean => {
+  if (s.shrineRestored || s.money < SHRINE_RESTORE_PRICE) return false;
+  s.money -= SHRINE_RESTORE_PRICE;
+  s.shrineRestored = true;
+  return true;
+};
+
+// Become Charlie's patron.
+export const sponsorCharlie = (s: GameSave): boolean => {
+  if (s.charliePatron || s.money < CHARLIE_PATRON_PRICE) return false;
+  s.money -= CHARLIE_PATRON_PRICE;
+  s.charliePatron = true;
+  return true;
+};
+
+// Install a private hot spring at the apartment (unlocks homeSoak).
+export const buyHomeOnsen = (s: GameSave): boolean => {
+  if (s.homeOnsen || s.money < HOME_ONSEN_PRICE) return false;
+  s.money -= HOME_ONSEN_PRICE;
+  s.homeOnsen = true;
+  return true;
+};
+
+// Soak in the home onsen (once per day). Mirrors the island spring: restores a big
+// chunk of energy (capped) and grants the day-long `warm` buff (cheaper exertions).
+export const homeSoak = (s: GameSave): boolean => {
+  if (!s.homeOnsen || s.homeOnsenDay === s.day) return false;
+  s.homeOnsenDay = s.day;
+  const max = maxEnergy(s);
+  s.energy = Math.min(max, s.energy + Math.round(max * 0.6));
+  s.buff = { id: 'warm', day: s.day };
+  return true;
+};
 
 // ---- greenhouse (Community Garden 2.0) ---------------------------------------
 // Costs for the upgrades.
@@ -772,7 +930,7 @@ const harvestQuality = (s: GameSave, plot: GreenhousePlot): number => {
   if (plot.missed === 0) pts += 2; else if (plot.missed <= 1) pts += 1; // tended it well
   if (plot.fertilized) pts += 1;
   pts += s.greenhouse.tier;     // 0..2
-  pts += shrineLuck(s);         // 0..2 — the shrine's favor shows in the soil
+  pts += shrineLuck(s);         // 0..3 — the shrine's favor shows in the soil
   pts += skillLevel(s, 'farm') >= 8 ? 2 : skillLevel(s, 'farm') >= 4 ? 1 : 0; // a green thumb shows
   return pts >= 5 ? 2 : pts >= 3 ? 1 : 0;
 };
@@ -914,8 +1072,8 @@ export interface MineLayout {
 // floor (stable across reloads, independent of the ore/crawler rolls), only from
 // VAULT_MIN_FLOOR down, and uncommon enough to feel like a real event. It stocks
 // the floor richer and drops a centerpiece chest with a one-time haul.
-export const VAULT_MIN_FLOOR = 3;
-export const VAULT_CHANCE = 0.07;        // ~7% per qualifying floor
+export const VAULT_MIN_FLOOR = 4;
+export const VAULT_CHANCE = 0.05;        // ~5% per qualifying floor
 export const isVaultFloor = (s: GameSave, floor: number): boolean =>
   floor >= VAULT_MIN_FLOOR && mulberry32(s.day * 999983 + floor * 7919 + 31)() < VAULT_CHANCE;
 
@@ -988,11 +1146,11 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   let richness = rand() * rand();
   const luckyOre = luckyToday(s) ? 0.2 : 0; // Lucky Day or a Lucky meal: veins run rich
   const mineSkill = skillLevel(s, 'mine') * 0.025; // a seasoned miner finds more
-  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre + mineSkill);
+  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre + mineSkill + omamoriLuck(s));
   if (ch.id === 'rich') richness = Math.min(1, richness + 0.2);
   if (ch.id === 'calm') richness = Math.min(1, richness + 0.05);
   if (vault) richness = Math.min(1, richness + 0.45);   // a vault floor runs rich
-  const oreCount = Math.round(3 + richness * 12 + depth + (vault ? 6 : 0));
+  const oreCount = Math.round(2 + richness * 7 + depth * 0.7 + (vault ? 5 : 0));
 
   // Mineral pool is gated by floor — deep ore simply isn't here until you descend.
   const pool = MINERALS.filter(m => m.minFloor <= floor);
@@ -1027,8 +1185,8 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
     for (const m of pool) { r -= tiltedW(m); if (r <= 0) { mineral = m; break; } }
     // Rich veins yield extra; deeper floors hit them more often.
     const vein = rand();
-    const hi = 0.02 + richness * 0.05 + depth * 0.01;
-    const mid = 0.07 + richness * 0.13 + depth * 0.03;
+    const hi = 0.01 + richness * 0.03 + depth * 0.006;
+    const mid = 0.04 + richness * 0.08 + depth * 0.02;
     const amount = vein < hi ? 3 : vein < mid ? 2 : 1;
     ore.push({ x: c.x, y: c.y, mineral, amount });
   }
@@ -1085,7 +1243,7 @@ export const lootVault = (s: GameSave, floor: number): VaultHaul | null => {
   const lucky = luckyToday(s) ? 1 : 0;
   const mult = 1 + luck * 0.15 + streakBonus + lucky * 0.25;
 
-  const cash = Math.round((2500 + depth * 500) * mult);
+  const cash = Math.round((1800 + depth * 350) * mult);
   s.money += cash;
 
   const add = (id: string, n: number) => { s.minerals[id] = (s.minerals[id] ?? 0) + n; };
@@ -1118,7 +1276,7 @@ export const crackGeode = (s: GameSave): { text: string; color: string } | null 
     case 'opal': { const n = 1 + Math.floor(Math.random() * 2); add('opal', n); return { text: `${n}× Void Opal!`, color: '#b06ad0' }; }
     case 'starstone': { add('starstone', 1); return { text: 'An Astral Stone!', color: '#ff7cc4' }; }
     case 'gacha': { const fig = GEODE_FIGURES[Math.floor(Math.random() * GEODE_FIGURES.length)]; s.gacha[fig] = (s.gacha[fig] ?? 0) + 1; return { text: `A figure: ${fig}!`, color: '#ff7cc4' }; }
-    case 'jackpot': { s.money += 5000; add('opal', 2); return { text: 'JACKPOT! ¥5,000 + 2 Void Opal!', color: '#ffd24a' }; }
+    case 'jackpot': { s.money += 3000; add('opal', 2); return { text: 'JACKPOT! ¥3,000 + 2 Void Opal!', color: '#ffd24a' }; }
   }
   return null;
 };
