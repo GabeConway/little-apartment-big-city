@@ -10,7 +10,7 @@ import {
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
   mineChallengeFor, enterMineStreak, crackGeode, lootVault, isVaultFloor, VAULT_MIN_FLOOR,
   unlockGameAch, dayEventFor, shoreForageFor,
-  isRainyDay, foggyDay, meteorNight,
+  isRainyDay, foggyDay, meteorNight, storeClosedToday,
   plantCrop, clearPlot, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
   streetEventFor, streetEventDoneToday,
   timeBlock, routineTargetFor, ROUTINES, type RoutineBlock,
@@ -1142,5 +1142,29 @@ describe('Kojima Motors delivery race', () => {
     expect(driveAceTime(60)).toBe(34);                 // matches the legacy default
     expect(driveAceTime(74)).toBeGreaterThan(driveAceTime(56)); // longer course → later ace cut
     for (const lim of [56, 62, 67, 74]) expect(driveAceTime(lim)).toBeLessThan(lim);
+  });
+});
+
+describe('storeClosedToday', () => {
+  it('is deterministic for a given day + shop', () => {
+    for (const d of [2, 7, 23, 99]) for (const shop of ['denden', 'pawn', 'gacha'])
+      expect(storeClosedToday(d, shop)).toBe(storeClosedToday(d, shop));
+  });
+  it('never closes the 24h konbini, non-shop scenes, or day 1', () => {
+    for (let d = 1; d <= 60; d++) {
+      expect(storeClosedToday(d, 'konbini')).toBe(false);
+      expect(storeClosedToday(d, 'shore')).toBe(false);
+      expect(storeClosedToday(d, 'apartment')).toBe(false);
+    }
+    expect(storeClosedToday(1, 'denden')).toBe(false); // settling-in day is always open
+  });
+  it('closes a closeable shop roughly ~10% of days (1%..25% over a long window)', () => {
+    for (const shop of ['denden', 'pawn', 'gacha']) {
+      let closed = 0;
+      for (let d = 2; d <= 1001; d++) if (storeClosedToday(d, shop)) closed++;
+      const rate = closed / 1000;
+      expect(rate).toBeGreaterThan(0.01);
+      expect(rate).toBeLessThan(0.25);
+    }
   });
 });
