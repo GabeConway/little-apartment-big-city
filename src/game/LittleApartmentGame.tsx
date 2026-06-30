@@ -79,6 +79,7 @@ import {
   buyFertilizer, expandBeds, upgradeGreenhouse, grantMoonSeed, seedShopFor, activeRequest,
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
+  seacaveDrop, seacaveSearchDoneToday, SEACAVE_SEARCH_COST, bigfootInCaveToday,
   deliveryDoneToday, drivePayout, driveAceTime,
   canCook, canCookHere, cook, eatDish, learnRecipe, ingredientCount, buyGrocery, keepProduce,
   buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend, meetFriend,
@@ -1047,8 +1048,12 @@ const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.4
 const MIDNIGHT_IDS = new Set(['stranger']);
 const strangerActive = (s: GameSave): boolean => s.timeMin >= 22 * 60;
 // True if a time-gated NPC is currently hidden (not drawn, not solid, not interactive).
+// Bigfoot is doubly gated: he only resolves in the island cave on a rare luck-blessed
+// day (and only until met), and only shows at Club Kaiju once you HAVE met him.
 const npcHiddenNow = (s: GameSave, id: string): boolean =>
-  (NIGHT_EVEN_IDS.has(id) && !davidActive(s)) || (MIDNIGHT_IDS.has(id) && !strangerActive(s));
+  (NIGHT_EVEN_IDS.has(id) && !davidActive(s)) || (MIDNIGHT_IDS.has(id) && !strangerActive(s))
+  || (id === 'bigfoot-cave' && !bigfootInCaveToday(s))
+  || (id === 'bigfoot-club' && !s.storySeen.includes('bigfoot-met'));
 
 // ---- Bingus museum fetch-quest helpers --------------------------------------
 const bingusHasKind = (s: GameSave, kind: BingusFetch['kind']): boolean =>
@@ -2587,6 +2592,30 @@ const LittleApartmentGame: React.FC = () => {
         return;
       }
       if (npc.id === 'campfire') { showDialog(['Driftwood crackles, though no one gathered it. The fire smells of the sea — and something older.']); return; }
+      // Bigfoot — first met deep in the island cave (a rare, luck-blessed sighting),
+      // then forever after a regular at Club Kaiju. Meeting him sets 'bigfoot-met',
+      // which is exactly what moves him from the cave (bigfoot-cave) to the club
+      // (bigfoot-club) via npcHiddenNow.
+      if (npc.id === 'bigfoot-cave' || npc.id === 'bigfoot-club') {
+        if (!s.storySeen.includes('bigfoot-met')) {
+          s.storySeen.push('bigfoot-met');
+          s.money += 3000;
+          sfxCatch();
+          persistSave(s); refreshHud();
+          showDialog([
+            'The dark at the back of the cave is not empty. It is breathing. A shape unfolds from it — taller than the doorway you crawled through, shaggy with brown fur gone grey at the muzzle, two amber eyes catching the daylight crack and holding it.',
+            'You should run. You do not. He tilts his great head, considering you the way you might consider a stray cat — and decides, apparently, that you are alright.',
+            '"...wasn\'t hiding from YOU," he rumbles, in a voice like the tide moving stones. "Hiding from the cameras. The fellas with the long lenses. You\'re not one of those." He almost sounds disappointed for you.',
+            'He presses something into your hand — a fat roll of damp banknotes, who knows from where. "For not screaming. Buy yourself a drink. ...Actually—" a slow, enormous grin, "—come find me at the loud place in the bad part of town. Club Kaiju. Big green fella out front knows me. They don\'t blink at a guy like me in there." (+¥3,000)',
+          ], 'Bigfoot');
+          return;
+        }
+        showDialog([
+          '"Hey! The cave kid!" Bigfoot raises a glass that looks like a thimble in his hand, the club lights strobing across his fur. "Told you they don\'t blink at me in here. Best night spot in the prefecture."',
+          'He leans in, conspiratorial, which from him means the whole booth darkens. "Keep the cave thing between us, yeah? A guy needs ONE place nobody\'s pointing a camera. ...Drinks are on me though. You found me. Fair\'s fair."',
+        ], 'Bigfoot');
+        return;
+      }
       // The midnight stranger — a one-time gift, then just eerie company on later nights.
       if (npc.id === 'stranger') {
         if (!s.storySeen.includes('midnight-stranger')) {
@@ -3181,6 +3210,37 @@ const LittleApartmentGame: React.FC = () => {
           'Inside it is cold and far louder than the surface: the whole ocean breathing in and out through the stone. The walls are scratched with tally-marks no one is left to explain.',
           'In a niche, bound in oilcloth gone hard as bark, someone\'s buried nest egg — old coins, salt-blackened but real, hidden against a worse day than they ever lived to see. You take them, and whisper a thank-you to the dark. (+¥5,000)',
         ]);
+        break;
+      }
+      // Sift the sea-cave floor — once a day, the tide leaves something in the dark.
+      // What you turn up is luck-gated (see seacaveDrop): mostly damp coins, but a
+      // blessed day can cough up a Void Opal or even an Astral Stone.
+      case 'seacave-search': {
+        if (seacaveSearchDoneToday(s)) { showDialog(['You\'ve already worked over the cave floor today. The tide will rearrange the dark by morning — come back then.']); break; }
+        const cost = energyCost(s, SEACAVE_SEARCH_COST);
+        if (s.energy < cost) { showDialog(['You haven\'t the strength left to dig through wet shingle and stone. Rest first, then come back to the dark.']); break; }
+        s.energy -= cost;
+        s.caveDropDay = s.day;
+        const drop = seacaveDrop(s);
+        if (drop.mineralId) {
+          const m = mineralById(drop.mineralId);
+          s.minerals[drop.mineralId] = (s.minerals[drop.mineralId] ?? 0) + drop.count;
+          if (!s.almanac.minerals.includes(drop.mineralId)) s.almanac.minerals.push(drop.mineralId);
+          sfxMine(m.value);
+          persistSave(s); refreshHud();
+          showDialog([
+            'You sink your hands into the cold shingle where the tide has been working, and the dark gives something up.',
+            `Wedged in the wet stone: ${drop.count > 1 ? `${drop.count}× ` : ''}${m.name}, salt-bright and impossibly out of place down here. (+${drop.count > 1 ? `${drop.count}× ` : ''}${m.name})`,
+          ]);
+        } else {
+          s.money += drop.money;
+          sfxCoin();
+          persistSave(s); refreshHud();
+          showDialog([
+            'You sink your hands into the cold shingle where the tide has been working, sifting for whatever the sea decided to leave.',
+            `A scatter of salt-blackened coins, sand-cold against your palm. Not a fortune — but the cave rarely sends you away empty. (+¥${drop.money.toLocaleString()})`,
+          ]);
+        }
         break;
       }
       // 2) Shore stargazing — only after dark; spot the Sleeping Cat constellation.

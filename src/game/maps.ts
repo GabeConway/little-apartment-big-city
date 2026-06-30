@@ -531,6 +531,9 @@ const nightclub: SceneDef = {
     { id: 'dancer3', x: 7, y: 4, sprite: 'npc-dancer', dir: 'down' },
     { id: 'dancer4', x: 10, y: 7, sprite: 'npc-dancer', dir: 'up' },
     { id: 'kaiju', x: 13, y: 6, sprite: 'npc-kaiju', dir: 'left' },
+    // Bigfoot, once you've met him in the island cave — hidden until then
+    // (npcHiddenNow gates on the 'bigfoot-met' story flag).
+    { id: 'bigfoot-club', x: 12, y: 3, sprite: 'npc-bigfoot', dir: 'down' },
   ],
 };
 
@@ -879,8 +882,12 @@ const seacave: SceneDef = {
   ],
   interactables: [
     { id: 'seacave-niche', x: 5, y: 2, label: 'A niche in the rock' },
+    { id: 'seacave-search', x: 8, y: 1, w: 3, h: 1, label: 'Sift the cave floor' },
   ],
-  npcs: [],
+  // Bigfoot only resolves here on a rare, luck-blessed day (bigfootInCaveToday);
+  // npcHiddenNow keeps him out of the cave otherwise — and forever once you've met
+  // him, by which point he's a regular at Club Kaiju instead.
+  npcs: [{ id: 'bigfoot-cave', x: 2, y: 4, sprite: 'npc-bigfoot', dir: 'right' }],
 };
 
 // ---- Open water (take the skiff out from the shore) -----------------------------------

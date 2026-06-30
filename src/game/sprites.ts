@@ -451,6 +451,130 @@ const addMonster = (atlas: Atlas) => {
   }
 };
 
+// Bigfoot — the island cryptid that only shows in the sea cave when luck is
+// with you. NOT built on the human body: a hulking shaggy ape, broad shoulders,
+// a heavy brow and amber eyes that "look back in the dark" (cf. the bottle note,
+// "look for the ones that look back"). f fur, k fur-shadow, s muzzle skin,
+// B brow ridge, e amber eye, n nose, m mouth. Two walk frames swap the feet.
+const BIGFOOT_PAL = { f: '#6b4a2e', k: '#3f2a18', s: '#c89b6e', B: '#2a1a0e', e: '#ffcf6b', n: '#2a1a0e', m: '#3f2a18' };
+const BIGFOOT_DOWN_0 = [
+  '....ffffffff....',
+  '..ffffffffffff..',
+  '..fkffffffffkf..',
+  '..ffssssssssff..',
+  '..ffsBBssBBsff..',
+  '..ffseesseesff..',
+  '..ffsssnnsssff..',
+  '..fkssmmmmsskf..',
+  '..ffffffffffff..',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '.fffkffffffkfff.',
+  '.ffffffffffffff.',
+  '...fff....fff...',
+  '..kkkk....kkkk..',
+  '................',
+];
+const BIGFOOT_DOWN_1 = [
+  '....ffffffff....',
+  '..ffffffffffff..',
+  '..fkffffffffkf..',
+  '..ffssssssssff..',
+  '..ffsBBssBBsff..',
+  '..ffseesseesff..',
+  '..ffsssnnsssff..',
+  '..fkssmmmmsskf..',
+  '..ffffffffffff..',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '.fffkffffffkfff.',
+  '.ffffffffffffff.',
+  '...fff....fff...',
+  '.kkkk......kkkk.',
+  '................',
+];
+const BIGFOOT_UP_0 = [
+  '....ffffffff....',
+  '..ffffffffffff..',
+  '..ffffffffffff..',
+  '..ffffffffffff..',
+  '..ffkffffffkff..',
+  '..ffffffffffff..',
+  '..ffffffffffff..',
+  '..ffkffffffkff..',
+  '..ffffffffffff..',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '...fff....fff...',
+  '..kkkk....kkkk..',
+  '................',
+];
+const BIGFOOT_UP_1 = [
+  '....ffffffff....',
+  '..ffffffffffff..',
+  '..ffffffffffff..',
+  '..ffffffffffff..',
+  '..ffkffffffkff..',
+  '..ffffffffffff..',
+  '..ffffffffffff..',
+  '..ffkffffffkff..',
+  '..ffffffffffff..',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '.ffffffffffffff.',
+  '...fff....fff...',
+  '.kkkk......kkkk.',
+  '................',
+];
+const BIGFOOT_SIDE_0 = [
+  '....ffffff......',
+  '..ffffffffff....',
+  '.fffffffffkf....',
+  '.fsssfffffff....',
+  '.fsBsfffffff....',
+  '.fsesfffffff....',
+  '.fnssfffffff....',
+  '.fmmsfffffff....',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '...ff...ff......',
+  '..kkk...kkk.....',
+  '................',
+];
+const BIGFOOT_SIDE_1 = [
+  '....ffffff......',
+  '..ffffffffff....',
+  '.fffffffffkf....',
+  '.fsssfffffff....',
+  '.fsBsfffffff....',
+  '.fsesfffffff....',
+  '.fnssfffffff....',
+  '.fmmsfffffff....',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '.ffffffffffff...',
+  '...ff...ff......',
+  '.kkk.....kkk....',
+  '................',
+];
+const addBigfoot = (atlas: Atlas) => {
+  const d0 = strSprite(BIGFOOT_DOWN_0, BIGFOOT_PAL), d1 = strSprite(BIGFOOT_DOWN_1, BIGFOOT_PAL);
+  const u0 = strSprite(BIGFOOT_UP_0, BIGFOOT_PAL), u1 = strSprite(BIGFOOT_UP_1, BIGFOOT_PAL);
+  const l0 = strSprite(BIGFOOT_SIDE_0, BIGFOOT_PAL), l1 = strSprite(BIGFOOT_SIDE_1, BIGFOOT_PAL);
+  atlas['npc-bigfoot-down-0'] = d0; atlas['npc-bigfoot-down-1'] = d1;
+  atlas['npc-bigfoot-up-0'] = u0; atlas['npc-bigfoot-up-1'] = u1;
+  atlas['npc-bigfoot-left-0'] = l0; atlas['npc-bigfoot-left-1'] = l1;
+  atlas['npc-bigfoot-right-0'] = mirror(l0); atlas['npc-bigfoot-right-1'] = mirror(l1);
+};
+
 // Mine crawlers — skittering shadows with too many eyes.
 // Crawlers: domed carapace with a top-left rim (l), belly shadow (d) and
 // glowing eyes (y). Two skitter frames swap the leg positions.
@@ -4069,6 +4193,7 @@ export const buildAtlas = (): Atlas => {
   addCharacter(atlas, 'player-fem-hat', FEM_PAL, [ACC.longhair('#6e4a2f', '#4a3120'), ACC.cowboy('#b08a50', '#6e4a2f')]);
   for (const [key, def] of Object.entries(NPC_DEFS)) addCharacter(atlas, key, def.pal, def.acc);
   addMonster(atlas);
+  addBigfoot(atlas);
   addCrawler(atlas);
   addCrawlerVariants(atlas);
   buildTiles(atlas);

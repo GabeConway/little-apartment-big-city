@@ -10,6 +10,7 @@ import {
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
   mineChallengeFor, enterMineStreak, crackGeode, lootVault, isVaultFloor, VAULT_MIN_FLOOR,
   unlockGameAch, dayEventFor, shoreForageFor,
+  caveLuck, seacaveDrop, seacaveSearchDoneToday, bigfootSightChance, bigfootInCaveToday,
   isRainyDay, foggyDay, meteorNight, storeClosedToday,
   plantCrop, clearPlot, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
   streetEventFor, streetEventDoneToday,
@@ -1166,5 +1167,85 @@ describe('storeClosedToday', () => {
       expect(rate).toBeGreaterThan(0.01);
       expect(rate).toBeLessThan(0.25);
     }
+  });
+});
+
+describe('island sea cave: luck drops + Bigfoot', () => {
+  it('caveLuck sums shrine + omamori + Lucky day', () => {
+    const s = newSave();
+    expect(caveLuck(s)).toBe(0);
+    s.donated = 20000;                         // shrine tier 2
+    expect(caveLuck(s)).toBe(2);
+    grantKeepsake(s, 'omamori');               // +1
+    expect(caveLuck(s)).toBe(3);
+  });
+
+  it('seacaveSearchDoneToday gates on the current day', () => {
+    const s = newSave();
+    expect(seacaveSearchDoneToday(s)).toBe(false);
+    s.caveDropDay = s.day;
+    expect(seacaveSearchDoneToday(s)).toBe(true);
+    s.day += 1;
+    expect(seacaveSearchDoneToday(s)).toBe(false);
+  });
+
+  it('seacaveDrop with no luck and a low roll yields coins, not ore', () => {
+    const s = newSave();
+    const d = seacaveDrop(s, () => 0.1);       // luck 0, roll 0.1 → coins
+    expect(d.mineralId).toBeNull();
+    expect(d.money).toBeGreaterThan(0);
+    expect(d.count).toBe(0);
+  });
+
+  it('seacaveDrop pushes toward rarer ore as the roll climbs', () => {
+    const s = newSave();
+    expect(seacaveDrop(s, () => 0.5).mineralId).toBe('shard');
+    expect(seacaveDrop(s, () => 0.7).mineralId).toBe('crystal');
+    expect(seacaveDrop(s, () => 0.9).mineralId).toBe('opal');
+  });
+
+  it('the top-tier Astral Stone is reachable only with luck', () => {
+    const s = newSave();
+    // With no luck the rng alone (<1) can never clear the 1.08 starstone gate…
+    expect(seacaveDrop(s, () => 0.999).mineralId).toBe('opal');
+    // …but shrine + omamori + Lucky (caveLuck 4 → +0.36) pushes a high roll over.
+    s.donated = 20000; grantKeepsake(s, 'omamori'); s.buff = { id: 'lucky', day: s.day };
+    expect(caveLuck(s)).toBe(4);
+    expect(seacaveDrop(s, () => 0.95).mineralId).toBe('starstone');
+  });
+
+  it('luck nudges the same roll into a better tier', () => {
+    const lo = newSave();
+    const hi = newSave();
+    hi.donated = 20000; grantKeepsake(hi, 'omamori'); // caveLuck 3 → +0.27
+    // A roll of 0.5: no-luck stays shard (<0.64), luck-3 (→0.77) crosses into crystal.
+    expect(seacaveDrop(lo, () => 0.5).mineralId).toBe('shard');
+    expect(seacaveDrop(hi, () => 0.5).mineralId).toBe('crystal');
+  });
+
+  it('bigfootSightChance is rare and rises with luck', () => {
+    const s = newSave();
+    const base = bigfootSightChance(s);
+    expect(base).toBeCloseTo(0.02, 5);
+    s.donated = 20000; grantKeepsake(s, 'omamori');
+    s.buff = { id: 'lucky', day: s.day };
+    expect(bigfootSightChance(s)).toBeGreaterThan(base);
+    expect(bigfootSightChance(s)).toBeLessThanOrEqual(0.18);
+  });
+
+  it('bigfootInCaveToday never fires once already met', () => {
+    const s = newSave();
+    s.donated = 20000; grantKeepsake(s, 'omamori'); s.buff = { id: 'lucky', day: s.day };
+    s.storySeen.push('bigfoot-met');
+    for (let d = 1; d < 200; d++) { s.day = d; expect(bigfootInCaveToday(s)).toBe(false); }
+  });
+
+  it('bigfootInCaveToday actually fires on some lucky days (seeded)', () => {
+    const s = newSave();
+    s.donated = 20000; grantKeepsake(s, 'omamori'); s.buff = { id: 'lucky', day: s.day };
+    let hits = 0;
+    for (let d = 1; d < 400; d++) { s.day = d; s.buff = { id: 'lucky', day: d }; if (bigfootInCaveToday(s)) hits++; }
+    expect(hits).toBeGreaterThan(0);   // rare, but not impossible
+    expect(hits).toBeLessThan(120);    // and genuinely rare
   });
 });

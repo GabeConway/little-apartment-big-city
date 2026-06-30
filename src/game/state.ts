@@ -92,6 +92,7 @@ export interface GameSave {
   forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
   foragedSpots: number[];       // indices of today's shore finds already grabbed
   errandDay: number;            // last day the odd-jobs board errand was completed (0 = none); one per day
+  caveDropDay: number;          // last day the island sea cave was searched for drops (0 = none); one per day
   deliveryDay: number;          // last day the Kojima Motors delivery race was run (0 = never); one per day
   deliveryBest: number;         // best delivery time in seconds (0 = none yet); lower is better
   streetEventDay: number;       // last day the daily random street event was completed (0 = none); one per day
@@ -283,6 +284,7 @@ export const newSave = (): GameSave => ({
   forageDay: 0,
   foragedSpots: [],
   errandDay: 0,
+  caveDropDay: 0,
   deliveryDay: 0,
   deliveryBest: 0,
   streetEventDay: 0,
@@ -808,6 +810,38 @@ export const grantKeepsake = (s: GameSave, id: string): boolean => {
 // blowing the caps (the mine richness/forage paths still clamp).
 export const OMAMORI_LUCK = 0.06;
 export const omamoriLuck = (s: GameSave): number => hasKeepsake(s, 'omamori') ? OMAMORI_LUCK : 0;
+
+// ---- Island sea cave: luck drops + the Bigfoot sighting -----------------------
+// Squeezing into the sea cave (after the one-time nest egg) lets you search the
+// dark once a day for whatever the tide left behind. What you turn up is gated by
+// your luck — shrine favor, the omamori, a Lucky day/meal all push the roll toward
+// the rarer ore (and away from a fistful of damp coins). Pure + testable: pass an
+// rng for deterministic tests; defaults to Math.random for in-game surprise.
+export const SEACAVE_SEARCH_COST = 8;   // energy to dig through the cave floor
+export const seacaveSearchDoneToday = (s: GameSave): boolean => s.caveDropDay === s.day;
+// Total luck the cave reads: shrine tiers (0..3) + omamori (0/1) + a Lucky glow (0/1).
+export const caveLuck = (s: GameSave): number =>
+  shrineLuck(s) + (hasKeepsake(s, 'omamori') ? 1 : 0) + (luckyToday(s) ? 1 : 0); // 0..5
+export interface CaveDrop { money: number; mineralId: string | null; count: number }
+export const seacaveDrop = (s: GameSave, rng: () => number = Math.random): CaveDrop => {
+  const roll = rng() + caveLuck(s) * 0.09;   // luck nudges the roll up toward the good stuff
+  if (roll >= 1.08) return { money: 0, mineralId: 'starstone', count: 1 };
+  if (roll >= 0.88) return { money: 0, mineralId: 'opal',      count: 1 };
+  if (roll >= 0.64) return { money: 0, mineralId: 'crystal',   count: 1 };
+  if (roll >= 0.40) return { money: 0, mineralId: 'shard',     count: 1 + (rng() < 0.3 ? 1 : 0) };
+  return { money: 120 + Math.floor(rng() * 240), mineralId: null, count: 0 }; // a handful of salt-blackened coins
+};
+
+// Bigfoot only shows himself in the cave on a rare, luck-blessed day — and only
+// until you've actually met him (after that he's holed up at Club Kaiju). Seeded
+// per-day so it's stable across reloads; the THRESHOLD scales with luck, so a
+// Lucky day or a fat shrine donation genuinely improves your odds of a sighting.
+export const bigfootSightChance = (s: GameSave): number =>
+  Math.min(0.18, 0.02 + shrineLuck(s) * 0.015 + omamoriLuck(s) + (luckyToday(s) ? 0.05 : 0));
+export const bigfootInCaveToday = (s: GameSave): boolean => {
+  if (s.storySeen.includes('bigfoot-met')) return false; // already met — he's at the club now
+  return mulberry32(s.day * 2654435761 + 909)() < bigfootSightChance(s);
+};
 
 // ---- One-time prestige purchases ---------------------------------------------
 // Each charges once, sets its flag, and returns true on success (false if already
