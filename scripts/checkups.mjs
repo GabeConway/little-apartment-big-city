@@ -98,6 +98,15 @@ export const CHECKS = [
     assert: 'save.missionsDone.length===5 && money===5600',
   },
   {
+    name: 'festival-goldfish-pays',
+    note: 'Summer Matsuri (day 14): playing the goldfish stall pays ¥600 once + the matsuri trophy',
+    save: { scene: 'city', px: 208, py: 252, dir: 'up', day: 14, money: 1000, visited: ['city'] },
+    keys: 'e e',                              // open the stall dialog, snap the typewriter so the choices mount
+    click: 'Scoop fast',
+    wait: 900,
+    assert: "money===1600 && save.storySeen.includes('festival-summer-matsuri-14') && save.gameAch.includes('matsuri')",
+  },
+  {
     name: 'phone-settings-tab',
     note: 'phone Settings app opens (save codes live on the title MANAGE SAVE panel, covered by unit tests)',
     save: { scene: 'city', px: 96, py: 224, visited: ['city'] },
