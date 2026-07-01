@@ -12,7 +12,7 @@
 - `npm run test:watch` — watch mode while developing.
 
 ## Coverage (as built)
-`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers). ~180 tests. Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see [bug-hunting.md](bug-hunting.md)).
+`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers). ~206 tests (incl. save-code round-trips, cat-gift seeding, mission predicates, weather-fish gating). Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see [bug-hunting.md](bug-hunting.md)).
 
 ## Where it runs
 - **CI on every PR + push to main**: `.github/workflows/ci.yml` (`check` job) runs `tsc --noEmit` → `npm test` → `npm run build` on ubuntu. Rust-free + fast; native bundling stays in `release.yml`.

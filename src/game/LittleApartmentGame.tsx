@@ -59,6 +59,7 @@ import {
   SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
   festivalFor, FESTIVAL_REWARD_YEN,
   fishingTournamentDay, tournamentScore, tournamentTierFor, TOURNAMENT_NAME, TOURNAMENT_BLURB, TOURNAMENT_SCENE,
+  MISSIONS,
 } from './data';
 import type { BingusFetch, GiftKind, GiftTier, IngredientKind, DecorItem, StreetEvent, Festival } from './data';
 import type { HangoutScene, HomeVisit } from './data';
@@ -88,6 +89,9 @@ import {
   ROOM_PRICE, JUKEBOX_PRICE, skillLevel, skillProgress, addSkillXp,
   streetEventFor, streetEventDoneToday,
   sanitizeName,
+  petCat, catPetToday, catGiftMorning, catGiftFor,
+  syncMissions, biteTableFor,
+  exportSaveCode, importSaveCode,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
 import type { GameSave, Vibe, SkillId } from './state';
@@ -132,6 +136,7 @@ const sfxBite = () => blip([1175, 1175], 0.06, 0.07);
 const sfxLetter = () => blip([784, 988], 0.12, 0.04);
 const sfxType = (i: number) => blip([i % 2 ? 2050 : 1650], 0.012, 0.012); // faint click-clack as dialogue types
 const sfxBoop = () => blip([660], 0.05, 0.02); // soft short placement boop (Arrange drop / decor apply)
+const sfxPurr = () => blip([196, 175, 196, 175], 0.4, 0.03); // David's low, warbling purr (petting)
 // Mining chime — brighter, fuller arpeggio for the rarer (more valuable) ore.
 const sfxMine = (value: number) =>
   value >= 900 ? blip([784, 1175, 1568], 0.09, 0.06)
@@ -182,11 +187,35 @@ const engineSet = (target: number, dt: number) => {
 
 // ---- Ambient soundscape (WebAudio, asset-free) -----------------------------
 // Occasional one-shot ambient accents, swapped by scene (gull caws at the coast,
-// water drips in the mines). Driven each frame from the draw loop via `ambientSet`.
-// NOTE: the old continuous filtered-noise BED was removed — it was a long droning
-// layer that muddled the music. Only the short SFX accents remain. Honors mute.
-type AmbientKind = 'shore' | 'mine' | 'rainhome';
-let ambient: { kind: AmbientKind; accent: number } | null = null;
+// water drips in the mines, chips + cards at the casino). Driven each frame from
+// the draw loop via `ambientSet`.
+// NOTE: the old continuous filtered-noise BED was removed from the outdoor kinds —
+// it was a long droning layer that muddled the music. The one exception is the
+// casino's crowd murmur, which is mixed *barely audible* (the windowless felt-room
+// hush; nothing like the old surf drone). Honors mute.
+type AmbientKind = 'shore' | 'mine' | 'rainhome' | 'casino';
+type AmbientBed = { src: AudioBufferSourceNode; gain: GainNode };
+let ambient: { kind: AmbientKind; accent: number; bed?: AmbientBed } | null = null;
+// Shared 1s looping noise buffers for the ambient bits: 'brown' (integrated —
+// warm rumble for the murmur bed) and 'white' (bright — filtered into the tiny
+// chip/card ticks). Built once each, on first use.
+const ambNoiseBufs = new Map<string, AudioBuffer>();
+const ambNoiseBuf = (ctx: AudioContext, kind: 'brown' | 'white'): AudioBuffer => {
+  let buf = ambNoiseBufs.get(kind);
+  if (!buf) {
+    const len = ctx.sampleRate;
+    buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      if (kind === 'white') d[i] = w;
+      else { last = (last + w * 0.02) / 1.02; d[i] = last * 3.5; } // leaky integrator → brown-ish
+    }
+    ambNoiseBufs.set(kind, buf);
+  }
+  return buf;
+};
 // distant gull — two quick downward caws
 const sfxGull = () => {
   if (readMuted() || !audioCtx) return;
@@ -221,18 +250,86 @@ const sfxDrip = () => {
     osc.start(t); osc.stop(t + 0.18);
   } catch { /* no audio */ }
 };
-const ambientStop = () => { ambient = null; };
-// Schedule occasional one-shot ambient accents for the scene (no continuous bed).
-// `dt` = seconds since the last call (clamped by the caller). Only `shore` (gulls)
-// and `mine` (drips) have accents; everything else is silent.
+// chip clatter — two or three tiny clicky ticks (a stack of chips restacked at the felt)
+const sfxChips = () => {
+  if (readMuted() || !audioCtx) return;
+  try {
+    const ctx = audioCtx, t = ctx.currentTime;
+    for (const o of [0, 0.07, 0.16]) {
+      const src = ctx.createBufferSource(); src.buffer = ambNoiseBuf(ctx, 'white');
+      const filt = ctx.createBiquadFilter(); filt.type = 'bandpass';
+      filt.frequency.value = 2200 + Math.random() * 600; filt.Q.value = 7;
+      const g = ctx.createGain();
+      src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t + o);
+      g.gain.exponentialRampToValueAtTime(0.018, t + o + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.05);
+      src.start(t + o, Math.random()); src.stop(t + o + 0.07);
+    }
+  } catch { /* no audio */ }
+};
+// card riffle — a fast decelerating run of very quiet clicks (a deck shuffled somewhere)
+const sfxRiffle = () => {
+  if (readMuted() || !audioCtx) return;
+  try {
+    const ctx = audioCtx, t = ctx.currentTime;
+    for (let i = 0; i < 9; i++) {
+      const o = i * 0.016 + i * i * 0.0018; // ticks spread apart like a real riffle
+      const src = ctx.createBufferSource(); src.buffer = ambNoiseBuf(ctx, 'white');
+      const filt = ctx.createBiquadFilter(); filt.type = 'highpass'; filt.frequency.value = 3200;
+      const g = ctx.createGain();
+      src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t + o);
+      g.gain.exponentialRampToValueAtTime(0.011, t + o + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.03);
+      src.start(t + o, Math.random()); src.stop(t + o + 0.05);
+    }
+  } catch { /* no audio */ }
+};
+// Kinryū murmur bed: looping low-passed brown noise eased in barely audible —
+// the felt-room crowd hush under the music. Returns its nodes so ambientStop
+// can fade + kill them when the player steps back out.
+const casinoBedStart = (): AmbientBed | undefined => {
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    const ctx = audioCtx;
+    const src = ctx.createBufferSource(); src.buffer = ambNoiseBuf(ctx, 'brown'); src.loop = true;
+    const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 320;
+    const gain = ctx.createGain(); gain.gain.value = 0;
+    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+    gain.gain.setTargetAtTime(0.012, ctx.currentTime, 0.6); // ease in, barely-there
+    src.start();
+    return { src, gain };
+  } catch { return undefined; }
+};
+const ambientStop = () => {
+  if (ambient?.bed && audioCtx) {
+    const { src, gain } = ambient.bed;
+    try {
+      gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.08);
+      src.stop(audioCtx.currentTime + 0.4);
+    } catch { /* already stopped */ }
+  }
+  ambient = null;
+};
+// Schedule occasional one-shot ambient accents for the scene. `dt` = seconds
+// since the last call (clamped by the caller). `shore` (gulls), `mine` (drips)
+// and `casino` (chip clatter / card riffles over its murmur bed) have accents;
+// everything else is silent.
 const ambientSet = (kind: AmbientKind | null, dt: number) => {
-  if (readMuted() || !kind || (kind !== 'shore' && kind !== 'mine')) { ambientStop(); return; }
-  if (!ambient || ambient.kind !== kind) { ambient = { kind, accent: 2.5 + Math.random() * 4 }; return; }
+  if (readMuted() || !kind || kind === 'rainhome') { ambientStop(); return; }
+  if (!ambient || ambient.kind !== kind) {
+    ambientStop();
+    ambient = { kind, accent: 2.5 + Math.random() * 4 };
+    if (kind === 'casino') ambient.bed = casinoBedStart();
+    return;
+  }
   const a = ambient;
   a.accent -= dt;
   if (a.accent <= 0) {
-    if (kind === 'shore') { a.accent = 7 + Math.random() * 10; sfxGull(); } // sparse gull caws
-    else { a.accent = 4 + Math.random() * 8; sfxDrip(); }                   // sparse mine drips
+    if (kind === 'shore') { a.accent = 7 + Math.random() * 10; sfxGull(); }        // sparse gull caws
+    else if (kind === 'mine') { a.accent = 4 + Math.random() * 8; sfxDrip(); }     // sparse mine drips
+    else { a.accent = 5 + Math.random() * 9; (Math.random() < 0.5 ? sfxChips : sfxRiffle)(); } // soft table sounds
   }
 };
 
@@ -1170,6 +1267,50 @@ const DERBY_FISHERS: { x: number; y: number; sprite: string }[] = [
 ];
 const DERBY_SIGN: Vec = { x: 6, y: 5 }; // chalkboard by the waterline, near Genji
 
+// ---- Casino patrons (transient — never baked into maps.ts) ------------------
+// The Kinryū Lounge seats 2-3 gamblers a day: decorative townsfolk parked at the
+// slot banks / tables (reusing existing npc-* atlas keys, like the derby fishers),
+// each with a one-line brush-off if you bug them mid-streak. Seeded per `day`
+// (mulberry32, like the other daily rolls) so the crowd reshuffles each morning
+// but stays put across re-entries. All spots are open carpet facing a machine or
+// table; non-blocking (the player walks right past). Drawn y-sorted with a
+// draw-time idle sway so they read as alive without wanderer state.
+type CasinoGambler = { x: number; y: number; dir: Dir; sprite: string; line: string };
+const CASINO_GAMBLER_SPOTS: { x: number; y: number; dir: Dir }[] = [
+  { x: 2,  y: 2, dir: 'up' },  // top slot bank, west
+  { x: 7,  y: 2, dir: 'up' },  // top slot bank, centre
+  { x: 13, y: 2, dir: 'up' },  // top slot bank, east
+  { x: 4,  y: 4, dir: 'up' },  // west blackjack table
+  { x: 10, y: 4, dir: 'up' },  // east blackjack table
+  { x: 8,  y: 6, dir: 'up' },  // roulette felt
+  { x: 1,  y: 7, dir: 'up' },  // lower slot bank, west
+  { x: 11, y: 7, dir: 'up' },  // lower slot bank, east
+];
+const GAMBLER_SPRITES = ['npc-sketchy', 'npc-tourist', 'npc-oldman', 'npc-dancer', 'npc-collector'];
+const GAMBLER_LINES = [
+  '"Don\'t talk to me. I\'m on a heater."',
+  '"Three more spins. Three more spins and I\'m done, I swear."',
+  '"The machine by the door pays out. I can feel it. It knows me."',
+  '"I came in for the free tea. That was four hours ago."',
+  '"Shh — you\'ll scare the luck off."',
+  '"This table owes me money. We have an understanding."',
+];
+let casinoGamblersCache: { day: number; list: CasinoGambler[] } | null = null;
+const casinoGamblersFor = (day: number): CasinoGambler[] => {
+  if (casinoGamblersCache?.day === day) return casinoGamblersCache.list;
+  const rnd = mulberry32(day * 1664525 + 13);
+  const spots = [...CASINO_GAMBLER_SPOTS], sprites = [...GAMBLER_SPRITES], lines = [...GAMBLER_LINES];
+  const n = 2 + (rnd() < 0.5 ? 1 : 0);
+  const list: CasinoGambler[] = [];
+  for (let i = 0; i < n; i++) list.push({
+    ...spots.splice(Math.floor(rnd() * spots.length), 1)[0],
+    sprite: sprites.splice(Math.floor(rnd() * sprites.length), 1)[0],
+    line: lines.splice(Math.floor(rnd() * lines.length), 1)[0],
+  });
+  casinoGamblersCache = { day, list };
+  return list;
+};
+
 const LittleApartmentGame: React.FC = () => {
   // Active input device (pointer/keyboard/gamepad) + controller/keyboard menu nav.
   const inputSource = useUiNav();
@@ -1358,7 +1499,9 @@ const LittleApartmentGame: React.FC = () => {
   const parisGlitchRef = useRef(0); // seconds left of the "hacked into the map" materialize on Paris arrival
   // David the cat, once adopted: roams the apartment, sits, naps. Lives only in the
   // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
-  const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; napping: boolean; timer: number } | null>(null);
+  // napTarget = the rug/kotatsu he's ambling to before curling up (null = none).
+  const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; napping: boolean; timer: number; napTarget: Vec | null } | null>(null);
+  const petHeartRef = useRef(0); // seconds left on the little heart floating over David after a pet
   const ghPlotRef = useRef(0); // which greenhouse plot index the open plot menu is acting on
   // Today's random street event (or null), spawned ONLY in the city for that day.
   // Set on every scene entry (enterScene / begin); never baked into the static map.
@@ -1465,7 +1608,10 @@ const LittleApartmentGame: React.FC = () => {
 
   // Deliver any newly-eligible phone messages; if any arrived, buzz + toast
   // ("check your phone") and refresh the unread badge. Returns fresh count.
-  const checkMessages = useCallback((): number => {
+  // `silent` delivers without the buzz/toast — used during the end-of-day recap,
+  // where a toast would be buried; the morning buzz in closeEndDay surfaces the
+  // overnight texts a beat after you're back in control instead.
+  const checkMessages = useCallback((silent = false): number => {
     const s = saveRef.current;
     const fresh = syncMessages(s);
     // Kawamachi Cooking Institute — a one-time enrollment text. Fires the first
@@ -1490,6 +1636,7 @@ const LittleApartmentGame: React.FC = () => {
     if (fresh.length === 0) return 0;
     persistSave(s);
     refreshHud();
+    if (silent) return fresh.length;
     sfxPhone();
     const latest = fresh[fresh.length - 1];
     const preview = latest.body[0].length > 48 ? latest.body[0].slice(0, 47) + '…' : latest.body[0];
@@ -1574,6 +1721,22 @@ const LittleApartmentGame: React.FC = () => {
     const nm = saveRef.current.name || 'Neighbor';
     setOverlayBoth({ type: 'dialog', lines: lines.map(l => l.replaceAll('{name}', nm)), idx: 0, speaker, actions });
   }, [setOverlayBoth]);
+
+  // Journal missions: pay out any newly-completed steps of the starter chain
+  // (syncMissions dedupes via save.missionsDone). Mirrors checkMessages — called
+  // on scene enter and when the Journal app opens, so a step lands within moments
+  // of earning it without polling every frame.
+  const checkMissions = useCallback(() => {
+    const s = saveRef.current;
+    const fresh = syncMissions(s);
+    if (fresh.length === 0) return;
+    sfxCoin();
+    persistSave(s);
+    refreshHud();
+    const m = fresh[fresh.length - 1];
+    showToast(`📓 Mission complete: ${m.title}`,
+      `+¥${m.reward.toLocaleString()}${fresh.length > 1 ? ` (and ${fresh.length - 1} more — see the Journal)` : ''}`);
+  }, [refreshHud, showToast]);
 
   // Capstone: the one-time "you know everyone now" payoff. Fires the first time
   // every FRIENDS id is in your phone — a warm journal letter + a modest cash
@@ -1721,6 +1884,7 @@ const LittleApartmentGame: React.FC = () => {
     s.scene = id; s.px = posRef.current.x; s.py = posRef.current.y; s.dir = dir;
     if (!s.visited.includes(id)) s.visited.push(id);
     checkMessages(); // visiting a place can unlock its texts (buzz if so)
+    checkMissions(); // a step finished elsewhere pays out on the next scene change
     if (id !== 'nightclub') djPickRef.current = null; // the set ends when you leave
     if (id === 'mines') {
       const layout = mineLayoutFor(s, mineFloorRef.current);
@@ -1741,7 +1905,7 @@ const LittleApartmentGame: React.FC = () => {
     playMusicFor(id);
     if (id === 'nightclub') award('club');
     checkRegular(); // catches an all-cast save on scene enter (e.g. a loaded game)
-  }, [computeSolids, refreshHud, playMusicFor, award, checkRegular, showToast]);
+  }, [computeSolids, refreshHud, playMusicFor, award, checkRegular, showToast, checkMissions]);
 
   // ---- interactions ----------------------------------------------------------
 
@@ -1767,6 +1931,18 @@ const LittleApartmentGame: React.FC = () => {
     const shipPay = sellShipping(s); // the produce buyer pays out the shipping box overnight
     if (shipPay > 0) pushMessage(s, { id: `ship-${s.day}`, from: 'Produce Buyer 🧺', avatar: '🧺', company: true,
       body: [`Your greenhouse harvest sold for ¥${shipPay.toLocaleString()}. Fresh stuff. The neighborhood thanks you. 🌱`] });
+    // David's morning gift: ~8% of mornings (seeded by day — deterministic across
+    // reloads) the cat leaves a little something by the door. catGiftDay dedupes
+    // so a re-run of the wake flow can never pay the same morning twice.
+    if (s.cat.found && s.catGiftDay !== s.day && catGiftMorning(s.day)) {
+      s.catGiftDay = s.day;
+      const gift = catGiftFor(s.day);
+      if (gift.egg) s.pantry['egg'] = (s.pantry['egg'] ?? 0) + 1;
+      else s.money += gift.money;
+      showToast('🐾 David left you something by the door', gift.egg
+        ? 'A single egg, gently herded. Do not ask whose. (+1 egg in the pantry)'
+        : `A neat little pile of coins. Do not ask where from. (+¥${gift.money.toLocaleString()})`);
+    }
     // Konbini lottery resolves the morning after you buy a ticket. SECRET: shrine
     // donations quietly raise your odds (more offered = luckier draw).
     if (s.lotteryDay > 0 && s.lotteryDay < s.day) {
@@ -1807,18 +1983,32 @@ const LittleApartmentGame: React.FC = () => {
     if (fishingTournamentDay(s.day)) pushMessage(s, { id: `tournament-${s.day}`, from: 'Kawamachi Bulletin 📣', avatar: '🎣', company: true,
       body: [`🎣 ${TOURNAMENT_NAME} is TODAY! ${TOURNAMENT_BLURB} The whole town is gathering down at ${SCENES[TOURNAMENT_SCENE]?.name ?? 'the shore'} — reel in your biggest haul and place on the board for a prize.`] });
     checkStory();
-    checkMessages(); // new day can trigger date-gated texts (buzz if so)
+    checkMessages(true); // deliver overnight texts silently — the recap covers the screen; closeEndDay buzzes for them
     persistSave(s);
     refreshHud();
     setOverlayBoth({ type: 'endday', recap: pending.recap });
     playMusicFor('endofday'); // dedicated end-of-day theme over the recap
-  }, [setOverlayBoth, checkStory, refreshHud, computeSolids, playMusicFor, award]);
+  }, [setOverlayBoth, checkStory, refreshHud, computeSolids, playMusicFor, award, showToast]);
 
   const closeEndDay = useCallback(() => {
     const pending = pendingWakeRef.current;
     pendingWakeRef.current = null;
     setOverlayBoth(null);
     playMusicFor(sceneRef.current.id); // back to the world's music
+    // Morning phone buzz: overnight texts (bulletins/heralds/receipts) were
+    // delivered silently under the recap — surface them a beat after you're
+    // back in control, like a phone catching up on the night's notifications.
+    window.setTimeout(() => {
+      if (overlayRef.current || !saveRef.current) return; // player already opened something — badge suffices
+      const unread = saveRef.current.messages.filter(m => !m.read);
+      if (unread.length === 0) return;
+      const latest = unread[unread.length - 1];
+      const preview = latest.body[0].length > 48 ? latest.body[0].slice(0, 47) + '…' : latest.body[0];
+      sfxPhone();
+      setMsgToast({ from: latest.from, count: unread.length, preview, id: latest.id });
+      if (msgTimerRef.current) window.clearTimeout(msgTimerRef.current);
+      msgTimerRef.current = window.setTimeout(() => setMsgToast(null), 6000);
+    }, 2800);
     if (pending?.rescuer) {
       nursedRef.current = false;
       // Stand the rescuer in the apartment, talking over you. When you dismiss the
@@ -2145,6 +2335,22 @@ const LittleApartmentGame: React.FC = () => {
     return [{ label: '🎁 Give a gift', onPick: () => setOverlayBoth({ type: 'gift', npcId: friendId }) }];
   };
 
+  // Pet David (once a day, via the cat dialog's trailing action): a purr, a
+  // floating heart over wherever he's sat, and a small friendship bump (petCat
+  // routes the points through the same clamp as gifting — see state.ts).
+  const doPetCat = () => {
+    const s = saveRef.current;
+    const before = friendHearts(s, 'david');
+    if (!petCat(s)) return;
+    sfxPurr();
+    petHeartRef.current = 1.4; // the heart floats off over ~a second and a half
+    persistSave(s); refreshHud();
+    const hearts = friendHearts(s, 'david');
+    const lines = ['You crouch down and give David a good scritch behind the ears. He leans in, motor running, and pretends not to.'];
+    if (hearts > before) { sfxHeartUp(); lines.push(`You and David are closer now. (${hearts}/10 ♥)`); }
+    showDialog(lines, 'David');
+  };
+
   // Heart-event hangout: a one-time deeper scene that plays the next time you talk
   // to a friend once you've crossed a heart threshold (see pendingHangout). Sets
   // the storySeen flag immediately so it never repeats, applies any keepsake/buff,
@@ -2362,13 +2568,18 @@ const LittleApartmentGame: React.FC = () => {
     if (catRef.current && scene.id === 'apartment') {
       const ct = { x: Math.round(catRef.current.x / TILE), y: Math.round(catRef.current.y / TILE) };
       if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
-        catRef.current.sitting = true; catRef.current.napping = false; catRef.current.timer = 4; // he stirs to address you
+        catRef.current.sitting = true; catRef.current.napping = false; catRef.current.napTarget = null; catRef.current.timer = 4; // he stirs to address you
         // A heart-threshold hangout with the cat takes priority over his usual one-liners.
         const catHang = pendingHangout(s, 'david');
         if (catHang) { playHangout(catHang); return; }
         const catLines = WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)];
         const catFlavor = friendFlavorLine(s, 'david'); // warmer as you bond with him
-        showDialog(catFlavor ? [...catLines, catFlavor] : catLines, 'David', giftActionFor('david'));
+        // Trailing actions: a once-a-day pet, plus the usual gift offer if carrying one.
+        const catActs: DialogAction[] = [
+          ...(!catPetToday(s) ? [{ label: 'Pet David 🐾', onPick: doPetCat }] : []),
+          ...(giftActionFor('david') ?? []),
+        ];
+        showDialog(catFlavor ? [...catLines, catFlavor] : catLines, 'David', catActs.length ? catActs : undefined);
         return;
       }
     }
@@ -2567,6 +2778,12 @@ const LittleApartmentGame: React.FC = () => {
       if (streetEventDoneToday(s)) { showDialog(streetEventDoneLines(ev.id)); return; }
       setOverlayBoth({ type: 'shop', shop: 'street' });
       return;
+    }
+
+    // Kinryū patrons: a one-line brush-off if you bug a gambler mid-streak.
+    if (scene.id === 'casino') {
+      const gam = casinoGamblersFor(s.day).find(g => g.x === faced.x && g.y === faced.y);
+      if (gam) { showDialog([gam.line]); return; }
     }
 
     // Prefer a wanderer at the faced tile (they move; their static tile is stale).
@@ -3594,15 +3811,28 @@ const LittleApartmentGame: React.FC = () => {
 
     // David the cat ambles around the apartment, pausing to sit and nap.
     if (sceneRef.current.id === 'apartment' && saveRef.current.cat.found) {
-      if (!catRef.current) catRef.current = { x: 8 * TILE, y: 6 * TILE, dir: 'left', sitting: true, napping: false, timer: 1.5 };
+      if (!catRef.current) catRef.current = { x: 8 * TILE, y: 6 * TILE, dir: 'left', sitting: true, napping: false, timer: 1.5, napTarget: null };
       const cat = catRef.current;
+      petHeartRef.current = Math.max(0, petHeartRef.current - dt); // the post-pet heart floats off
       cat.timer -= dt;
       if (cat.timer <= 0) {
-        if (cat.napping) { // stir awake into a sit before moving again
+        if (cat.napTarget) { // the walk-to-a-soft-spot leg ran long — nap right here
+          cat.napTarget = null; cat.napping = true; cat.sitting = true; cat.timer = 6 + Math.random() * 8;
+        } else if (cat.napping) { // stir awake into a sit before moving again
           cat.napping = false; cat.sitting = true; cat.timer = 1.5 + Math.random() * 2;
         } else if (cat.sitting) { // doze off, or get up and pick somewhere to mosey
-          if (Math.random() < 0.3) { cat.napping = true; cat.timer = 6 + Math.random() * 8; }
-          else {
+          if (Math.random() < 0.3) {
+            // Nap time — but he prefers somewhere soft: beeline for the nearest
+            // rug (2×2, centered) or the placed kotatsu (wide, he naps ON it) if
+            // either exists and isn't underfoot already; else curl up right here.
+            const sv = saveRef.current;
+            const spots: Vec[] = sv.rugs.map(r => ({ x: r.x * TILE + TILE / 2, y: r.y * TILE + TILE / 2 }));
+            if (sv.placed['kotatsu']) spots.push({ x: sv.placed['kotatsu'].x * TILE + TILE / 2, y: sv.placed['kotatsu'].y * TILE - 4 });
+            let best: Vec | null = null, bd = Infinity;
+            for (const sp of spots) { const d = Math.abs(sp.x - cat.x) + Math.abs(sp.y - cat.y); if (d < bd) { bd = d; best = sp; } }
+            if (best && bd > 6) { cat.napTarget = best; cat.sitting = false; cat.timer = 12; } // plenty of time to arrive
+            else { cat.napping = true; cat.timer = 6 + Math.random() * 8; }
+          } else {
             cat.sitting = false;
             cat.dir = Math.random() < 0.5 ? 'left' : 'right';
             cat.timer = 1.2 + Math.random() * 2.2;
@@ -3612,7 +3842,19 @@ const LittleApartmentGame: React.FC = () => {
           else { cat.dir = Math.random() < 0.5 ? 'left' : 'right'; cat.timer = 1 + Math.random() * 2; }
         }
       }
-      if (!cat.sitting) {
+      if (cat.napTarget) {
+        // Teleport-walk straight to the chosen nap spot (no collision — rugs and
+        // the kotatsu sit in open floor, and cats go where they please anyway).
+        const tgt = cat.napTarget;
+        const step = 26 * dt;
+        const dx = tgt.x - cat.x, dy = tgt.y - cat.y;
+        if (Math.abs(dx) > 1) cat.dir = dx < 0 ? 'left' : 'right';
+        cat.x += Math.abs(dx) <= step ? dx : Math.sign(dx) * step;
+        cat.y += Math.abs(dy) <= step ? dy : Math.sign(dy) * step;
+        if (Math.abs(tgt.x - cat.x) < 1 && Math.abs(tgt.y - cat.y) < 1) { // curled up on the soft spot
+          cat.napTarget = null; cat.napping = true; cat.sitting = true; cat.timer = 6 + Math.random() * 8;
+        }
+      } else if (!cat.sitting) {
         const sp = (cat.dir === 'left' ? -16 : 16) * dt;
         const moved = tryMove(sceneRef.current, { x: cat.x, y: cat.y }, sp, 0, solidsRef.current);
         if (Math.abs(moved.x - cat.x) < 0.01) { cat.dir = cat.dir === 'left' ? 'right' : 'left'; } // bumped a wall — turn
@@ -3649,7 +3891,9 @@ const LittleApartmentGame: React.FC = () => {
           const luck = shrineLuck(sNow);
           const rodPull = sNow.fishRod >= 1 ? 1 : 0;
           const rain = isRainyDay(sNow) ? 0.8 : 0; // rainy days stir up the rare, hungry fish
-          const base = fm.table === 'deep' ? DEEP_FISH : fm.table === 'tropical' ? TROPICAL_FISH : FISH;
+          // Weather-gated species (Rain Koi / Stargazer) only join the table under
+          // their sky — biteTableFor filters on Fish.when (see fishSky in state.ts).
+          const base = biteTableFor(sNow, fm.table === 'deep' ? DEEP_FISH : fm.table === 'tropical' ? TROPICAL_FISH : FISH);
           const boost = 0.5 * luck + 0.6 * rodPull + rain + 0.12 * skillLevel(sNow, 'fish'); // skill draws rarer fish
           const table = boost === 0 ? base : base.map(f => (f.value >= 500 ? { ...f, weight: f.weight * (1 + boost) } : f));
           fishModeRef.current = { phase: 'reel', st: startFishing(rollFish(Math.random, table)), tile: fm.tile, table: fm.table };
@@ -4489,11 +4733,13 @@ const LittleApartmentGame: React.FC = () => {
         const sx = sg.x * TILE - cam.x, sy = sg.y * TILE - cam.y + 4;
         const sp = sprite(sg);
         const blinkOff = sg.blink && !neonOn;
-        if (blinkOff) { ctx.save(); ctx.globalAlpha = 0.4; }
         // anchor the plate top-left at (sx-2, sy-2) — same spot as before; the canvas
         // now carries the outline/shadow margins, so back off by the plate inset.
         ctx.drawImage(sp.c, sx - 2 - sp.mx, sy - 2 - sp.my, sp.w, sp.h);
-        if (blinkOff) ctx.restore();
+        // mid-blink the tube goes DARK, not transparent — alpha-fading the whole
+        // plate let the wall show through; a dark wash over the plate reads as
+        // an unlit sign that's still physically mounted there.
+        if (blinkOff) { ctx.fillStyle = 'rgba(10, 10, 16, 0.55)'; ctx.fillRect(sx - 2, sy - 2, sp.pw, sp.ph); }
       };
       for (const sign of signs) paint(sign);
 
@@ -4740,6 +4986,27 @@ const LittleApartmentGame: React.FC = () => {
         },
       });
     }
+    // Kinryū patrons — decorative gamblers y-sorted with everyone else. A gentle
+    // idle sway (like the derby fishers' cast-bob) plus the odd little hop when a
+    // spin comes up good — pure draw-time, no state, every sprite atlas-guarded.
+    if (scene.id === 'casino') {
+      for (const g of casinoGamblersFor(saveRef.current.day)) {
+        ents.push({
+          y: g.y * TILE,
+          draw: () => {
+            const gx = g.x * TILE - cam.x, gy = g.y * TILE - cam.y;
+            const sh = atlas['m-shadow']; if (sh) ctx.drawImage(sh, gx, gy + 2);
+            let bob = Math.round(Math.sin(t * 1.6 + g.x * 0.7) * 0.5 - 0.5);
+            // occasional celebration hop, on a slow per-patron clock (seeded by x
+            // so the room never jumps in unison) — someone's machine just paid out
+            const cyc = t * 0.09 + g.x * 0.13;
+            const hph = cyc % 1;
+            if (hph < 0.1) bob -= Math.round(2 * Math.sin((hph / 0.1) * Math.PI));
+            const gs = atlas[`${g.sprite}-${g.dir}-0`]; if (gs) ctx.drawImage(gs, gx, gy + bob);
+          },
+        });
+      }
+    }
     for (const w of wanderersRef.current) {
       ents.push({
         y: w.y,
@@ -4804,6 +5071,18 @@ const LittleApartmentGame: React.FC = () => {
             : cat.sitting ? `cat-sit-${d}-${Math.floor(animRef.current * 1.5) % 2}`
             : `cat-${d}-${Math.floor(animRef.current * 8) % 2}`;
           ctx.drawImage(atlas[key] ?? atlas[`cat-${d}`], cx, cy + bob);
+          // Post-pet heart: a tiny pixel heart drifts up off him and fades. A few
+          // fillRects only while the 1.4s timer runs — no sprite, no allocation.
+          if (petHeartRef.current > 0) {
+            const rise = (1.4 - petHeartRef.current) * 8;
+            ctx.globalAlpha = Math.min(1, petHeartRef.current * 1.6);
+            ctx.fillStyle = '#e857a8';
+            const hx = cx + 5, hy = Math.round(cy - 8 - rise);
+            ctx.fillRect(hx + 1, hy, 2, 2); ctx.fillRect(hx + 4, hy, 2, 2);       // the two bumps
+            ctx.fillRect(hx, hy + 1, 7, 2); ctx.fillRect(hx + 1, hy + 3, 5, 1);   // the body
+            ctx.fillRect(hx + 2, hy + 4, 3, 1); ctx.fillRect(hx + 3, hy + 5, 1, 1); // the point
+            ctx.globalAlpha = 1;
+          }
         },
       });
     }
@@ -5091,15 +5370,17 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
-    // Ambient soundscape: surf+gulls at the coast, drips in the mines, rain on the
-    // window when it's raining at home. Layered over (not replacing) the music.
+    // Ambient soundscape: surf+gulls at the coast, drips in the mines, murmur +
+    // chip clatter at the casino, rain on the window when it's raining at home.
+    // Layered over (not replacing) the music.
     {
       const sid = scene.id;
       const amb: AmbientKind | null =
         sid === 'apartment' && isRainyDay(saveRef.current) ? 'rainhome'
           : (sid === 'shore' || sid === 'deepsea' || sid === 'island' || sid === 'seacave') ? 'shore'
             : (sid === 'mines' || sid === 'backrooms') ? 'mine'
-              : null;
+              : sid === 'casino' ? 'casino'
+                : null;
       const adt = Math.min(0.1, Math.max(0, t - ambLastTRef.current));
       ambLastTRef.current = t;
       ambientSet(amb, adt);
@@ -5143,6 +5424,22 @@ const LittleApartmentGame: React.FC = () => {
           ctx.drawImage(screen, gx - 18, gy - 18, 36, 36);
         }
       }
+      // Torii-garden toro lanterns ('O'): the same soft warm glow the shrine's
+      // stone lanterns give off — lit only once night falls (nightT-gated),
+      // still just cheap cached-sprite blits inside the same additive pass.
+      const cityNight = nightT(saveRef.current);
+      if (cityNight > 0.05) {
+        const toro = glow('255,206,120');
+        for (let ty = ty0; ty <= ty1; ty++) {
+          const row = scene.grid[ty];
+          for (let tx = tx0; tx <= tx1; tx++) {
+            if (row[tx] !== 'O') continue;
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 6;
+            ctx.globalAlpha = cityNight * (0.22 + 0.04 * Math.sin(t * 1.6 + tx * 1.3)); // soft flicker, swells with night
+            ctx.drawImage(toro, gx - 20, gy - 20, 40, 40);
+          }
+        }
+      }
       ctx.globalAlpha = 1;
       ctx.restore();
     }
@@ -5159,6 +5456,34 @@ const LittleApartmentGame: React.FC = () => {
           const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 3;
           ctx.globalAlpha = 0.20 + 0.04 * Math.sin(t * 2 + tx);  // faint flicker
           ctx.drawImage(lamp, gx - 22, gy - 22, 44, 44);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // Kinryū Lounge: warm gold lamp-pools over the blackjack/roulette felts and a
+    // busier amber flicker over each slot machine — the windowless room is lit
+    // like this at every hour (night-independent). Cached glow() sprites blitted
+    // additively, same pattern as the club/lamps (never per-frame gradients).
+    if (scene.id === 'casino') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const felt = glow('255,200,90');
+      const reel = glow('255,150,70');
+      for (let ty = ty0; ty <= ty1; ty++) {
+        const row = scene.grid[ty];
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const ch = row[tx];
+          if (ch === 'B' || ch === 'R' || ch === 'r') {         // table lamps: steady warm pools
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 8;
+            ctx.globalAlpha = 0.20 + 0.04 * Math.sin(t * 1.4 + tx * 1.1);
+            ctx.drawImage(felt, gx - 22, gy - 22, 44, 44);
+          } else if (ch === 'S') {                              // slots: faint jittery reel-light
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 10;
+            ctx.globalAlpha = 0.09 + 0.05 * Math.sin(t * 5 + tx * 2.7 + ty * 1.9);
+            ctx.drawImage(reel, gx - 14, gy - 14, 28, 28);
+          }
         }
       }
       ctx.globalAlpha = 1;
@@ -5442,6 +5767,8 @@ const LittleApartmentGame: React.FC = () => {
         && faced.x === streetEventRef.current.x && faced.y === streetEventRef.current.y) {
         label = streetEventDoneToday(sv) ? 'Look' : 'Check it out';
       }
+      // Kinryū patrons: facing a seated gambler offers a chat (they'll decline).
+      if (scene.id === 'casino' && casinoGamblersFor(sv.day).some(g => g.x === faced.x && g.y === faced.y)) label = 'Talk';
       if (it?.id === 'gh-supply') label = 'Supplies';
       if (it?.id === 'gh-shipbox') label = sv.greenhouse.shipped.length > 0 ? `Shipping (${sv.greenhouse.shipped.length})` : 'Shipping box';
       if (it?.id === 'gh-plot') {
@@ -6979,6 +7306,27 @@ const LittleApartmentGame: React.FC = () => {
   const [cheatInput, setCheatInput] = useState('');
   const [cheatMsg, setCheatMsg] = useState('');
 
+  // Save-code panel (phone Settings): the generated export string, the paste box,
+  // and the last import complaint (cleared on success).
+  const [exportCode, setExportCode] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importCode, setImportCode] = useState('');
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  // IMPORT SAVE (title → SAVE MANAGEMENT): validate + default-merge the pasted
+  // code (importSaveCode), persist it, and refresh the title's save summary —
+  // the player then enters through the normal CONTINUE path. Bad codes get a
+  // friendly no and leave the current save untouched.
+  const [importOk, setImportOk] = useState(false);
+  const doImportSave = () => {
+    const merged = importSaveCode(importCode);
+    if (!merged) { setImportOk(false); setImportMsg("That code didn't take — make sure you pasted the WHOLE export string, then try again."); return; }
+    persistSave(merged);
+    setImportCode(''); setExportCode(null); setImportOpen(false);
+    setImportOk(true); setImportMsg(`💾 Save loaded — Day ${merged.day}, ${merged.name}. Press CONTINUE to play.`);
+    setSaveTick(t => t + 1);
+  };
+
   // Save and bail back to the title screen mid-game.
   const quitToMenu = useCallback(() => {
     persistSave(saveRef.current);
@@ -7542,6 +7890,8 @@ const LittleApartmentGame: React.FC = () => {
         >
           💾 SAVE &amp; QUIT TO MENU
         </button>
+        {/* Save codes live on the TITLE screen (Settings → MANAGE SAVE), next to
+            the rest of save management — not in the in-game phone. */}
         <button
           className="w-full font-pixel text-sm border border-white/20 text-[#e8e0d0]/70 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
           onClick={() => open('cheats')}
@@ -7661,9 +8011,37 @@ const LittleApartmentGame: React.FC = () => {
       // RUMORS: at most TWO cryptic achievement whispers (was four — too much).
       const rumors = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id)).slice(0, 2);
       const todayEvent = dayEventFor(s);
+      // MISSIONS: the hand-authored starter chain (data.ts). Done steps show
+      // checked, the FIRST unfinished step is the live one (highlighted, with its
+      // blurb + hint), and everything past it stays a locked '???' — no spoilers.
+      const missionIdx = MISSIONS.findIndex(m => !s.missionsDone.includes(m.id));
       return (
         <div className="px-3 py-2">
           <p className="text-xs opacity-50 mb-2 leading-snug italic">No finish line — just a big city keeping its secrets. Wander, talk to strangers, and see what you turn up.</p>
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">MISSIONS</p>
+          {missionIdx < 0 && <p className="text-xs opacity-50 mb-1 italic">All done — the city is yours now.</p>}
+          {MISSIONS.map((m, i) => {
+            const done = s.missionsDone.includes(m.id);
+            const current = i === missionIdx;
+            if (!done && !current) return ( // future steps stay a mystery
+              <div key={m.id} className="flex items-start gap-2 py-1 border-b border-white/10 opacity-40">
+                <span className="shrink-0">🔒</span>
+                <p className="text-base leading-tight tracking-widest">???</p>
+              </div>
+            );
+            return (
+              <div key={m.id} className={`py-1 border-b border-white/10 ${current ? 'bg-[#ffd24a]/10 rounded-md px-1 -mx-1' : ''}`}>
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0">{done ? '✅' : '▢'}</span>
+                  <p className={`flex-grow text-base leading-tight ${done ? 'opacity-50 line-through' : ''}`}>{m.title}</p>
+                  <span className={`shrink-0 text-sm ${done ? 'opacity-40' : 'text-[#ffd24a]'}`}>¥{m.reward.toLocaleString()}</span>
+                </div>
+                {current && <p className="text-sm opacity-80 leading-tight mt-0.5 pl-6">{m.blurb}</p>}
+                {current && <p className="text-xs text-[#ffd24a]/70 leading-tight mt-0.5 pl-6 italic">hint: {m.hint}</p>}
+              </div>
+            );
+          })}
+          <div className="h-3" />
           {todayEvent && (
             <div className={`flex items-start gap-2 rounded-md px-2 py-1.5 mb-2 ${todayEvent === 'lucky' ? 'bg-[#ffd24a]/15 text-[#ffe9a0]' : 'bg-[#e857a8]/15 text-[#f6b4dc]'}`}>
               <span className="shrink-0 font-bold">{DAY_EVENT_LABEL[todayEvent]}</span>
@@ -7820,6 +8198,8 @@ const LittleApartmentGame: React.FC = () => {
         angler: 'A little lantern in the black. It found you first.',
         parrot: 'Painted like the reef it grazes. A tropical jewel.',
         marlin: "A blue spear of the open sea. Kiwami's grandest catch.",
+        rainkoi: 'Only surfaces when the sky is falling. It likes the company.',
+        stargazer: 'Rises on meteor nights to watch the stars come down.',
       };
       const seen = new Set<string>();
       const waters = WATERS.map(w => ({
@@ -8014,7 +8394,7 @@ const LittleApartmentGame: React.FC = () => {
             <div className="grid grid-cols-3 gap-y-5 gap-x-2 px-4 pt-3 pb-6 justify-items-center">
               <AppIcon icon="🧳" label="Bag" bg="linear-gradient(160deg,#c9952f,#8a5a1f)" onClick={() => open('inventory')} />
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
-              <AppIcon icon="📓" label="Journal" bg="linear-gradient(160deg,#4a6ea0,#28406a)" onClick={() => open('journal')} />
+              <AppIcon icon="📓" label="Journal" bg="linear-gradient(160deg,#4a6ea0,#28406a)" onClick={() => { checkMissions(); open('journal'); }} />
               <AppIcon icon="💛" label="Friends" bg="linear-gradient(160deg,#d0506e,#8a2f4a)" onClick={() => open('friends')} />
               {s.jukeboxUnlocked && (
                 <AppIcon icon="🎵" label="Music" bg="linear-gradient(160deg,#7a4fd0,#3a2a8a)" onClick={() => open('music')} />
@@ -9392,9 +9772,8 @@ const LittleApartmentGame: React.FC = () => {
               </div>
               <div className="flex flex-col gap-2">
                 <button className={`${btnCls} w-full py-1.5`} onClick={() => { setSettingsOpen(false); setDisplayOpen(true); }}>⛶ DISPLAY</button>
-                {saved && (
-                  <button className={`${btnCls} w-full py-1.5`} onClick={() => { setSettingsOpen(false); setManageOpen(true); setConfirmMode(null); }}>MANAGE SAVE</button>
-                )}
+                {/* always shown — with no save the panel still offers IMPORT (bring a save TO this device) */}
+                <button className={`${btnCls} w-full py-1.5`} onClick={() => { setSettingsOpen(false); setManageOpen(true); setConfirmMode(null); }}>MANAGE SAVE</button>
                 <button className={`${btnCls} w-full py-1.5`} onClick={() => { setSettingsOpen(false); setCreditsOpen(true); }}>CREDITS</button>
               </div>
             </div>
@@ -9509,6 +9888,21 @@ const LittleApartmentGame: React.FC = () => {
                     </div>
                   ) : (
                     <div className="flex flex-col gap-2">
+                      <button
+                        className={`${btnCls} w-full py-1.5`}
+                        onClick={() => { setExportCode(exportSaveCode(saved)); setImportOpen(false); setImportMsg(null); }}
+                      >📤 EXPORT SAVE CODE</button>
+                      {exportCode && (<>
+                        <textarea
+                          readOnly
+                          value={exportCode}
+                          rows={3}
+                          onFocus={e => e.currentTarget.select()}
+                          onClick={e => e.currentTarget.select()}
+                          className="w-full bg-black/60 border border-[#ffd24a]/40 rounded px-2 py-1 text-xs text-[#e8e0d0] outline-none"
+                        />
+                        <p className="text-xs opacity-50 leading-snug">Tap the code to select it, then copy. Paste it into IMPORT on the other device.</p>
+                      </>)}
                       <button className="border border-red-400/60 text-red-300 px-3 py-1.5 w-full font-pixel text-lg hover:bg-red-500 hover:text-black transition-colors" onClick={() => setConfirmMode('delete')}>DELETE SAVE</button>
                       <p className="text-sm opacity-60 text-center mt-1">Deleting returns you to the title — start a fresh game from there.</p>
                     </div>
@@ -9516,7 +9910,33 @@ const LittleApartmentGame: React.FC = () => {
                 </>
               ) : (
                 <div className="text-center">
-                  <p className="text-base opacity-70">No save yet — start a new game from the title.</p>
+                  <p className="text-base opacity-70 mb-3">No save on this device — start a new game, or paste a save code from another device below.</p>
+                </div>
+              )}
+
+              {/* IMPORT works with or without an existing save (bring a save TO this device). */}
+              {confirmMode !== 'delete' && (
+                <div className="flex flex-col gap-2 mt-2">
+                  <button
+                    className={`${btnCls} w-full py-1.5`}
+                    onClick={() => { setImportOpen(v => !v); setImportMsg(null); setImportOk(false); }}
+                  >📥 IMPORT SAVE CODE</button>
+                  {importOpen && (<>
+                    <textarea
+                      value={importCode}
+                      onChange={e => setImportCode(e.target.value)}
+                      rows={3}
+                      placeholder="paste a save code…"
+                      className="w-full bg-black/60 border border-[#9fc4e8]/40 rounded px-2 py-1 text-xs text-[#e8e0d0] outline-none focus:border-[#9fc4e8]"
+                    />
+                    <button
+                      className={`${btnCls} w-full py-1.5 disabled:opacity-30`}
+                      disabled={importCode.trim().length === 0}
+                      onClick={doImportSave}
+                    >LOAD THIS SAVE</button>
+                    <p className="text-xs opacity-50 leading-snug">Importing replaces the save on THIS device.</p>
+                  </>)}
+                  {importMsg && <p className={`text-sm leading-snug ${importOk ? 'text-[#7ce8a0]' : 'text-[#ff9c7a]'}`}>{importMsg}</p>}
                 </div>
               )}
             </div>

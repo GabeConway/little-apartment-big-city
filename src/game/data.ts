@@ -403,6 +403,10 @@ export const GACHA_FIGURES: string[] = [
 export const PAWN_DISCOUNT = 0.55;        // pawn shop sells at 55% of full price
 export const PAWN_STOCK_SIZE = 3;
 
+// Weather-gated species read a tiny SKY snapshot (built by state.ts → fishSky)
+// so this table never learns the save's shape. `when` omitted = always biting.
+export interface FishSky { rainy: boolean; meteorNight: boolean }
+
 export interface Fish {
   id: string;
   name: string;
@@ -410,6 +414,7 @@ export interface Fish {
   weight: number;         // roll weight (higher = more common)
   difficulty: number;     // 0..1 — how erratically it moves in the minigame
   sprite: string;
+  when?: (sky: FishSky) => boolean; // weather gate: in the bite table only while true
 }
 
 export const FISH: Fish[] = [
@@ -421,6 +426,12 @@ export const FISH: Fish[] = [
   { id: 'puffer', name: 'Pufferfish', value: 700, weight: 5, difficulty: 0.75, sprite: 'fish-puffer' },
   { id: 'koi', name: 'Lost Koi', value: 950, weight: 3, difficulty: 0.85, sprite: 'fish-koi' },
   { id: 'golden', name: 'Golden Carp', value: 1800, weight: 1, difficulty: 1, sprite: 'fish-golden' },
+  // Weather-only species — filtered OUT of the bite table under a clear sky (see
+  // biteTableFor in state.ts).
+  { id: 'rainkoi', name: 'Rain Koi', value: 900, weight: 4, difficulty: 0.8, sprite: 'fish-rainkoi',
+    when: sky => sky.rainy },
+  { id: 'stargazer', name: 'Stargazer', value: 1600, weight: 2, difficulty: 0.9, sprite: 'fish-stargazer',
+    when: sky => sky.meteorNight },
 ];
 
 // Deep water (needs the skiff): bigger fish, no minnows out here.
@@ -498,6 +509,52 @@ export const ERRANDS: Errand[] = [
   { id: 'coconut-run', giver: 'Lulu (remote gig)', kind: 'coconut', reward: 550,
     ask: 'A gig pings in, the message faintly scented with rum: "Darling — the tiki bar is dry on coconuts. Courier me one from Kiwami Island? ¥550. — L"',
     thanks: 'The slot clunks; ¥550 dispenses, still warm. Lulu pays her debts.' },
+];
+
+// ---- Journal missions --------------------------------------------------------
+// A hand-authored 5-step starter chain shown in the phone Journal: it walks a new
+// player along the spine of the game (forage → Genji → fish → shift → shrine).
+// Predicates are PURE over a tiny structural slice of the save (GameSave satisfies
+// MissionCtx, no state.ts import — same trick as MsgCtx) so they unit-test clean.
+// Completion pay/tracking lives in state.ts → syncMissions (save.missionsDone);
+// the Journal renders done steps checked, the current step + hint highlighted,
+// and every later step as a locked '???' so the chain never spoils itself.
+export interface MissionCtx {
+  almanac: { forage: string[] };
+  canFish: boolean;
+  fishLog: Record<string, number>;
+  shiftsWorked: number;
+  donated: number;
+}
+export interface Mission {
+  id: string;
+  title: string;
+  blurb: string;                       // what to actually do (shown on the current step)
+  hint: string;                        // where/how, in-world (shown on the current step)
+  reward: number;                      // yen paid once, when the step completes
+  isDone: (c: MissionCtx) => boolean;
+}
+export const MISSIONS: Mission[] = [
+  { id: 'm-forage', title: 'Comb the shore', reward: 300,
+    blurb: 'Pick up something the tide washed onto Sumikawa Shore.',
+    hint: 'The beach is west out of Kawamachi St. — finds glint on the sand each morning.',
+    isDone: c => c.almanac.forage.length > 0 },
+  { id: 'm-genji', title: 'Learn to fish', reward: 400,
+    blurb: 'Talk to Genji, the old angler working the waterline.',
+    hint: 'He has the look of someone itching to teach. He even keeps a spare rod.',
+    isDone: c => c.canFish },
+  { id: 'm-fish3', title: 'Land three fish', reward: 500,
+    blurb: 'Catch 3 fish, any species, any water.',
+    hint: 'Face the water, E to cast, E on the bite, then hold E to keep the fish in the bar.',
+    isDone: c => Object.values(c.fishLog).reduce((a, b) => a + b, 0) >= 3 },
+  { id: 'm-shift', title: 'Work a konbini shift', reward: 600,
+    blurb: 'Pick up a paid shift behind the Konbini 24h counter.',
+    hint: 'Visit the konbini, then check your texts — they are always short a pair of hands.',
+    isDone: c => c.shiftsWorked > 0 },
+  { id: 'm-shrine', title: 'Make an offering', reward: 800,
+    blurb: 'Donate once at the little shrine in the torii garden.',
+    hint: 'Follow the stone path in the city\'s south-east corner. Any coin counts.',
+    isDone: c => c.donated > 0 },
 ];
 
 // ---- Random daily street events ---------------------------------------------

@@ -154,9 +154,11 @@ const city: SceneDef = {
     'x': T('t-stonepath'),         // stone sando trail (walkable)
     'X': T('t-torii-beam-path'),   // torii crossbar where the trail runs under the gate
     'O': T('t-toro', true),        // stone ishidoro lantern flanking the approach
-    'C': T('t-sakura', true),      // cherry-blossom tree shading the garden
+    'Y': T('t-sakura', true),      // cherry-blossom tree shading the garden ('C' is taken by the t-bld-c storefront)
     'q': T('t-sakura-petals'),     // fallen petals beside the trail (walkable)
     'u': T('t-pond', true),        // garden koi pond (solid)
+    '1': T('t-post-grass', true),  // wayfinding signpost on grass (its SCENE_SIGNS plate is the board)
+    '2': T('t-post-walk', true),   // wayfinding signpost on the sidewalk
   },
   outdoor: true,
   grid: [
@@ -169,12 +171,12 @@ const city: SceneDef = {
     'llllllllllllllllllllllllllllllll',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwwwwwwwwwwwwwwww2ww',
     'gTggggwwggggggRRRRggggggggggggfg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
-    'ggHHHHDDHHggggEGGEggTgggxxgCggfg',
-    'sggggpwwpggggggggggfgfgOxxOggggg',
+    'ggHHHHDDHHggggEGGEggTgggxxgYggfg',
+    's1gggpwwpggggggggggfgfgOxxOggggg',
     'kwwwwwwwgggggggggggggggnXXnouuog',
     'kwwwwwwwggggggggggggggojxxjouugg',
     'ssggFgggggggggFggggggggqxxqggggg',
@@ -239,9 +241,11 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'PAWN', x: 22, y: 1, color: '#e89a7c', bg: 'rgba(0,0,0,0.55)' },
     { text: 'ガチャ', x: 27, y: 0, color: '#fff', bg: '#e857a8', border: '#ffd5ec', blink: true, font: 8 },
     { text: 'GACHA!', x: 27, y: 1, color: '#e857a8', bg: 'rgba(0,0,0,0.55)' },
-    { text: '⛩ SHRINE', x: 22, y: 14, color: '#e8a0a0', bg: 'rgba(0,0,0,0.35)' },
-    { text: '← BEACH', x: 1, y: 15, color: '#cfe6ff', bg: '#16304a', border: '#2e5e8e' },
-    { text: 'DOWNTOWN >', x: 26, y: 8, color: '#e857a8', bg: 'rgba(0,0,0,0.55)', blink: true },
+    // Wayfinding boards are painted WOOD mounted on planted post tiles ('1'/'2'
+    // in the grid, one row below each plate) so they read as in-world signposts,
+    // not floating UI. The shrine has no sign — the torii gate IS the sign.
+    { text: '← BEACH', x: 0, y: 13, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
+    { text: 'DOWNTOWN →', x: 27, y: 8, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
   ],
   // Signs sit over the four venue facades of the 28-wide strip:
   // club N (cols 1-4), garage G (cols 7-10), casino K (cols 13-16), museum U (cols 19-24).
@@ -254,7 +258,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'CASINO', x: 13, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: 'はくぶつかん', x: 19, y: 0, color: '#16181d', bg: '#e8d8a0', border: '#c9a227', font: 8 },
     { text: 'MUSEUM', x: 19, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
-    { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
+    { text: '← STATION', x: 0, y: 6, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
   ],
   museum: [
     { text: 'カワマチ びじゅつかん', x: 1, y: 9, color: '#3a3322', bg: '#e0d8c4', border: '#b08a50', font: 7 },
@@ -265,7 +269,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   ],
   shore: [
     // Mirror of the city's '← BEACH' gate — the boardwalk at the NE corner leads back to town.
-    { text: 'TOWN →', x: 19, y: 2, color: '#cfe6ff', bg: '#16304a', border: '#2e5e8e' },
+    { text: 'TOWN →', x: 18, y: 2, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
   ],
   garage: [
     { text: 'こじまモータース せいび', x: 2, y: 0, color: '#ffd24a', bg: '#33302a', border: '#c9a227', font: 8 },
@@ -392,13 +396,14 @@ const shore: SceneDef = {
     'b': T('t-buoy', true),
     'U': T('t-parasol', true),
     'J': T('t-crate', true),
+    '1': T('t-post-dune', true),   // wayfinding signpost (TOWN → board = SCENE_SIGNS plate)
   },
   outdoor: true,
   grid: [
     'PgdvggPddvggdPvdggPdvggP',
     'gdvddvgddvddgddvvddvgddv',
     'vddvUdJddvddvddvdvddPddd',
-    'ddsddsdsddsssddssdsdkkkk',
+    'ddsddsdsddsssddssds1kkkk',
     'sssossssssUsssssLssssskk',
     'ssssssssssssssssssssssss',
     'ssssssssssssssssssssssss',
@@ -437,6 +442,7 @@ const shore: SceneDef = {
 
 const BADTOWN_L = {
   'p': T('t-sidewalk-bad'),
+  '1': T('t-post-plaza', true),  // wayfinding signpost (← STATION board = SCENE_SIGNS plate)
   'E': T('t-bld-neon', true),
   'q': T('t-chochin', true),
   'r': T('t-asphalt'),
@@ -467,7 +473,7 @@ const badtown: SceneDef = {
     'ppppppVppppppppppppppppppppp',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
-    'pppppppppppppppppppppppppppp',
+    'p1pppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
@@ -778,9 +784,9 @@ const greenhouse: SceneDef = {
   },
   grid: [
     'RRRRRRRRRRRRRRRR',
-    'G.P.HYH.H..P.F.G',
+    'GGGGHYHGGHGGHGGG',
     'G..o...o...o...G',
-    'G......xx......G',
+    'G.P....xx....P.G',
     'G..o...o...o...G',
     'G......xx......G',
     'G..o...o...o...G',
@@ -817,7 +823,8 @@ const island: SceneDef = {
     'B': T('t-banana', true),       // banana palms (scenery)
     'R': T('t-basalt', true),       // volcanic basalt (cone flanks)
     'V': T('t-volcano', true),      // the crater peak
-    'H': T('t-hotspring', true),    // onsen pool
+    'H': T('t-hotspring-l', true),  // onsen pool, left half (steam scan keys on 'H')
+    'h': T('t-hotspring-r', true),  // onsen pool, right half (the pair reads as ONE pool)
     'K': T('t-tiki', true),
     'Z': T('t-zama-poster', true),  // ZamaZonk billboard
     'b': T('t-bottle'),             // message in a bottle (secret; walkable sand)
@@ -829,7 +836,7 @@ const island: SceneDef = {
     '~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
     '~~~~~~~ssssRRVVRRssss~~~~~~~',
     '~~~~~ssssgggRRRcgggssss~~~~~',
-    '~~~~ssgggggggHHgggggssss~~~~',
+    '~~~~ssgggggggHhgggggssss~~~~',
     '~~~sssgggPgggggggBgggsss~~~~',
     '~~ssgggggggggggggggsslll~~~~',
     '~~sgggggPgggggggggggslllll~~',
@@ -872,7 +879,8 @@ const seacave: SceneDef = {
   legend: {
     '#': T('t-cave-wall', true),   // reused from the mines
     '.': T('t-cave-floor'),        // reused from the mines
-    'X': T('t-cave-exit'),         // daylight crack — walkable, warps back to the island
+    'x': T('t-cave-exit-l'),       // daylight crack, left half — walkable, warps back to the island
+    'X': T('t-cave-exit-r'),       // daylight crack, right half (the pair reads as ONE opening)
   },
   grid: [
     '############',
@@ -881,7 +889,7 @@ const seacave: SceneDef = {
     '#...#..#...#',
     '#...#..#...#',
     '#..........#',
-    '#....XX....#',
+    '#....xX....#',
     '############',
   ],
   warps: [

@@ -7,7 +7,7 @@ harness mechanics; this file is the **strategy** on top.
 ## The 3-command health check (run before AND after any change)
 
 ```bash
-npx tsc --noEmit && npm test          # types + 180-ish unit tests
+npx tsc --noEmit && npm test          # types + 200-ish unit tests
 npm run playtest -- smoke --wait 450  # all 20 scenes render without errors
 npm run playtest -- checkup           # end-to-end mechanics battery (scripts/checkups.mjs)
 ```

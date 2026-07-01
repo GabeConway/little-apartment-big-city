@@ -221,3 +221,7 @@ type-checks React calls — two bugs above invisible there. This repo DOES have
 
 ## Last session (personalsite era)
 2026-06-13 — deep-sea track + easier bay exit (whole south edge) + `country roads` cheat + ALPHA badge; Yoshi Shrine rename; trimmed JP from directional signs (stores keep it); Windows dev script (`start-dev.ps1`/`.cmd`); verified all mp3s audio-only/metadata-stripped. Everything committed on `fable` (latest `47f877e`). kb fully synced.
+## 2026-07-01 — Fable 5 playtester passes (on `DEV`)
+Two large batches (see kb/games.md "Recent changes" for full detail):
+- **Batch 1** (`cb79156`): David cat anim pass, t-tree/beachrock/cave-exit redraws, city torii garden (sando/toro/sakura/koi pond), greenhouse decor pass, club beat-sync + delivery-race juice (subagent), meteor-glow perf fix, 9 dead exports + nakatomi tiles removed, `checkup` harness command + seacave preset (smoke 20/20) + calendar tests + kb/bug-hunting.md.
+- **Batch 2** (uncommitted → this commit): David full REdesign (chunky), pawn-facade legend-collision fix, seacave single-slit exit, island-sign/terminal bg fixes, onsen l/r pool, greenhouse back wall, blackjack table redraw, casino patrons/glows/ambience (subagent), cat pet/gift/nap-spots + journal missions + save codes (title MANAGE SAVE) + weather fish + toro night glow (subagent), wooden signpost wayfinding + shrine sign removed, sign blink darkens (not transparent), morning message buzz, holistic systems audit (no soft-locks; quirk list in games.md). Tests 206, checkup 12/12.

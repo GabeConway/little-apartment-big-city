@@ -1249,3 +1249,220 @@ describe('island sea cave: luck drops + Bigfoot', () => {
     expect(hits).toBeLessThan(120);    // and genuinely rare
   });
 });
+
+// ---- Save export / import codes (phone Settings) --------------------------------
+import {
+  exportSaveCode, importSaveCode,
+  petCat, catPetToday, CAT_PET_PTS, catGiftMorning, catGiftFor, CAT_GIFT_CHANCE,
+  syncMissions, biteTableFor, fishSky,
+} from '../src/game/state';
+import { MISSIONS, FISH, DEEP_FISH } from '../src/game/data';
+
+describe('save export/import codes', () => {
+  it('round-trips a save through a code, unicode name intact', () => {
+    const s = newSave();
+    s.money = 12345; s.day = 7; s.name = 'ゆき🐟'; s.owned = ['bed']; s.canFish = true;
+    const back = importSaveCode(exportSaveCode(s))!;
+    expect(back).not.toBeNull();
+    expect(back.money).toBe(12345);
+    expect(back.day).toBe(7);
+    expect(back.name).toBe('ゆき🐟');       // TextEncoder path — bare btoa would throw here
+    expect(back.owned).toEqual(['bed']);
+    expect(back.canFish).toBe(true);
+  });
+
+  it('a code survives surrounding whitespace (a sloppy paste)', () => {
+    const code = exportSaveCode(newSave());
+    expect(importSaveCode(`  ${code}\n`)).not.toBeNull();
+  });
+
+  it('rejects tampered / truncated / garbage codes', () => {
+    const code = exportSaveCode(newSave());
+    expect(importSaveCode(code.slice(0, code.length - 12))).toBeNull(); // truncated JSON
+    expect(importSaveCode('!!!not base64!!!')).toBeNull();              // not base64
+    expect(importSaveCode(btoa('{"hello":1}'))).toBeNull();             // valid JSON, wrong shape
+    expect(importSaveCode('')).toBeNull();
+  });
+
+  it('rejects a non-v2 save blob', () => {
+    const s = newSave() as unknown as { v: number };
+    s.v = 1;
+    expect(importSaveCode(exportSaveCode(s as GameSave))).toBeNull();
+  });
+
+  it('rejects insane core types (money/day/name/scene/owned)', () => {
+    const bad = (patch: Record<string, unknown>) =>
+      importSaveCode(btoa(JSON.stringify({ v: 2, money: 100, day: 3, name: 'x', scene: 'city', owned: [], ...patch })));
+    expect(bad({})).not.toBeNull();                 // the baseline blob itself imports
+    expect(bad({ money: 'lots' })).toBeNull();
+    expect(bad({ day: 0 })).toBeNull();
+    expect(bad({ name: 7 })).toBeNull();
+    expect(bad({ scene: null })).toBeNull();
+    expect(bad({ owned: 'bed' })).toBeNull();
+  });
+
+  it('merges a minimal blob over full defaults (loadSave-style)', () => {
+    const s = importSaveCode(btoa(JSON.stringify({ v: 2, money: 900, day: 3, name: 'x', scene: 'city', owned: [] })))!;
+    expect(s.energy).toBe(BASE_MAX_ENERGY);         // defaulted
+    expect(s.missionsDone).toEqual([]);             // new fields default-safe
+    expect(s.catPetDay).toBe(0);
+    expect(s.almanac).toEqual({ minerals: [], forage: [] });
+  });
+});
+
+// ---- David: petting + morning gifts ----------------------------------------------
+describe('petCat (once a day, +friendship)', () => {
+  it('needs the cat and only works once per day', () => {
+    const s = newSave();
+    expect(petCat(s)).toBe(false);                  // no cat yet
+    s.cat = { found: true, name: 'David' };
+    expect(catPetToday(s)).toBe(false);
+    expect(petCat(s)).toBe(true);
+    expect(s.friends['david'].pts).toBe(CAT_PET_PTS);
+    expect(s.catPetDay).toBe(s.day);
+    expect(catPetToday(s)).toBe(true);
+    expect(petCat(s)).toBe(false);                  // already petted today
+    s.day += 1;
+    expect(petCat(s)).toBe(true);                   // a new day, a new scritch
+    expect(s.friends['david'].pts).toBe(CAT_PET_PTS * 2);
+  });
+
+  it('never spends the day\'s gift and clamps at max points', () => {
+    const s = newSave();
+    s.cat = { found: true, name: 'David' };
+    s.friends['david'] = { pts: MAX_HEARTS * 100 - 2, giftDay: -1 };
+    expect(petCat(s)).toBe(true);
+    expect(s.friends['david'].pts).toBe(MAX_HEARTS * 100); // clamped
+    expect(s.friends['david'].giftDay).toBe(-1);           // gifting untouched
+    expect(canGiftToday(s, 'david')).toBe(true);
+  });
+});
+
+describe('catGiftMorning / catGiftFor (seeded, deterministic)', () => {
+  it('is deterministic per day and never fires on day 1', () => {
+    expect(catGiftMorning(1)).toBe(false);
+    for (let d = 2; d < 300; d++) expect(catGiftMorning(d)).toBe(catGiftMorning(d));
+  });
+
+  it('fires on roughly CAT_GIFT_CHANCE of mornings', () => {
+    let hits = 0;
+    for (let d = 2; d <= 2001; d++) if (catGiftMorning(d)) hits++;
+    expect(hits).toBeGreaterThan(2000 * CAT_GIFT_CHANCE * 0.5);
+    expect(hits).toBeLessThan(2000 * CAT_GIFT_CHANCE * 2);
+  });
+
+  it('the gift itself is deterministic and sane (¥50–300 or one egg)', () => {
+    let eggs = 0, cash = 0;
+    for (let d = 2; d < 500; d++) {
+      const a = catGiftFor(d), b = catGiftFor(d);
+      expect(a).toEqual(b);                          // same day → same haul
+      if (a.egg) { eggs++; expect(a.money).toBe(0); }
+      else { cash++; expect(a.money).toBeGreaterThanOrEqual(50); expect(a.money).toBeLessThanOrEqual(300); }
+    }
+    expect(eggs).toBeGreaterThan(0);                 // both outcomes actually occur
+    expect(cash).toBeGreaterThan(0);
+  });
+});
+
+// ---- Journal missions ---------------------------------------------------------
+describe('MISSIONS predicates (pure)', () => {
+  const ctx = () => ({ almanac: { forage: [] as string[] }, canFish: false, fishLog: {} as Record<string, number>, shiftsWorked: 0, donated: 0 });
+  const by = (id: string) => MISSIONS.find(m => m.id === id)!;
+
+  it('is the authored 5-step chain', () => {
+    expect(MISSIONS.map(m => m.id)).toEqual(['m-forage', 'm-genji', 'm-fish3', 'm-shift', 'm-shrine']);
+  });
+  it('m-forage: any shore find ever grabbed', () => {
+    expect(by('m-forage').isDone(ctx())).toBe(false);
+    expect(by('m-forage').isDone({ ...ctx(), almanac: { forage: ['shell'] } })).toBe(true);
+  });
+  it('m-genji: learning to fish', () => {
+    expect(by('m-genji').isDone(ctx())).toBe(false);
+    expect(by('m-genji').isDone({ ...ctx(), canFish: true })).toBe(true);
+  });
+  it('m-fish3: three fish across any species', () => {
+    expect(by('m-fish3').isDone({ ...ctx(), fishLog: { minnow: 2 } })).toBe(false);
+    expect(by('m-fish3').isDone({ ...ctx(), fishLog: { minnow: 2, koi: 1 } })).toBe(true);
+  });
+  it('m-shift: first konbini shift', () => {
+    expect(by('m-shift').isDone(ctx())).toBe(false);
+    expect(by('m-shift').isDone({ ...ctx(), shiftsWorked: 1 })).toBe(true);
+  });
+  it('m-shrine: any yen ever offered', () => {
+    expect(by('m-shrine').isDone(ctx())).toBe(false);
+    expect(by('m-shrine').isDone({ ...ctx(), donated: 100 })).toBe(true);
+  });
+});
+
+describe('syncMissions (pay each step once)', () => {
+  it('a fresh save has nothing to pay', () => {
+    const s = newSave();
+    expect(syncMissions(s)).toEqual([]);
+    expect(s.missionsDone).toEqual([]);
+  });
+
+  it('pays a completed step exactly once', () => {
+    const s = newSave();
+    const before = s.money;
+    s.shiftsWorked = 1;
+    const fresh = syncMissions(s);
+    expect(fresh.map(m => m.id)).toEqual(['m-shift']);
+    expect(s.money).toBe(before + fresh[0].reward);
+    expect(s.missionsDone).toEqual(['m-shift']);
+    expect(syncMissions(s)).toEqual([]);            // second sweep: nothing new
+    expect(s.money).toBe(before + fresh[0].reward);
+  });
+
+  it('sweeps multiple newly-done steps in chain order', () => {
+    const s = newSave();
+    const before = s.money;
+    s.almanac.forage.push('shell');
+    s.canFish = true;
+    s.fishLog = { minnow: 3 };
+    s.shiftsWorked = 2;
+    s.donated = 500;
+    const fresh = syncMissions(s);
+    expect(fresh).toHaveLength(5);
+    expect(s.missionsDone).toEqual(MISSIONS.map(m => m.id));
+    expect(s.money).toBe(before + MISSIONS.reduce((a, m) => a + m.reward, 0));
+  });
+});
+
+// ---- Weather-gated fish ---------------------------------------------------------
+describe('biteTableFor (weather-gated species)', () => {
+  const GATED = ['rainkoi', 'stargazer'];
+
+  it('a clear day-1 sky serves only the classic table', () => {
+    const s = newSave();                            // day 1: never rain, never meteors
+    const ids = biteTableFor(s, FISH).map(f => f.id);
+    for (const g of GATED) expect(ids).not.toContain(g);
+    expect(ids).toHaveLength(FISH.length - GATED.length);
+  });
+
+  it('rain adds the Rain Koi (and only it)', () => {
+    const s = newSave();
+    s.day = 5; s.forceRain = true;                  // forceRain wins the weather roll
+    const ids = biteTableFor(s, FISH).map(f => f.id);
+    expect(ids).toContain('rainkoi');
+    expect(ids).not.toContain('stargazer');         // rain precludes a meteor night
+  });
+
+  it('a meteor night adds the Stargazer — but only after dark', () => {
+    const s = newSave();
+    s.timeMin = 22 * 60;                            // full night
+    let found = 0;
+    for (let d = 2; d < 600 && !found; d++) { s.day = d; if (meteorNight(s)) found = d; }
+    expect(found).toBeGreaterThan(0);               // the seeded roll does land sometimes
+    s.day = found;
+    expect(biteTableFor(s, FISH).map(f => f.id)).toContain('stargazer');
+    expect(fishSky(s)).toEqual({ rainy: false, meteorNight: true });
+    s.timeMin = 12 * 60;                            // same sky at noon: not yet
+    expect(biteTableFor(s, FISH).map(f => f.id)).not.toContain('stargazer');
+  });
+
+  it('tables without gated species pass through untouched', () => {
+    const s = newSave();
+    s.day = 5; s.forceRain = true;
+    expect(biteTableFor(s, DEEP_FISH)).toHaveLength(DEEP_FISH.length);
+  });
+});

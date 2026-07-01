@@ -13,8 +13,9 @@ import {
   friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
   FRIENDS, FRIEND_HEART_LINES, HANGOUTS, HOME_VISITS,
   SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
+  MISSIONS,
 } from './data';
-import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind } from './data';
+import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind, Fish, FishSky, Mission } from './data';
 import type { HangoutScene, HomeVisit } from './data';
 import type { CropRequest } from './data';
 import type { Errand, StreetEvent } from './data';
@@ -108,6 +109,9 @@ export interface GameSave {
   museum: { donated: string[] }; // MUSEUM_SLOTS ids the player has donated a piece to (empty by default)
   greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
   cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
+  catPetDay: number;            // last day David was petted (0 = never); one pet per day
+  catGiftDay: number;           // last day David left a morning gift by the door (0 = never)
+  missionsDone: string[];       // Journal MISSIONS steps already completed + paid (data.ts)
   collectibles: string[];       // museum collectible item ids found but not yet donated (in your bag)
   keepsakes: string[];          // friendship-capstone keepsake ids held (see KEEPSAKES in data.ts)
   almanac: { minerals: string[]; forage: string[] }; // Almanac app: ever-discovered sets (ore struck / shore finds grabbed) — survives selling
@@ -300,6 +304,9 @@ export const newSave = (): GameSave => ({
   museum: { donated: [] },
   greenhouse: freshGreenhouse(),
   cat: { found: false, name: '' },
+  catPetDay: 0,
+  catGiftDay: 0,
+  missionsDone: [],
   collectibles: [],
   keepsakes: [],
   almanac: { minerals: [], forage: [] },
@@ -318,11 +325,10 @@ export const newSave = (): GameSave => ({
   skills: { fish: 0, mine: 0, farm: 0 },
 });
 
-export const loadSave = (): GameSave | null => {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<GameSave>;
+// Merge a parsed (possibly older / partial) save blob over fresh defaults and run
+// every migration. Shared by loadSave (localStorage) and importSaveCode (pasted
+// codes) so an imported save survives shape changes exactly like a stored one.
+const mergeSave = (parsed: Partial<GameSave>): GameSave => {
     // Merge over defaults so older saves survive shape changes.
     const s = { ...newSave(), ...parsed };
     // Migration: v1 saves predate the placement system — auto-place everything
@@ -362,6 +368,51 @@ export const loadSave = (): GameSave | null => {
     // Almanac: default-safe nested merge so older saves (and partial future ones) get both sets.
     s.almanac = { minerals: [], forage: [], ...s.almanac };
     return s;
+};
+
+export const loadSave = (): GameSave | null => {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return null;
+    return mergeSave(JSON.parse(raw) as Partial<GameSave>);
+  } catch { return null; }
+};
+
+// ---- Save export / import codes ------------------------------------------------
+// A save serialized to one copy-pasteable string (phone Settings app): UTF-8 JSON
+// → base64. TextEncoder handles unicode (names like "ゆき" would blow up a bare
+// btoa, which only eats latin-1); encoding is chunked so a fat endgame save can't
+// overflow the argument list. Dependency-free — btoa/atob + TextEncoder exist in
+// every webview (and node ≥16, for the tests).
+const b64encode = (str: string): string => {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+const b64decode = (b64: string): string => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+};
+
+export const exportSaveCode = (s: GameSave): string => b64encode(JSON.stringify(s));
+
+// Paste-side: decode + parse, refuse anything that isn't plausibly a v2 save
+// (tampered/truncated codes fail the base64/JSON step; a wrong-shaped blob fails
+// the type checks), then run the SAME default-merge + migrations as loadSave.
+// Returns null on any rejection — the caller shows the friendly message.
+export const importSaveCode = (code: string): GameSave | null => {
+  try {
+    const parsed = JSON.parse(b64decode(code.trim())) as Partial<GameSave>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    if (parsed.v !== 2) return null;
+    if (typeof parsed.money !== 'number' || !Number.isFinite(parsed.money)) return null;
+    if (typeof parsed.day !== 'number' || parsed.day < 1) return null;
+    if (typeof parsed.name !== 'string' || typeof parsed.scene !== 'string') return null;
+    if (!Array.isArray(parsed.owned)) return null;
+    return mergeSave(parsed);
   } catch { return null; }
 };
 
@@ -435,6 +486,21 @@ export const foggyDay = (s: GameSave): boolean =>
 // one wish per shower-night (see `wishDay`) for a next-day `lucky` buff.
 export const meteorNight = (s: GameSave): boolean =>
   !isRainyDay(s) && !foggyDay(s) && s.day > 1 && mulberry32(s.day * 374761397 + 89)() < 0.062;
+
+// ---- Weather-gated fish --------------------------------------------------------
+// The SKY snapshot a Fish.when predicate reads (see the weather-only species in
+// data.ts). The Stargazer only rises to a shower sky once it's properly dark —
+// past half the evening ramp — so a meteor-forecast day can't hook it at noon.
+export const fishSky = (s: GameSave): FishSky => ({
+  rainy: isRainyDay(s),
+  meteorNight: meteorNight(s) && nightT(s) > 0.5,
+});
+// Filter a bite table down to the species actually biting under today's sky.
+// Ungated fish always pass, so a clear day just yields the classic table.
+export const biteTableFor = (s: GameSave, table: Fish[]): Fish[] => {
+  const sky = fishSky(s);
+  return table.filter(f => !f.when || f.when(sky));
+};
 
 // ---- Daily special events ----------------------------------------------------
 // At most one "special day" rolls per day — seeded so it's stable across reloads,
@@ -1377,6 +1443,21 @@ export const syncMessages = (s: GameSave): PhoneMessage[] => {
 export const unreadCount = (s: GameSave): number =>
   s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0);
 
+// ---- Journal missions ----------------------------------------------------------
+// Mark + pay any newly-completed MISSIONS steps (mirrors syncMessages: called on
+// scene enter and when the Journal opens). Each step pays its reward exactly once
+// (save.missionsDone dedupes); returns the fresh completions for a toast.
+export const syncMissions = (s: GameSave): Mission[] => {
+  const fresh: Mission[] = [];
+  for (const m of MISSIONS) {
+    if (s.missionsDone.includes(m.id) || !m.isDone(s)) continue;
+    s.missionsDone.push(m.id);
+    s.money += m.reward;
+    fresh.push(m);
+  }
+  return fresh;
+};
+
 // Push a one-off (non-catalog) message — used for ZamaZonk order/delivery
 // receipts. Deduped by id so re-running is safe.
 export const pushMessage = (s: GameSave, m: Omit<PhoneMessage, 'day' | 'read'>): void => {
@@ -1560,6 +1641,37 @@ export const giftTo = (s: GameSave, npcId: string, kind: GiftKind): { tier: Gift
   persistSave(s);
   const hearts = friendHearts(s, npcId);
   return { tier, hearts, gainedHeart: hearts > before };
+};
+
+// ---- David the cat: pets & morning gifts --------------------------------------
+// Pet David once a day (the dialog's "Pet David 🐾" action): a modest friendship
+// bump on the FRIENDS id 'david' — smaller than any gift, but free and daily.
+// Points route through the same clamp as giftTo; giftDay is untouched so a pet
+// never spends the day's gift.
+export const CAT_PET_PTS = 6;
+export const catPetToday = (s: GameSave): boolean => s.catPetDay === s.day;
+export const petCat = (s: GameSave): boolean => {
+  if (!s.cat.found || s.catPetDay === s.day) return false;
+  s.catPetDay = s.day;
+  const cur = s.friends['david'] ?? { pts: 0, giftDay: -1 };
+  cur.pts = Math.max(0, Math.min(MAX_HEARTS * HEART_POINTS, cur.pts + CAT_PET_PTS));
+  s.friends['david'] = cur;
+  return true;
+};
+
+// Some mornings (~8%, seeded per day like the weather rolls — stable across
+// reloads, never day 1) David leaves a little something by the door. The wake
+// flow checks the roll once per morning and dedupes via save.catGiftDay.
+export const CAT_GIFT_CHANCE = 0.08;
+export const catGiftMorning = (day: number): boolean =>
+  day > 1 && mulberry32(day * 1103515245 + 61)() < CAT_GIFT_CHANCE;
+// What he left: usually a small pile of coins (¥50–300), sometimes one pantry egg.
+// Seeded by the same day so the haul is as deterministic as the roll.
+export interface CatGift { money: number; egg: boolean }
+export const catGiftFor = (day: number): CatGift => {
+  const rand = mulberry32(day * 1103515245 + 62);
+  if (rand() < 0.3) return { money: 0, egg: true };
+  return { money: 50 + Math.floor(rand() * 251), egg: false };
 };
 
 // ---- Heart-event hangouts & home visits --------------------------------------

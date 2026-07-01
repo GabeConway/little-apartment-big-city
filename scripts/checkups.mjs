@@ -79,4 +79,29 @@ export const CHECKS = [
     save: { scene: 'apartment', px: 112, py: 80, visited: ['apartment'] },
     assert: 'money>=0 && energy>0',
   },
+  {
+    name: 'journal-missions-tab',
+    note: 'phone Journal app opens (missions section renders with it)',
+    save: { scene: 'city', px: 96, py: 224, visited: ['city'] },
+    click: 'PHONE,Journal',
+    assert: "overlay==='menu' && overlayData && overlayData.tab==='journal'",
+  },
+  {
+    name: 'journal-missions-pay',
+    note: 'opening the Journal pays every newly-completed mission step once (5 × ¥300..800 = ¥2,600)',
+    save: {
+      scene: 'city', px: 96, py: 224, visited: ['city'], money: 3000,
+      canFish: true, shiftsWorked: 1, donated: 500,
+      fishLog: { minnow: 3 }, almanac: { minerals: [], forage: ['shell'] },
+    },
+    click: 'PHONE,Journal',
+    assert: 'save.missionsDone.length===5 && money===5600',
+  },
+  {
+    name: 'phone-settings-tab',
+    note: 'phone Settings app opens (save codes live on the title MANAGE SAVE panel, covered by unit tests)',
+    save: { scene: 'city', px: 96, py: 224, visited: ['city'] },
+    click: 'PHONE,Settings',
+    assert: "overlay==='menu' && overlayData && overlayData.tab==='settings'",
+  },
 ];
