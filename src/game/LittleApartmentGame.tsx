@@ -7553,6 +7553,8 @@ const LittleApartmentGame: React.FC = () => {
   const [placingItem, setPlacingItem] = useState<string | null>(null);
   const [cheatInput, setCheatInput] = useState('');
   const [cheatMsg, setCheatMsg] = useState('');
+  // "now you see me" reveals the known-codes list outside dev builds (session-only).
+  const [codesRevealed, setCodesRevealed] = useState(false);
 
   // Save-code panel (phone Settings): the generated export string, the paste box,
   // and the last import complaint (cleared on success).
@@ -7644,6 +7646,10 @@ const LittleApartmentGame: React.FC = () => {
       case 'im god':
         s.god = !s.god;
         setCheatMsg(s.god ? 'GOD MODE on. The crawlers can no longer touch you.' : 'God mode off. Mortal again.');
+        break;
+      case 'now you see me':
+        setCodesRevealed(!codesRevealed);
+        setCheatMsg(codesRevealed ? "…now you don't. The list slips back behind the curtain." : 'Abracadabra. The list steps out from behind the curtain.');
         break;
       default:
         setCheatMsg(code ? `"${code}"? Never heard of it.` : '');
@@ -8211,9 +8217,9 @@ const LittleApartmentGame: React.FC = () => {
           <button className={`${btnCls} text-sm`} onClick={applyCheat}>APPLY</button>
         </div>
         {cheatMsg && <p className="text-sm text-[#7ce8a0] mt-2">{cheatMsg}</p>}
-        {isDev && (
+        {(isDev || codesRevealed) && (
           <div className="mt-3 border-t border-[#ffd24a]/20 pt-2">
-            <p className="text-xs text-[#ffd24a]/70 mb-1">DEV — known codes</p>
+            <p className="text-xs text-[#ffd24a]/70 mb-1">{isDev ? 'DEV — known codes' : 'Known codes'}</p>
             {[
               ['motherlode', '+¥50,000'],
               ['redbull', 'Refill energy'],
@@ -8225,6 +8231,7 @@ const LittleApartmentGame: React.FC = () => {
               ['midnight', 'Time → 1:30 AM'],
               ['come again another day', 'Force rain today'],
               ['im god', 'Toggle: no crawler damage in mines'],
+              ['now you see me', 'Toggle this list'],
             ].map(([code, desc]) => (
               <p key={code} className="text-sm flex justify-between gap-3 py-px"><span className="text-[#7ce8a0]">{code}</span><span className="opacity-55">{desc}</span></p>
             ))}

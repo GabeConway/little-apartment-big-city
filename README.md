@@ -55,6 +55,7 @@ Open the phone (**P** / 📱) → **Codes** app, type a code, APPLY:
 | `nightfall` | Set time to 10:00 PM (night) |
 | `midnight` | Set time to 1:30 AM |
 | `come again another day` | Force rain for the current day |
+| `now you see me` | Toggle the in-game code list (visible by default in dev builds) |
 
 ## Quick start (dev)
 ```sh
