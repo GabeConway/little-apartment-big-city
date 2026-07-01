@@ -703,7 +703,6 @@ export const DELIVERY_BASE = 900;           // flat fee for a completed delivery
 export const DELIVERY_ACE_FRAC = 0.57;      // "ace driver" = finishing under ~57% of the track's limit
 // Ace threshold for a given track limit (proportional, so it's fair on long + short courses).
 export const driveAceTime = (timeLimit: number = DELIVERY_TIME_LIMIT): number => Math.round(timeLimit * DELIVERY_ACE_FRAC);
-export const DELIVERY_ACE_TIME = driveAceTime(); // 34s on the default limit (legacy/default)
 export const deliveryDoneToday = (s: GameSave): boolean => s.deliveryDay === s.day;
 export interface DrivePayout { total: number; base: number; timeBonus: number; cleanBonus: number; onTime: boolean }
 // elapsedSec = run time; grassSec = seconds spent off the dirt (the clean-driving penalty);
@@ -889,8 +888,6 @@ export const FERTILIZER_COST = 250;
 export const BED_COSTS: Record<number, number> = { 6: 4000, 9: 12000 }; // pay to till to the next bed count
 export const TIER_COSTS: Record<number, number> = { 1: 8000, 2: 30000 }; // glass-repair tiers (quality bonus + better seeds)
 
-// How many beds are tilled & usable (drives which plots are interactive).
-export const greenhouseBeds = (s: GameSave): number => s.greenhouse.beds;
 // Visual growth stage (0..3) for a planted plot.
 export const plotStage = (plot: GreenhousePlot): number => {
   const crop = plot.crop ? CROPS[plot.crop] : undefined;

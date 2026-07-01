@@ -28,6 +28,7 @@ Read before editing the matching area:
 - [kb/dependencies.md](kb/dependencies.md) — versions, security policy.
 - [kb/testing.md](kb/testing.md) — Vitest setup, CI, pre-commit hook.
 - [kb/playtesting.md](kb/playtesting.md) — Playwright playtest harness (`npm run playtest`): seed a save, drive inputs, read live state, screenshot.
+- [kb/bug-hunting.md](kb/bug-hunting.md) — agent playtesting playbook: 3-command health check (`tsc+test` / `smoke` / `checkup`), seeding tricks, blind spots, fragile areas.
 
 ## Commands
 - `npm run dev` — Vite dev server in a browser (fast iteration only; not a ship target). No Rust needed.
@@ -36,6 +37,9 @@ Read before editing the matching area:
 - `npm run playtest -- <shot|state|drive|title|presets> [opts]` — drive the game in a headless browser (seed save, send input, read live state, screenshot). See [kb/playtesting.md](kb/playtesting.md).
 - `npm run desktop:dev` / `:build` (+ `desktop:build:mac` for .app+.dmg), `android:dev` / `:build`, `ios:dev` / `:build` — Tauri (needs Rust; see build-targets).
 - `./start-dev.sh [desktop|android|ios]` (mac/linux) · `start-dev.ps1`/`.cmd` (Windows).
+
+## Git workflow
+Day-to-day work is committed and pushed to the **`DEV` branch** — not `main`, no feature branches, no PRs. `main` is promoted from `DEV` when the owner decides (CI + release workflows key off `main`).
 
 ## Invariants (don't break)
 - `src/game/` stays React-only (no new npm deps inside it).

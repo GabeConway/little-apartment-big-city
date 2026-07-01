@@ -142,15 +142,21 @@ const city: SceneDef = {
   name: 'Kawamachi St.',
   legend: {
     ...OUTDOOR,
-    'H': T('t-apt-wall', true),    // Nakatomi Apartments facade (home building)
-    'N': T('t-nakatomi-l', true),  // sign over the door: "NAKA"
-    'K': T('t-nakatomi-r', true),  // sign over the door: "TOMI"
+    'H': T('t-apt-wall', true),    // Nakatomi Apartments facade (home building; name plate = SCENE_SIGNS.city)
     'p': T('t-planter', true),     // flowering planter flanking the entrance
     'F': T('t-grass-v2'),          // clover/daisy grass detail (walkable)
     'E': T('t-gh-front', true),    // community greenhouse glass facade (east of home)
     'R': T('t-gh-roof', true),     // greenhouse pitched glass roof (over the facade)
     'G': T('t-gh-door'),           // greenhouse glass door (walk-in warp, gated)
     'k': T('t-boardwalk'),         // beach-access boardwalk gate at the SW shore seam (matches the shore boardwalk)
+    // Torii-garden kit (SE corner — the shrine approach): stone sando trail,
+    // beam-over-path, stone toro lanterns, sakura + fallen petals, koi pond.
+    'x': T('t-stonepath'),         // stone sando trail (walkable)
+    'X': T('t-torii-beam-path'),   // torii crossbar where the trail runs under the gate
+    'O': T('t-toro', true),        // stone ishidoro lantern flanking the approach
+    'C': T('t-sakura', true),      // cherry-blossom tree shading the garden
+    'q': T('t-sakura-petals'),     // fallen petals beside the trail (walkable)
+    'u': T('t-pond', true),        // garden koi pond (solid)
   },
   outdoor: true,
   grid: [
@@ -167,11 +173,11 @@ const city: SceneDef = {
     'gTggggwwggggggRRRRggggggggggggfg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
-    'ggHHHHDDHHggggEGGEggTgggggggggfg',
-    'sggggpwwpggggggggggfgfgggggggggg',
-    'kwwwwwwwgggggggggggggggnmmnggggg',
-    'kwwwwwwwggggggggggggggojggjo~~gg',
-    'ssggFgggggggggFggggggggggggg~~gg',
+    'ggHHHHDDHHggggEGGEggTgggxxgCggfg',
+    'sggggpwwpggggggggggfgfgOxxOggggg',
+    'kwwwwwwwgggggggggggggggnXXnouuog',
+    'kwwwwwwwggggggggggggggojxxjouugg',
+    'ssggFgggggggggFggggggggqxxqggggg',
   ],
   warps: [
     { x: 4, y: 2, to: 'denden', tx: 8, ty: 8, dir: 'up' },
@@ -767,17 +773,19 @@ const greenhouse: SceneDef = {
     'b': T('t-gh-shipbox', true),    // shipping box — harvest sells here at dawn
     'Y': T('t-gh-poster', true),
     'D': T('t-door'),
+    'x': T('t-gh-path'),             // stepping-stone path (walkable)
+    'F': T('t-gh-flowers', true),    // flower bed (decor)
   },
   grid: [
     'RRRRRRRRRRRRRRRR',
-    'G...HYH........G',
+    'G.P.HYH.H..P.F.G',
     'G..o...o...o...G',
-    'G..............G',
+    'G......xx......G',
     'G..o...o...o...G',
-    'G..............G',
+    'G......xx......G',
     'G..o...o...o...G',
-    'G..............G',
-    'G.vw.......b...G',
+    'G.F....xx....P.G',
+    'G.vw...xx..b.F.G',
     'GGGGGGGDDGGGGGGG',
   ],
   warps: [
@@ -805,9 +813,9 @@ const island: SceneDef = {
     's': T('t-sand'),
     'g': T('t-grass'),
     'D': T('t-dock'),               // wooden pier (walkable, over water)
-    'P': T('t-tree', true),         // coconut palms
+    'P': T('t-palm', true),         // coconut palms
     'B': T('t-banana', true),       // banana palms (scenery)
-    'R': T('t-rock', true),         // volcanic rock
+    'R': T('t-basalt', true),       // volcanic basalt (cone flanks)
     'V': T('t-volcano', true),      // the crater peak
     'H': T('t-hotspring', true),    // onsen pool
     'K': T('t-tiki', true),
@@ -864,7 +872,7 @@ const seacave: SceneDef = {
   legend: {
     '#': T('t-cave-wall', true),   // reused from the mines
     '.': T('t-cave-floor'),        // reused from the mines
-    'X': T('t-cave-crack'),        // daylight crack — walkable, warps back to the island
+    'X': T('t-cave-exit'),         // daylight crack — walkable, warps back to the island
   },
   grid: [
     '############',

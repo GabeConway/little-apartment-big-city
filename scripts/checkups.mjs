@@ -1,0 +1,82 @@
+// checkups.mjs — the named check table behind `npm run playtest -- checkup`.
+// Each row is one end-to-end regression check the harness runs in a single
+// browser session: seed the save → boot → drive inputs → eval `assert` against
+// the live snapshot (same scope as `--assert`: money/scene/day/overlay/… + save).
+//
+// Add a row per mechanic you want guarded. Keep rows ROBUST:
+//   - drive via `keys`/`hold` (real keyboard) or `click` (DOM button labels);
+//     canvas pointer-drags (Arrange mode) and ref-mode QTEs can't be driven.
+//   - `click` labels match by substring, comma = sequence ("PHONE,Messages").
+//   - prefer asserting on snapshot/save state over screen contents.
+//
+// Row shape:
+//   name     unique id (run one with: checkup --only <name>)
+//   note     what this guards (shown on failure)
+//   save     partial save merged over newSave() (null = NEW GAME flow)
+//   keys / hold / click / wait   optional inputs, same semantics as CLI flags
+//   keepOverlay  don't auto-dismiss the arrival overlay before inputs
+//   assert   JS expression evaluated against the snapshot; truthy = pass
+
+export const CHECKS = [
+  {
+    name: 'new-game-boots',
+    note: 'NEW GAME → vibe picker → START lands in the apartment on day 1',
+    save: null,
+    assert: "scene==='apartment' && day===1 && screen==='playing'",
+  },
+  {
+    name: 'phone-opens',
+    note: 'P opens the phone menu overlay',
+    save: { scene: 'city', px: 96, py: 224, visited: ['city'] },
+    keys: 'p',
+    assert: "overlay==='menu'",
+  },
+  {
+    name: 'phone-messages-tab',
+    note: 'HUD PHONE button → Messages app reaches the messages tab',
+    save: { scene: 'city', px: 96, py: 224, visited: ['city'] },
+    click: 'PHONE,Messages',
+    assert: "overlay==='menu' && overlayData && overlayData.tab==='messages'",
+  },
+  {
+    name: 'zamazonk-order',
+    note: 'ZamaZonk order debits cash and queues a next-morning delivery',
+    save: { scene: 'city', px: 96, py: 224, money: 40000, zamazonkApp: true, visited: ['city'] },
+    click: 'PHONE,ZamaZonk,ORDER',
+    assert: 'save.orders.length===1 && money<40000',
+  },
+  {
+    name: 'seacave-exit-warp',
+    note: 'walking onto the sea-cave daylight crack warps back to the island',
+    save: { scene: 'seacave', px: 80, py: 80, vehicles: ['boat'], visited: ['island', 'seacave'] },
+    hold: ['ArrowDown:700'],
+    wait: 1200,
+    assert: "scene==='island'",
+  },
+  {
+    name: 'collapse-at-2am',
+    note: 'clock passing 26:00 forces the OUT COLD collapse-sleep overlay',
+    save: { scene: 'apartment', px: 112, py: 80, timeMin: 1556, visited: ['apartment'] },
+    wait: 4500,
+    assert: "overlay==='sleep' && overlayData && overlayData.collapsed===true",
+  },
+  {
+    name: 'mine-snapshot-live',
+    note: 'mines expose floor/ladder runtime state to the harness',
+    save: { scene: 'mines', px: 32, py: 32, backroomsUnlocked: true, wand: true, visited: ['mines'] },
+    assert: 'mine && mine.floor===1 && mine.down && typeof mine.down.x==="number"',
+  },
+  {
+    name: 'city-wanderers-alive',
+    note: 'townsfolk wander the city without getting stuck',
+    save: { scene: 'city', px: 96, py: 224, visited: ['city'] },
+    wait: 3000,
+    assert: 'wanderers.length>0 && wanderers.every(w=>!w.stuck)',
+  },
+  {
+    name: 'money-not-negative',
+    note: 'a fresh save never starts in debt',
+    save: { scene: 'apartment', px: 112, py: 80, visited: ['apartment'] },
+    assert: 'money>=0 && energy>0',
+  },
+];

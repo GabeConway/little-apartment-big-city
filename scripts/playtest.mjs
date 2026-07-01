@@ -19,6 +19,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { CHECKS } from './checkups.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PLAYTEST_PORT || 5179);
@@ -26,7 +27,7 @@ const PORT = Number(process.env.PLAYTEST_PORT || 5179);
 // px = tile * 16. Coords below land the player on a walkable tile in each scene
 // (taken from the warp targets in maps.ts), so a teleport never drops you in a wall.
 // Safe spawn tile per scene (px/py = warp-target tile ×16, walkable on arrival).
-// Covers all 19 scenes so `--save <scene>` and the `smoke` command can reach
+// Covers all 20 scenes so `--save <scene>` and the `smoke` command can reach
 // every map. Tiles sourced from the `to:'<scene>'` warp targets in maps.ts.
 const SCENE_SPAWN = {
   apartment: { px: 112, py: 80 },
@@ -46,6 +47,7 @@ const SCENE_SPAWN = {
   backrooms: { px: 128, py: 32 },
   mines: { px: 32, py: 32 },
   island: { px: 80, py: 112 },
+  seacave: { px: 80, py: 80 },
   deepsea: { px: 128, py: 128 },
   paris: { px: 128, py: 160 },
 };
@@ -60,6 +62,7 @@ const SCENE_EXTRA = {
   casino: { gangPaid: true },
   paris: { backroomsUnlocked: true, parisRevealed: true },
   island: { vehicles: ['boat'] },
+  seacave: { vehicles: ['boat'] },
   deepsea: { vehicles: ['boat'] },
 };
 
@@ -226,6 +229,79 @@ async function main() {
         process.stderr.write(`  ${landed === scene && !errs.length ? '✓' : '✗'} ${scene}\n`);
       }
       process.stdout.write(JSON.stringify({ ok: bad === 0, total: scenes.length, failed: bad, scenes: rows }, null, 2) + '\n');
+      if (bad) process.exitCode = 1;
+      return;
+    }
+
+    // `checkup` — run the named end-to-end regression battery (scripts/checkups.mjs)
+    // in one browser session. Each check seeds a save, boots, drives inputs, and
+    // evals its assert against the live snapshot. `--only a,b` runs a subset.
+    // Exit 1 if any check fails — one command regression-guards the mechanics.
+    if (cmd === 'checkup') {
+      const only = opts.only ? String(opts.only).split(',').map((s) => s.trim()) : null;
+      const checks = CHECKS.filter((c) => !only || only.includes(c.name));
+      if (!checks.length) throw new Error(`--only matched no checks (have: ${CHECKS.map((c) => c.name).join(', ')})`);
+      const rows = [];
+      let bad = 0;
+      for (const check of checks) {
+        errBuf.length = 0;
+        let ok = false, detail = '';
+        try {
+          await page.evaluate((s) => {
+            if (s === null) localStorage.removeItem('lab-save');
+            else localStorage.setItem('lab-save', JSON.stringify({ v: 2, ...s }));
+          }, check.save ?? null);
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await page.waitForFunction(() => !!window.__lab, null, { timeout: 10000 });
+          // Enter the game: CONTINUE when a save was seeded, NEW GAME (+ vibe START) otherwise.
+          const clicked = await page.evaluate(() => {
+            const b = [...document.querySelectorAll('button')].find((x) => /^(CONTINUE|NEW GAME)$/i.test(x.textContent.trim()));
+            if (b) { b.click(); return b.textContent.trim(); }
+            return null;
+          });
+          if (/NEW GAME/i.test(clicked || '')) {
+            await page.waitForTimeout(300);
+            await page.evaluate(() => {
+              const btn = [...document.querySelectorAll('button')].find((b) => /START/i.test(b.textContent.trim()));
+              if (btn) btn.click();
+            });
+          }
+          await page.waitForFunction(() => window.__lab.snapshot().screen === 'playing', null, { timeout: 8000 });
+          await page.waitForTimeout(400);
+          if (!check.keepOverlay) {
+            for (let i = 0; i < 4 && (await snapshot(page)).overlay; i++) {
+              await page.keyboard.press('Escape');
+              await page.waitForTimeout(160);
+            }
+          }
+          await runInputs(page, { hold: check.hold, keys: check.keys });
+          for (const t of String(check.click || '').split(',').filter(Boolean)) {
+            let hit = null;
+            for (let tries = 0; tries < 20 && !hit; tries++) {
+              hit = await page.evaluate((label) => {
+                const b = [...document.querySelectorAll('button')].find((x) => x.textContent.toUpperCase().includes(label.toUpperCase()));
+                if (b) { b.click(); return b.textContent.trim(); }
+                return null;
+              }, t.trim());
+              if (!hit) await page.waitForTimeout(100);
+            }
+            if (!hit) throw new Error(`no button matching "${t.trim()}"`);
+            await page.waitForTimeout(250);
+          }
+          if (check.wait) await page.waitForTimeout(Number(check.wait));
+          const snap = await snapshot(page);
+          ok = !!Function(...Object.keys(snap), `return (${check.assert});`)(...Object.values(snap));
+          if (!ok) detail = `assert false: ${check.assert}`;
+        } catch (e) {
+          detail = e.message.split('\n')[0];
+        }
+        const errs = [...new Set(errBuf)];
+        if (errs.length) { ok = false; detail = detail || errs.join(' | '); }
+        if (!ok) bad++;
+        rows.push({ name: check.name, ok, note: check.note, ...(ok ? {} : { detail, errs }) });
+        process.stderr.write(`  ${ok ? '✓' : '✗'} ${check.name}${ok ? '' : ` — ${detail}`}\n`);
+      }
+      process.stdout.write(JSON.stringify({ ok: bad === 0, total: checks.length, failed: bad, checks: rows }, null, 2) + '\n');
       if (bad) process.exitCode = 1;
       return;
     }

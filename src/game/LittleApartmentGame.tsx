@@ -80,7 +80,7 @@ import {
   SPRINKLER_COST, FERTILIZER_COST, BED_COSTS, TIER_COSTS,
   errandFor, errandDoneToday,
   seacaveDrop, seacaveSearchDoneToday, SEACAVE_SEARCH_COST, bigfootInCaveToday,
-  deliveryDoneToday, drivePayout, driveAceTime,
+  deliveryDoneToday, drivePayout, driveAceTime, type DrivePayout,
   canCook, canCookHere, cook, eatDish, learnRecipe, ingredientCount, buyGrocery, keepProduce,
   buffActive, friendHearts, friendPts, canGiftToday, giftTo, giftTier, metFriend, meetFriend,
   friendFlavorLine, allFriendsMet, pendingHangout, pendingHomeVisit, homeVisitFlag,
@@ -713,22 +713,27 @@ const DRIVE_TRACKS: DriveTrack[] = [
 const selectDriveTrack = (day: number): DriveTrack =>
   DRIVE_TRACKS[Math.floor(mulberry32(day * 2654435761 + 137)() * DRIVE_TRACKS.length)];
 
-interface DriveParticle { x: number; y: number; vx: number; vy: number; life: number; max: number; r: number }
+interface DriveParticle { x: number; y: number; vx: number; vy: number; life: number; max: number; r: number; c?: string }
 interface DriveGame {
   track: DriveTrack;           // the day's selected course (points/checkpoints/limit/half)
   x: number; y: number;        // car position (world)
   vx: number; vy: number;      // velocity (world u/s)
   angle: number;               // heading (radians; 0 = +x)
   cp: number;                  // next index into track.checkpoints
+  count: number;               // 3-2-1-GO countdown (s); racing starts at ≤0 (clock held till then)
   elapsed: number;             // run time (s)
   grassT: number;              // seconds off the dirt (the clean-driving penalty)
   onGrass: boolean;            // off-track this frame?
   drift: number;               // |lateral speed| (for skid/dust + speed-line cues)
-  done: boolean;               // delivered (settled in update, then ref nulled)
+  done: boolean;               // delivered — celebration phase runs, then the ref is nulled
+  doneT: number;               // celebration timer (confetti + payout breakdown, then dialog)
+  pay: DrivePayout | null;     // settled payout (drawn as the finish breakdown)
+  isBest: boolean;             // this run set a new daily best (finish banner)
   best: number;                // daily best at run start (HUD compare)
   flash: number;               // checkpoint-pass flash
   emit: number;                // dust emit countdown
   dust: DriveParticle[];       // tyre dust (capped, mutated in place)
+  confetti: DriveParticle[];   // finish confetti (spawned once at delivery, world-space)
   skids: { x: number; y: number }[]; // drift skid-marks on the dirt (capped)
   camX: number; camY: number;  // smoothed camera (world)
 }
@@ -738,8 +743,9 @@ const makeDriveGame = (best: number, track: DriveTrack): DriveGame => {
     track,
     x: a.x, y: a.y, vx: 0, vy: 0,
     angle: Math.atan2(b.y - a.y, b.x - a.x),
-    cp: 0, elapsed: 0, grassT: 0, onGrass: false, drift: 0, done: false,
-    best, flash: 0, emit: 0, dust: [], skids: [], camX: a.x, camY: a.y,
+    cp: 0, count: 3, elapsed: 0, grassT: 0, onGrass: false, drift: 0,
+    done: false, doneT: 0, pay: null, isBest: false,
+    best, flash: 0, emit: 0, dust: [], confetti: [], skids: [], camX: a.x, camY: a.y,
   };
 };
 // Squared distance from point to segment — no allocation (hot path).
@@ -1352,7 +1358,7 @@ const LittleApartmentGame: React.FC = () => {
   const parisGlitchRef = useRef(0); // seconds left of the "hacked into the map" materialize on Paris arrival
   // David the cat, once adopted: roams the apartment, sits, naps. Lives only in the
   // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
-  const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; timer: number } | null>(null);
+  const catRef = useRef<{ x: number; y: number; dir: 'left' | 'right'; sitting: boolean; napping: boolean; timer: number } | null>(null);
   const ghPlotRef = useRef(0); // which greenhouse plot index the open plot menu is acting on
   // Today's random street event (or null), spawned ONLY in the city for that day.
   // Set on every scene entry (enterScene / begin); never baked into the static map.
@@ -2356,7 +2362,7 @@ const LittleApartmentGame: React.FC = () => {
     if (catRef.current && scene.id === 'apartment') {
       const ct = { x: Math.round(catRef.current.x / TILE), y: Math.round(catRef.current.y / TILE) };
       if ((ct.x === faced.x && ct.y === faced.y) || (ct.x === feet.x && ct.y === feet.y)) {
-        catRef.current.sitting = true; catRef.current.timer = 4; // he stops to address you
+        catRef.current.sitting = true; catRef.current.napping = false; catRef.current.timer = 4; // he stirs to address you
         // A heart-threshold hangout with the cat takes priority over his usual one-liners.
         const catHang = pendingHangout(s, 'david');
         if (catHang) { playHangout(catHang); return; }
@@ -3588,15 +3594,20 @@ const LittleApartmentGame: React.FC = () => {
 
     // David the cat ambles around the apartment, pausing to sit and nap.
     if (sceneRef.current.id === 'apartment' && saveRef.current.cat.found) {
-      if (!catRef.current) catRef.current = { x: 8 * TILE, y: 6 * TILE, dir: 'left', sitting: true, timer: 1.5 };
+      if (!catRef.current) catRef.current = { x: 8 * TILE, y: 6 * TILE, dir: 'left', sitting: true, napping: false, timer: 1.5 };
       const cat = catRef.current;
       cat.timer -= dt;
       if (cat.timer <= 0) {
-        if (cat.sitting) { // get up and pick somewhere to mosey
-          cat.sitting = false;
-          cat.dir = Math.random() < 0.5 ? 'left' : 'right';
-          cat.timer = 1.2 + Math.random() * 2.2;
-        } else { // settle down for a sit/nap, or turn around
+        if (cat.napping) { // stir awake into a sit before moving again
+          cat.napping = false; cat.sitting = true; cat.timer = 1.5 + Math.random() * 2;
+        } else if (cat.sitting) { // doze off, or get up and pick somewhere to mosey
+          if (Math.random() < 0.3) { cat.napping = true; cat.timer = 6 + Math.random() * 8; }
+          else {
+            cat.sitting = false;
+            cat.dir = Math.random() < 0.5 ? 'left' : 'right';
+            cat.timer = 1.2 + Math.random() * 2.2;
+          }
+        } else { // settle down for a sit, or turn around
           if (Math.random() < 0.55) { cat.sitting = true; cat.timer = 2.5 + Math.random() * 4; }
           else { cat.dir = Math.random() < 0.5 ? 'left' : 'right'; cat.timer = 1 + Math.random() * 2; }
         }
@@ -3803,11 +3814,60 @@ const LittleApartmentGame: React.FC = () => {
     const dg = driveRef.current;
     if (dg) {
       input.consumeInteract(); input.consumeInventory();
+
+      // --- finish celebration: the pay is already settled — the car coasts out,
+      // confetti falls, the breakdown counts itself up, then Kojima's dialog.
+      if (dg.done) {
+        dg.doneT += dt;
+        const coast = Math.max(0, 1 - 2.2 * dt);       // roll gently to a stop
+        dg.vx *= coast; dg.vy *= coast;
+        dg.x += dg.vx * dt; dg.y += dg.vy * dt;
+        dg.camX += (dg.x - dg.camX) * Math.min(1, dt * 6);
+        dg.camY += (dg.y - dg.camY) * Math.min(1, dt * 6);
+        engineSet(0, dt);                              // motor winds down under the fanfare
+        for (let i = dg.confetti.length - 1; i >= 0; i--) {
+          const p = dg.confetti[i]; p.life += dt;
+          if (p.life >= p.max) { dg.confetti.splice(i, 1); continue; }
+          p.vy += 150 * dt; p.vx *= 0.985;             // flutter down under light gravity
+          p.x += p.vx * dt; p.y += p.vy * dt;
+        }
+        // hold the moment, then settle up (cancel skips ahead)
+        if (dg.doneT > 2.6 || input.consumeCancel()) {
+          const pay = dg.pay!;
+          driveRef.current = null; engineStop();
+          const lines = pay.onTime
+            ? [
+                `Delivered! ${dg.elapsed.toFixed(1)}s on the clock.${dg.isBest ? ' A new daily best!' : ''}`,
+                `Base ¥${pay.base.toLocaleString()} + time ¥${pay.timeBonus.toLocaleString()} + clean ¥${pay.cleanBonus.toLocaleString()} = ¥${pay.total.toLocaleString()}. Kojima counts it out without looking up.`,
+              ]
+            : [
+                'Cut it fine — the package is late, but it got there in one piece.',
+                `Kojima shrugs and peels off ¥${pay.total.toLocaleString()}. "Tomorrow, faster."`,
+              ];
+          showDialog(lines, 'Kojima');
+        }
+        movingRef.current = false;
+        return;
+      }
+
       if (input.consumeCancel()) { // bail out — free retry, the daily gate isn't burned
         driveRef.current = null; engineStop();
         showDialog(['You pull over and hand back the keys. "No shame," Kojima says. "The box will keep till you\'re ready."'], 'Kojima');
         return;
       }
+
+      // --- 3-2-1-GO: the clock AND the car hold until the flag drops, so every
+      // run starts fair (no more mashing gas the frame the dialog closes).
+      if (dg.count > 0) {
+        const prevTick = Math.ceil(dg.count);
+        dg.count -= dt;
+        if (dg.count > 0 && Math.ceil(dg.count) !== prevTick) blip([560], 0.07, 0.05); // 2, 1…
+        if (dg.count <= 0) blip([840, 1120], 0.09, 0.06);                              // GO!
+        engineSet(0.18, dt); // idle rev at the line builds the moment
+        movingRef.current = false;
+        return;
+      }
+
       dg.elapsed += dt;
       if (dg.flash > 0) dg.flash -= dt;
 
@@ -3839,10 +3899,13 @@ const LittleApartmentGame: React.FC = () => {
 
       // grip / drift: split velocity into forward (heading) + lateral (perp), then
       // bleed off the lateral part. Less grip at speed mid-turn = a satisfying slide.
+      // Grip BLENDS out with speed while steering (no hard 165 u/s snap), so the
+      // back end eases into the drift instead of stepping out all at once.
       const lx = -hy, ly = hx; // lateral unit
       fwd = dg.vx * hx + dg.vy * hy;
       const lat = dg.vx * lx + dg.vy * ly;
-      const grip = onGrass ? 2.8 : (speed0 > 165 && steer !== 0 ? 4.4 : 8.2);
+      const slide = steer !== 0 ? Math.min(1, Math.max(0, (speed0 - 120) / 110)) : 0;
+      const grip = onGrass ? 2.8 : 8.2 - 3.8 * slide;
       const newLat = lat * Math.max(0, 1 - grip * dt);
       dg.drift = Math.abs(newLat);
       dg.vx = hx * fwd + lx * newLat;
@@ -3897,26 +3960,30 @@ const LittleApartmentGame: React.FC = () => {
       if (Math.hypot(dg.x - cpPt.x, dg.y - cpPt.y) < DRIVE_CP_RADIUS) {
         dg.cp += 1; dg.flash = 0.7;
         if (dg.cp >= cps.length) {
-          // delivered — settle pay (gate consumed now, so a bail is a free retry)
+          // delivered — settle pay NOW (gate consumed; a bail was a free retry),
+          // then hand off to the celebration phase above (confetti + breakdown).
           const sv = saveRef.current;
           const pay = drivePayout(dg.elapsed, dg.grassT, dg.track.timeLimit);
           sv.money += pay.total; sv.deliveryDay = sv.day;
           const isBest = pay.onTime && (sv.deliveryBest === 0 || dg.elapsed < sv.deliveryBest);
           if (isBest) sv.deliveryBest = Math.round(dg.elapsed * 10) / 10;
-          driveRef.current = null; engineStop();
+          dg.done = true; dg.doneT = 0; dg.pay = pay; dg.isBest = isBest;
           sfxCoin(); award('first-delivery');
           if (pay.onTime && dg.elapsed < driveAceTime(dg.track.timeLimit)) award('ace-driver');
           persistSave(sv); refreshHud();
-          const lines = pay.onTime
-            ? [
-                `Delivered! ${dg.elapsed.toFixed(1)}s on the clock.${isBest ? ' A new daily best!' : ''}`,
-                `Base ¥${pay.base.toLocaleString()} + time ¥${pay.timeBonus.toLocaleString()} + clean ¥${pay.cleanBonus.toLocaleString()} = ¥${pay.total.toLocaleString()}. Kojima counts it out without looking up.`,
-              ]
-            : [
-                'Cut it fine — the package is late, but it got there in one piece.',
-                `Kojima shrugs and peels off ¥${pay.total.toLocaleString()}. "Tomorrow, faster."`,
-              ];
-          showDialog(lines, 'Kojima');
+          // confetti bursts from the depot on an on-time drop (late stays sheepish)
+          if (pay.onTime) {
+            const CONF = ['#ffd24a', '#e857a8', '#7ce8e0', '#a0ffaa', '#f4eede'];
+            for (let i = 0; i < 40; i++) {
+              const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 130;
+              dg.confetti.push({
+                x: cpPt.x, y: cpPt.y,
+                vx: Math.cos(a) * v, vy: Math.sin(a) * v - 90, // pop upward, gravity pulls back
+                life: 0, max: 1.3 + Math.random() * 1.1, r: 1.5 + Math.random() * 1.5,
+                c: CONF[i % CONF.length],
+              });
+            }
+          }
           return;
         }
         sfxBite(); // checkpoint chime
@@ -4679,11 +4746,25 @@ const LittleApartmentGame: React.FC = () => {
         draw: () => {
           ctx.drawImage(atlas['m-shadow'], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + 2);
           const dancing = DANCER_IDS.has(w.id);
-          let frame: number, bob: number;
+          let frame: number, bob: number, dir = w.dir;
           if (dancing) {
-            // dancers bob in place even when not walking (Club Kaiju crowd) — unchanged
+            // dancers bob in place even when not walking (Club Kaiju crowd)
             frame = Math.floor(animRef.current * 9) % 2;
             bob = -(Math.abs(Math.sin(animRef.current * 7 + w.homeX)) > 0.5 ? 1 : 0);
+            // occasional flourish: on a slow per-dancer clock (seeded by homeX so
+            // the crowd never moves in unison) each dancer periodically throws a
+            // full SPIN (dir whirls through all four facings) or a little HOP —
+            // pure draw-time, no wanderer state to migrate.
+            const cyc = animRef.current * 0.14 + w.homeX * 0.031; // ~7s between flourishes
+            const fph = cyc % 1;
+            if (fph < 0.16 && !w.moving) {
+              const k = fph / 0.16;                               // 0..1 through the flourish
+              if ((Math.floor(cyc) + Math.floor(w.homeX / TILE)) % 2) {
+                dir = (['down', 'left', 'up', 'right'] as Dir[])[Math.floor(k * 4) % 4];
+              } else {
+                bob = -Math.round(3 * Math.sin(k * Math.PI));     // one smooth hop arc
+              }
+            }
           } else if (w.moving) {
             // walk cadence rides THIS NPC's own stride (walkPhase), not a shared clock,
             // so steps read naturally; a 1px lift on alternate frames adds a gentle bob.
@@ -4692,7 +4773,7 @@ const LittleApartmentGame: React.FC = () => {
           } else {
             frame = 0; bob = 0; // clean idle pose, no twitch
           }
-          ctx.drawImage(atlas[`${w.sprite}-${w.dir}-${frame}`], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + bob);
+          ctx.drawImage(atlas[`${w.sprite}-${dir}-${frame}`], Math.round(w.x) - cam.x, Math.round(w.y) - cam.y + bob);
         },
       });
     }
@@ -4718,8 +4799,10 @@ const LittleApartmentGame: React.FC = () => {
           const bob = cat.sitting ? 0 : Math.round(Math.sin(animRef.current * 9) * 0.6);
           ctx.drawImage(atlas['m-shadow'], cx, cy + 2);
           const d = cat.dir === 'left' ? 'l' : 'r';
-          // walking cat now has a 2-frame leg cycle; sitting is a single pose
-          const key = cat.sitting ? `cat-sit-${d}` : `cat-${d}-${Math.floor(animRef.current * 8) % 2}`;
+          // nap = curled loaf; sit = slow 2-frame tail flick; walk = 2-frame trot
+          const key = cat.napping ? `cat-nap-${d}`
+            : cat.sitting ? `cat-sit-${d}-${Math.floor(animRef.current * 1.5) % 2}`
+            : `cat-${d}-${Math.floor(animRef.current * 8) % 2}`;
           ctx.drawImage(atlas[key] ?? atlas[`cat-${d}`], cx, cy + bob);
         },
       });
@@ -4985,12 +5068,22 @@ const LittleApartmentGame: React.FC = () => {
           ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
           ctx.strokeStyle = `rgba(240, 248, 255, ${a})`;        // brighter head half
           ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(hx, hy); ctx.stroke();
-          // glowing head: a soft radial bloom + a hot core pixel
-          const rg = ctx.createRadialGradient(hx, hy, 0, hx, hy, 5);
-          rg.addColorStop(0, `rgba(255, 255, 255, ${a})`);
-          rg.addColorStop(1, 'rgba(180, 210, 255, 0)');
-          ctx.fillStyle = rg;
-          ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI * 2); ctx.fill();
+          // glowing head: a cached radial bloom (built once — never
+          // createRadialGradient per frame, the KB-banned pattern) + a hot core pixel
+          let bloom = glowSpriteRef.current.get('meteor-head');
+          if (!bloom) {
+            const S = 32;
+            bloom = document.createElement('canvas'); bloom.width = S; bloom.height = S;
+            const gx = bloom.getContext('2d')!;
+            const rg = gx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+            rg.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            rg.addColorStop(1, 'rgba(180, 210, 255, 0)');
+            gx.fillStyle = rg; gx.fillRect(0, 0, S, S);
+            glowSpriteRef.current.set('meteor-head', bloom);
+          }
+          ctx.globalAlpha = a;
+          ctx.drawImage(bloom, hx - 5, hy - 5, 10, 10);
+          ctx.globalAlpha = 1;
           ctx.fillStyle = `rgba(255, 255, 255, ${a})`;          // hot leading pixel
           ctx.fillRect(hx - 1, hy - 1, 2.4, 2.4);
         }
@@ -5012,9 +5105,11 @@ const LittleApartmentGame: React.FC = () => {
       ambientSet(amb, adt);
     }
 
-    // Club Kaiju: a dim room lit by sweeping colored spotlights + a disco-ball
-    // glow, with the occasional strobe flash. The dance-floor tiles already
-    // ripple colors; this is the lighting on top.
+    // Club Kaiju: a dim room lit by sweeping colored spotlights, a disco-ball
+    // glow, a beat-synced crowd wash + speaker thump, and drifting music notes.
+    // The dance-floor tiles already ripple colors; this is the lighting on top.
+    // Everything modulates on smooth low-amplitude sines — NO strobe (kb rule:
+    // seizure risk; the club should feel groovy, never harsh).
     // Pre-rendered radial light sprite, built once per color and cached —
     // blitting these is far cheaper than createRadialGradient + full-screen fill
     // every frame (which tanked the club's FPS). Shared by the club + lamps.
@@ -5173,16 +5268,34 @@ const LittleApartmentGame: React.FC = () => {
     }
 
     if (scene.id === 'nightclub') {
+      // One implied beat clock (~114 BPM) that everything grooves to — the wash,
+      // the speaker thump and the dancers all ride the same phase, so the room
+      // reads as "synced to the music" even though the track isn't analysed.
+      const beat = t * 1.9;                                      // beats elapsed
+      const pulse = 0.5 + 0.5 * Math.sin(beat * Math.PI * 2);    // smooth 0..1 groove
       ctx.fillStyle = 'rgba(10, 8, 22, 0.34)';       // dim the room so the lights pop (one cheap fill)
       ctx.fillRect(0, 0, VIEW_PW, VIEW_PH);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      // crowd colour wash: one wide soft glow over the dance floor whose hue
+      // crossfades through a FIXED palette (fixed rgb strings keep the glow()
+      // cache bounded — a continuous hue cycle would bake a new canvas per frame)
+      // and whose brightness breathes with the beat = the floor pulses in time.
+      const WASH = ['232,87,168', '124,232,224', '160,120,255', '255,180,80'];
+      const wSeg = t / 5;                                        // 5s per hue
+      const wi = Math.floor(wSeg) % WASH.length, wf = wSeg % 1;
+      const wx = 8 * TILE - cam.x, wy = 6 * TILE - cam.y;        // dance-floor centre
+      const washA = 0.09 + 0.05 * pulse;
+      ctx.globalAlpha = washA * (1 - wf);
+      ctx.drawImage(glow(WASH[wi]), wx - 96, wy - 66, 192, 132);
+      ctx.globalAlpha = washA * wf;
+      ctx.drawImage(glow(WASH[(wi + 1) % WASH.length]), wx - 96, wy - 66, 192, 132);
       const beams: [string, number][] = [['232,87,168', 0], ['124,232,224', 2.1], ['255,210,74', 4.2]];
       const bx = 11 * TILE - cam.x + 8, by = 2 * TILE - cam.y + 8; // origin near the DJ booth
       for (const [rgb, ph] of beams) {
         const fx = bx + Math.sin(t * 0.8 + ph) * 90;             // sweep across the floor
         const fy = by + 96 + Math.sin(t * 0.5 + ph) * 16;
-        ctx.globalAlpha = 0.18 + 0.1 * Math.sin(t * 3 + ph);
+        ctx.globalAlpha = 0.16 + 0.08 * Math.sin(t * 3 + ph) + 0.06 * pulse; // beams lean into the beat
         ctx.drawImage(glow(rgb), fx - 48, fy - 48, 96, 96);      // only a 96px blit, not the whole screen
       }
       // disco-ball glow: drifts in a slow circle (driven by the same clock as the
@@ -5191,6 +5304,29 @@ const LittleApartmentGame: React.FC = () => {
       const dby = 1 * TILE - cam.y + 4 + 40 + Math.sin(t * 0.7) * 24;
       ctx.globalAlpha = 0.22 + 0.12 * Math.sin(t * 6);
       ctx.drawImage(glow('230,240,255'), dbx - 32, dby - 32, 64, 64);
+      // bar glow: a warm amber pool over the counter — the cozy corner against
+      // the cool dance-floor colours (Lulu-lamp warmth, not another club light).
+      ctx.globalAlpha = 0.16 + 0.04 * Math.sin(t * 1.7);
+      ctx.drawImage(glow('255,190,110'), 1 * TILE - cam.x, 1.4 * TILE - cam.y, 64, 40);
+      // speaker thump: a ring eases out of each end of the DJ booth once per
+      // beat — an expanding stroked arc, smooth fade (localized, never a flash).
+      const bf = beat % 1;                                       // 0..1 within this beat
+      ctx.strokeStyle = 'rgb(180,200,255)'; ctx.lineWidth = 1;
+      for (const spx of [11 * TILE + 8, 14 * TILE + 8]) {
+        ctx.globalAlpha = 0.30 * (1 - bf);
+        ctx.beginPath(); ctx.arc(spx - cam.x, 3 * TILE - cam.y, 3 + bf * 11, 0, Math.PI * 2); ctx.stroke();
+      }
+      // music notes: a few ♪ drift up off the booth on offset loops, swaying as
+      // they rise and easing in/out so they never pop in or vanish abruptly.
+      ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffe9a8';
+      for (let i = 0; i < 3; i++) {
+        const nph = (t * 0.42 + i / 3) % 1;                      // 0..1 rise loop
+        const nx = (11.6 + i * 1.1) * TILE - cam.x + Math.sin(t * 2 + i * 2.1) * 4;
+        const ny = 2.2 * TILE - cam.y - nph * 24;
+        ctx.globalAlpha = 0.5 * Math.sin(nph * Math.PI);
+        ctx.fillText(i % 2 ? '♪' : '♫', nx, ny);
+      }
       ctx.globalAlpha = 1;
       ctx.restore();
     }
@@ -5591,6 +5727,18 @@ const LittleApartmentGame: React.FC = () => {
         const px = sx(p.x), py = sy(p.y);
         const last = i === cps.length - 1;
         const passed = i < dg.cp, next = i === dg.cp;
+        // the NEXT target telegraphs its capture radius: a ring breathes out to
+        // the true trigger distance, so "how close is close enough" is visible.
+        if (next && !dg.done) {
+          const rp = (t * 0.9) % 1; // 0..1 expand+fade loop
+          ctx.globalAlpha = 0.45 * (1 - rp);
+          ctx.strokeStyle = last ? '#ffd24a' : '#ff8a8a';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(px, py, DRIVE_CP_RADIUS * DRIVE_CAM * (0.35 + 0.65 * rp), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
         if (last) {
           // delivery depot: a glowing pad + ✦
           ctx.globalAlpha = next ? 0.5 + Math.sin(t * 6) * 0.25 : 0.4;
@@ -5632,6 +5780,35 @@ const LittleApartmentGame: React.FC = () => {
       ctx.fillStyle = '#222'; ctx.fillRect(-9, -7, 5, 2); ctx.fillRect(4, -7, 5, 2); ctx.fillRect(-9, 5, 5, 2); ctx.fillRect(4, 5, 5, 2); // wheels
       ctx.restore();
 
+      // guidance chevron: orbits the car pointing at the next target — you always
+      // know where to go, even mid-drift. Hides once the target is nearly on
+      // screen (its pulsing capture ring takes over from there).
+      if (!dg.done) {
+        const tgt = pts[cps[Math.min(dg.cp, cps.length - 1)]];
+        const dxT = tgt.x - dg.x, dyT = tgt.y - dg.y;
+        const distT = Math.hypot(dxT, dyT);
+        if (distT > 150) {
+          const angT = Math.atan2(dyT, dxT);
+          ctx.save();
+          ctx.translate(sx(dg.x) + Math.cos(angT) * 30, sy(dg.y) + Math.sin(angT) * 30);
+          ctx.rotate(angT);
+          ctx.globalAlpha = 0.7 + Math.sin(t * 5) * 0.25;
+          ctx.fillStyle = dg.cp === cps.length - 1 ? '#ffd24a' : '#ffb24a'; // gold = the depot leg
+          ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(-4, -5); ctx.lineTo(-1, 0); ctx.lineTo(-4, 5); ctx.fill();
+          ctx.restore();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // finish confetti — world-space paper flecks fluttering over the depot
+      for (let i = 0; i < dg.confetti.length; i++) {
+        const p = dg.confetti[i];
+        ctx.globalAlpha = Math.max(0, 1 - p.life / p.max);
+        ctx.fillStyle = p.c!;
+        ctx.fillRect(sx(p.x), sy(p.y), p.r, p.r);
+      }
+      ctx.globalAlpha = 1;
+
       // speed lines at the screen edges when flying
       if (sp > DRIVE_MAX_DIRT * 0.62) {
         ctx.globalAlpha = Math.min(0.5, (sp - DRIVE_MAX_DIRT * 0.62) / DRIVE_MAX_DIRT);
@@ -5649,18 +5826,22 @@ const LittleApartmentGame: React.FC = () => {
 
       // --- HUD ----------------------------------------------------------------
       const remain = Math.max(0, track.timeLimit - dg.elapsed);
+      const frac = remain / track.timeLimit;
       ctx.textAlign = 'left';
       ctx.fillStyle = 'rgba(8,10,14,0.62)'; ctx.fillRect(4, 4, 132, 30);
       ctx.font = 'bold 13px monospace';
-      ctx.fillStyle = remain < 10 ? (Math.floor(t * 6) % 2 ? '#ff5a5a' : '#ffb24a') : '#ffd24a';
+      // the clock's color ramps with the pressure (gold→amber→red); in the red
+      // zone it breathes on a smooth sine — urgency without a hard blink.
+      ctx.fillStyle = frac > 0.4 ? '#ffd24a' : frac > 0.18 ? '#ffb24a' : '#ff5a5a';
+      if (frac <= 0.18) ctx.globalAlpha = 0.72 + 0.28 * Math.sin(t * 5);
       ctx.fillText(`${remain.toFixed(1)}s`, 9, 18);
+      ctx.globalAlpha = 1;
       ctx.font = 'bold 7px monospace'; ctx.fillStyle = '#9fc4e8';
       ctx.fillText(`CHECKPOINT ${Math.min(dg.cp + 1, cps.length)}/${cps.length}`, 9, 29);
       if (dg.best > 0) { ctx.fillStyle = '#7ce8a0'; ctx.fillText(`BEST ${dg.best.toFixed(1)}s`, 86, 29); }
 
       // timer pressure bar
       ctx.fillStyle = '#2a3340'; ctx.fillRect(4, 36, 132, 3);
-      const frac = remain / track.timeLimit;
       ctx.fillStyle = frac > 0.4 ? '#7ce8a0' : frac > 0.18 ? '#ffb24a' : '#ff5a5a';
       ctx.fillRect(4, 36, Math.round(132 * frac), 3);
 
@@ -5676,21 +5857,85 @@ const LittleApartmentGame: React.FC = () => {
       const mx = (wx: number) => mmX + 3 + (wx - track.bx0) * mscale;
       const my = (wy: number) => mmY + 3 + (wy - track.by0) * mscale;
       ctx.fillStyle = 'rgba(8,10,14,0.62)'; ctx.fillRect(mmX, mmY, mmW, mmH);
+      ctx.strokeStyle = 'rgba(232,224,208,0.25)'; ctx.lineWidth = 1;
+      ctx.strokeRect(mmX + 0.5, mmY + 0.5, mmW - 1, mmH - 1); // crisp frame so it reads as a map
       ctx.strokeStyle = '#a06a3a'; ctx.lineWidth = 2; ctx.beginPath();
       ctx.moveTo(mx(pts[0].x), my(pts[0].y));
       for (let i = 1; i < pts.length; i++) ctx.lineTo(mx(pts[i].x), my(pts[i].y));
       ctx.stroke();
       for (let i = 0; i < cps.length; i++) {
         const p = pts[cps[i]];
-        ctx.fillStyle = i < dg.cp ? '#5a7a52' : i === dg.cp ? '#ff5a5a' : '#ffd24a';
-        ctx.fillRect(mx(p.x) - 1, my(p.y) - 1, 3, 3);
+        const nxt = i === dg.cp && !dg.done;
+        ctx.fillStyle = i < dg.cp ? '#5a7a52' : nxt ? '#ff5a5a' : '#ffd24a';
+        const r = nxt ? 2 + Math.sin(t * 4) * 0.8 : 1.5; // the live target breathes
+        ctx.fillRect(mx(p.x) - r, my(p.y) - r, r * 2, r * 2);
       }
-      ctx.fillStyle = '#9fc4e8'; ctx.fillRect(mx(dg.x) - 1, my(dg.y) - 1, 3, 3);
+      // car dot + a nose tick so the minimap shows your heading too
+      const cmx = mx(dg.x), cmy = my(dg.y);
+      ctx.fillStyle = '#9fc4e8';
+      ctx.fillRect(cmx - 1, cmy - 1, 3, 3);
+      ctx.fillRect(cmx - 1 + Math.round(Math.cos(dg.angle) * 3), cmy - 1 + Math.round(Math.sin(dg.angle) * 3), 2, 2);
 
-      ctx.font = 'bold 6px monospace'; ctx.globalAlpha = 0.55; ctx.fillStyle = '#e8e0d0';
-      ctx.textAlign = 'center';
-      ctx.fillText('↑ gas · ↓ brake · ←/→ steer · Esc bail', VIEW_PW / 2, VIEW_PH - 4);
-      ctx.globalAlpha = 1;
+      // checkpoint splash: a quick centered "✓" beat as you take each gate
+      if (dg.flash > 0 && !dg.done && dg.cp < cps.length) {
+        ctx.globalAlpha = Math.min(1, dg.flash / 0.3);
+        ctx.textAlign = 'center'; ctx.font = 'bold 10px monospace';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+        const msg = `CHECKPOINT ${dg.cp}/${cps.length - 1} ✓`;
+        ctx.strokeText(msg, cx, cy - 38);
+        ctx.fillStyle = '#7ce8a0'; ctx.fillText(msg, cx, cy - 38);
+        ctx.globalAlpha = 1;
+      }
+
+      // 3-2-1-GO: each digit pops in large and eases down; GO! flashes green over
+      // the first beat of the run. (The clock + car are held in update meanwhile.)
+      if (!dg.done && (dg.count > 0 || dg.elapsed < 0.7)) {
+        const counting = dg.count > 0;
+        const label = counting ? String(Math.ceil(dg.count)) : 'GO!';
+        const k = counting ? dg.count % 1 : 1 - dg.elapsed / 0.7; // 1→0 through this tick
+        ctx.textAlign = 'center';
+        ctx.font = `bold ${Math.round(15 + 9 * k)}px monospace`;
+        ctx.globalAlpha = counting ? 0.95 : 0.95 * k;
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+        ctx.strokeText(label, cx, cy - 22);
+        ctx.fillStyle = counting ? '#ffd24a' : '#7ce8a0';
+        ctx.fillText(label, cx, cy - 22);
+        ctx.globalAlpha = 1;
+      }
+
+      // finish card: DELIVERED! + the payout breakdown dealing in row by row (a
+      // little drumroll under the confetti before Kojima settles up in dialog).
+      if (dg.done && dg.pay) {
+        const pay = dg.pay;
+        ctx.fillStyle = 'rgba(8,10,14,0.78)'; ctx.fillRect(cx - 78, cy - 46, 156, 92);
+        ctx.strokeStyle = pay.onTime ? '#ffd24a' : '#8a93a3'; ctx.lineWidth = 1;
+        ctx.strokeRect(cx - 77.5, cy - 45.5, 155, 91);
+        ctx.textAlign = 'center'; ctx.font = 'bold 12px monospace';
+        ctx.fillStyle = pay.onTime ? '#ffd24a' : '#ffb24a';
+        ctx.fillText(pay.onTime ? 'DELIVERED!' : 'DELIVERED… LATE', cx, cy - 30);
+        ctx.font = 'bold 7px monospace';
+        if (dg.isBest) { ctx.fillStyle = '#7ce8a0'; ctx.fillText(`NEW BEST — ${dg.elapsed.toFixed(1)}s`, cx, cy - 20); }
+        else { ctx.fillStyle = '#8a93a3'; ctx.fillText(`${dg.elapsed.toFixed(1)}s on the clock`, cx, cy - 20); }
+        ctx.font = 'bold 8px monospace';
+        const rows: [string, string][] = pay.onTime
+          ? [['BASE', `¥${pay.base.toLocaleString()}`], ['TIME BONUS', `¥${pay.timeBonus.toLocaleString()}`],
+             ['CLEAN BONUS', `¥${pay.cleanBonus.toLocaleString()}`], ['TOTAL', `¥${pay.total.toLocaleString()}`]]
+          : [['LATE FEE', `¥${pay.total.toLocaleString()}`], ['TOTAL', `¥${pay.total.toLocaleString()}`]];
+        for (let i = 0; i < rows.length; i++) {
+          if (dg.doneT < 0.5 + i * 0.35) break;              // rows reveal in sequence
+          const ry = cy - 8 + i * 11;
+          ctx.fillStyle = i === rows.length - 1 ? '#ffe9a8' : '#c7d3e0';
+          ctx.textAlign = 'left'; ctx.fillText(rows[i][0], cx - 68, ry);
+          ctx.textAlign = 'right'; ctx.fillText(rows[i][1], cx + 68, ry);
+        }
+      }
+
+      if (!dg.done) {
+        ctx.font = 'bold 6px monospace'; ctx.globalAlpha = 0.55; ctx.fillStyle = '#e8e0d0';
+        ctx.textAlign = 'center';
+        ctx.fillText('↑ gas · ↓ brake · ←/→ steer · Esc bail', VIEW_PW / 2, VIEW_PH - 4);
+        ctx.globalAlpha = 1;
+      }
       ctx.restore();
     }
   }, []);
@@ -5970,6 +6215,7 @@ const LittleApartmentGame: React.FC = () => {
           track: driveRef.current.track.name,
           timeLimit: driveRef.current.track.timeLimit,
           elapsed: Math.round(driveRef.current.elapsed * 10) / 10,
+          count: Math.max(0, Math.round(driveRef.current.count * 10) / 10), // 3-2-1-GO hold left
           cp: driveRef.current.cp,
           cpTotal: driveRef.current.track.checkpoints.length,
           x: Math.round(driveRef.current.x),
@@ -6499,6 +6745,7 @@ const LittleApartmentGame: React.FC = () => {
     // The day picks the course (rota) — stable across reloads/retries within the day.
     const track = selectDriveTrack(saveRef.current.day);
     driveRef.current = makeDriveGame(saveRef.current.deliveryBest, track);
+    blip([560], 0.07, 0.05); // "3" — the countdown's first tick (2/1/GO fire in update)
   };
 
   // Pay off the yakuza: they stay put while the screen blacks out, then they're

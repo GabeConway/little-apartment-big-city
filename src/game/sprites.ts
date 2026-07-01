@@ -904,34 +904,6 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#c4a07c'; ctx.fillRect(4, 11, 8, 1);          // sill
     speckle(ctx, '#a8825f', 61, 6);                                // plaster texture
   });
-  // 3×5 pixel micro-font for the building sign (only the letters NAKATOMI need).
-  const FONT3x5: Record<string, string[]> = {
-    N: ['# #', '## ', '# #', ' ##', '# #'],
-    A: ['###', '# #', '###', '# #', '# #'],
-    K: ['# #', '## ', '## ', '# #', '# #'],
-    T: ['###', ' # ', ' # ', ' # ', ' # '],
-    O: ['###', '# #', '# #', '# #', '###'],
-    M: ['# #', '###', '# #', '# #', '# #'],
-    I: ['###', ' # ', ' # ', ' # ', '###'],
-  };
-  const drawText3x5 = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, col: string) => {
-    ctx.fillStyle = col;
-    let cx = x;
-    for (const ch of text) {
-      const g = FONT3x5[ch];
-      if (g) g.forEach((row, ry) => { for (let rx = 0; rx < 3; rx++) if (row[rx] === '#') ctx.fillRect(cx + rx, y + ry, 1, 1); });
-      cx += 4;
-    }
-  };
-  const naktomiSign = (text: string) => tile(ctx => {
-    fill(ctx, '#b08a6a');                                          // plaster behind the board
-    ctx.fillStyle = '#2c2230'; ctx.fillRect(0, 3, 16, 9);          // dark sign board (full width → joins neighbor tile)
-    ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 3, 16, 1);          // red top trim
-    ctx.fillStyle = '#1d1826'; ctx.fillRect(0, 11, 16, 1);         // bottom shadow
-    drawText3x5(ctx, text, 1, 5, '#ffe9a0');                       // warm-gold lettering
-  });
-  atlas['t-nakatomi-l'] = naktomiSign('NAKA');
-  atlas['t-nakatomi-r'] = naktomiSign('TOMI');
   atlas['t-planter'] = tile(ctx => {                               // flowering planter flanking the entrance
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 73, 5);
     ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 4, 8, 5);          // foliage
@@ -1663,11 +1635,19 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#2c2418'; ctx.fillRect(5, 8, 6, 2);   // coin slot
     ctx.fillStyle = '#a9805a'; ctx.fillRect(4, 7, 1, 6); ctx.fillRect(11, 7, 1, 6); // lit timber edges
   });
-  atlas['t-tree'] = tile(ctx => {
-    fill(ctx, '#3e5c33');
-    ctx.fillStyle = '#4d7440'; ctx.fillRect(1, 1, 6, 5); ctx.fillRect(8, 6, 7, 6); ctx.fillRect(3, 9, 5, 5);
-    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(2, 2, 3, 2); ctx.fillRect(10, 7, 3, 2); ctx.fillRect(4, 10, 2, 2);
-    ctx.fillStyle = '#2e4426'; ctx.fillRect(0, 14, 16, 2);
+  atlas['t-tree'] = tile(ctx => {                            // round leafy tree on grass (the old full-tile blob read as a moss cube)
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 13, 6);    // grass base (matches t-grass)
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(4, 13, 9, 2); // contact shadow
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 10, 3, 4);    // trunk
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(7, 10, 1, 4);    // trunk lit edge
+    // rounded canopy: stacked rects taper top + bottom
+    ctx.fillStyle = '#4d7440';
+    ctx.fillRect(2, 3, 12, 7);                               // mid mass
+    ctx.fillRect(4, 1, 8, 2);                                // crown
+    ctx.fillRect(3, 10, 10, 1);                              // underside taper
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(4, 2, 5, 3); ctx.fillRect(3, 5, 3, 2); // sunlit upper-left leaves
+    ctx.fillStyle = '#7cb86a'; ctx.fillRect(5, 2, 2, 1); ctx.fillRect(4, 4, 1, 1); // sun-tip highlights
+    ctx.fillStyle = '#3e5c33'; ctx.fillRect(10, 7, 4, 3); ctx.fillRect(5, 9, 6, 2); // shaded lower-right leaves
   });
   atlas['t-stonepath'] = tile(ctx => {
     fill(ctx, '#9aa0a6');
@@ -1675,6 +1655,13 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillRect(5, 1, 1, 4); ctx.fillRect(11, 6, 1, 4); ctx.fillRect(7, 11, 1, 5);
     speckle(ctx, '#a8aeb4', 71, 5);
     ctx.fillStyle = '#6f9e5e'; ctx.fillRect(1, 13, 2, 1); ctx.fillRect(13, 2, 2, 1); // moss
+  });
+  atlas['t-pond'] = tile(ctx => {                            // garden koi pond (city torii garden) — calm water, lily pad, a koi
+    fill(ctx, '#2e5e8e');                                    // still water (uniform base so 2×2 tiles read seamless)
+    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(2, 4, 6, 1); ctx.fillRect(9, 12, 5, 1); // soft sky-reflection bands (interior only)
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(3, 3, 3, 1); ctx.fillRect(10, 8, 2, 1); // ripple glints
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(11, 3, 3, 2); ctx.fillRect(12, 2, 1, 1); // lily pad
+    ctx.fillStyle = '#e0885a'; ctx.fillRect(4, 9, 2, 1); ctx.fillRect(3, 10, 1, 1);  // a koi glides by
   });
   atlas['t-lantern'] = tile(ctx => {
     fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 73, 5); speckle(ctx, '#4d7440', 79, 3);
@@ -1943,14 +1930,42 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#5a5560'; ctx.fillRect(1, 1, 6, 4); ctx.fillRect(9, 3, 5, 5); ctx.fillRect(3, 9, 6, 4); // lit faces (upper-left)
     ctx.fillStyle = '#33303a'; ctx.fillRect(0, 14, 16, 2);   // ground shadow
   });
-  atlas['t-volcano'] = tile(ctx => {                         // crater peak — dark cone w/ a lava throat (glow added at draw time)
-    fill(ctx, '#4a4550');
-    ctx.fillStyle = '#3a3640'; ctx.fillRect(0, 0, 3, 16); ctx.fillRect(13, 0, 3, 16); // sky-side dark flanks
-    ctx.fillStyle = '#5a5560'; ctx.fillRect(3, 2, 4, 12);    // upper-left lit face
-    ctx.fillStyle = '#2c2832'; ctx.fillRect(9, 2, 4, 12);    // right shadow face
-    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(5, 1, 6, 4);     // crater rim (dark red)
-    ctx.fillStyle = '#e0552e'; ctx.fillRect(6, 2, 4, 3);     // lava throat
-    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 2, 2, 2);     // bright core
+  atlas['t-volcano'] = tile(ctx => {                         // crater peak — the molten channel runs edge-to-edge so adjacent 'VV'
+    fill(ctx, '#4a4550');                                    // tiles merge into ONE wide crater mouth (glow added at draw time)
+    ctx.fillStyle = '#2c2832'; ctx.fillRect(0, 0, 16, 1);    // rim back edge against the sky
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 1, 16, 2);    // far rim (heat-scorched red)
+    ctx.fillStyle = '#e0552e'; ctx.fillRect(0, 3, 16, 5);    // molten lava pool (seamless across the seam)
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 4, 3, 2); ctx.fillRect(8, 5, 4, 2); ctx.fillRect(13, 3, 2, 1); // hot swells
+    ctx.fillStyle = '#fff0b0'; ctx.fillRect(9, 5, 2, 1); ctx.fillRect(3, 4, 1, 1);  // white-hot cores
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(0, 8, 16, 2);    // near rim lip
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 8, 16, 1);    // lip catching the heat
+    ctx.fillStyle = '#5a5560'; ctx.fillRect(0, 10, 16, 3);   // lit cone shoulder below the rim
+    ctx.fillStyle = '#3a3640'; ctx.fillRect(0, 13, 16, 3);   // cone base shade
+    ctx.fillStyle = '#e0552e'; ctx.fillRect(6, 10, 1, 5);    // a lava trickle escaping down the face
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(6, 10, 1, 2);
+  });
+  atlas['t-palm'] = tile(ctx => {                            // coconut palm (island) — ringed trunk, radiating fronds, coconuts
+    fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 13, 6);    // grass base (matches t-grass)
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(5, 13, 8, 2); // contact shadow
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(8, 6, 2, 8);     // trunk
+    ctx.fillStyle = '#a9805a'; ctx.fillRect(8, 6, 1, 8);     // trunk lit edge
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(8, 8, 2, 1); ctx.fillRect(8, 11, 2, 1); // ring notches
+    ctx.fillStyle = '#4d7440';                               // radiating fronds
+    ctx.fillRect(6, 1, 6, 2);                                // top
+    ctx.fillRect(3, 3, 5, 2); ctx.fillRect(1, 4, 3, 2);      // left sweep
+    ctx.fillRect(10, 3, 5, 2); ctx.fillRect(12, 4, 3, 2);    // right sweep
+    ctx.fillRect(7, 3, 4, 3);                                // crown core
+    ctx.fillStyle = '#5e8a4f'; ctx.fillRect(6, 1, 4, 1); ctx.fillRect(3, 3, 3, 1); ctx.fillRect(10, 3, 3, 1); // lit frond tops
+    ctx.fillStyle = '#7cb86a'; ctx.fillRect(7, 1, 2, 1);     // sun-tip
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(6, 5, 2, 2); ctx.fillRect(10, 5, 2, 2);  // coconut pair under the crown
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(6, 5, 1, 1); ctx.fillRect(10, 5, 1, 1);  // nut highlights
+  });
+  atlas['t-basalt'] = tile(ctx => {                          // volcanic basalt shoulder (island cone flanks — city keeps t-rock)
+    fill(ctx, '#4a4550'); speckle(ctx, '#3a3640', 31, 9);
+    ctx.fillStyle = '#5a5560'; ctx.fillRect(1, 2, 5, 3); ctx.fillRect(9, 7, 5, 3); ctx.fillRect(3, 11, 4, 3); // lit facets
+    ctx.fillStyle = '#6a6472'; ctx.fillRect(1, 2, 5, 1); ctx.fillRect(9, 7, 5, 1);   // facet top light
+    ctx.fillStyle = '#2c2832'; ctx.fillRect(6, 3, 1, 8); ctx.fillRect(11, 10, 1, 5); ctx.fillRect(2, 5, 1, 5); // deep cracks
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(6, 9, 1, 2);     // an ember down a crack
   });
   atlas['t-hotspring'] = tile(ctx => {                       // onsen pool — stone rim + steamy water (steam added at draw time)
     fill(ctx, '#6f9e5e'); speckle(ctx, '#5e8a4f', 61, 5);    // grass surround
@@ -1992,6 +2007,15 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#080610'; ctx.fillRect(7, 4, 2, 9);     // deeper black throat
     ctx.fillStyle = '#2c2832'; ctx.fillRect(5, 2, 1, 12); ctx.fillRect(10, 2, 1, 12); // crack edges
     ctx.fillStyle = '#33303a'; ctx.fillRect(0, 14, 16, 2);   // ground shadow
+  });
+  atlas['t-cave-exit'] = tile(ctx => {                       // the same crack seen from INSIDE the sea cave — daylight spills in (the way out)
+    fill(ctx, '#4a4550'); speckle(ctx, '#3a3640', 31, 9);    // volcanic rock, matches t-cave-crack
+    ctx.fillStyle = '#5a5560'; ctx.fillRect(1, 1, 4, 4); ctx.fillRect(11, 2, 4, 4); // lit rock faces
+    ctx.fillStyle = '#2c2832'; ctx.fillRect(5, 1, 1, 14); ctx.fillRect(10, 1, 1, 14); // crack edges
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(6, 1, 4, 14);    // sky through the crack
+    ctx.fillStyle = '#cfe4f4'; ctx.fillRect(7, 2, 2, 12);    // bright core
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(7, 4, 2, 3);     // glare
+    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 13, 4, 2);    // sun pooling on the threshold
   });
   // Beach stand
   atlas['t-parasol'] = tile(ctx => {
@@ -2060,11 +2084,17 @@ const buildTiles = (atlas: Atlas) => {
   });
   atlas['t-beachrock'] = tile(ctx => {                       // sandy-grey boulder on the beach (solid)
     fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 19, 6);    // sand base
-    ctx.fillStyle = '#8a96a0'; ctx.fillRect(3, 6, 10, 8);    // boulder body
-    ctx.fillStyle = '#a6b0b8'; ctx.fillRect(4, 5, 6, 4);     // sunlit top-left
-    ctx.fillStyle = '#6e7682'; ctx.fillRect(9, 9, 4, 5);     // shaded right
-    ctx.fillStyle = '#5a626c'; ctx.fillRect(3, 13, 10, 2);   // ground contact shadow
-    ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 13, 2, 1); ctx.fillRect(11, 11, 1, 1); // bit of seaweed
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(3, 13, 11, 2); // contact shadow
+    // rounded, irregular silhouette (a square rock reads as a crate at 16px)
+    ctx.fillStyle = '#8a96a0';
+    ctx.fillRect(3, 7, 11, 5);                               // mid mass
+    ctx.fillRect(4, 5, 8, 2);                                // shoulder
+    ctx.fillRect(5, 4, 5, 1);                                // crown
+    ctx.fillRect(4, 12, 9, 1);                               // tapered base
+    ctx.fillStyle = '#a6b0b8'; ctx.fillRect(5, 4, 4, 1); ctx.fillRect(4, 5, 5, 3); ctx.fillRect(3, 7, 3, 2); // sunlit upper-left
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(10, 8, 4, 4); ctx.fillRect(6, 11, 6, 2); // shaded lower-right
+    ctx.fillStyle = '#5a626c'; ctx.fillRect(9, 6, 1, 3); ctx.fillRect(10, 9, 1, 3);  // weathered seam
+    ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 12, 2, 1); ctx.fillRect(12, 10, 1, 1); // bit of seaweed
   });
   atlas['t-tidepool'] = tile(ctx => {                        // rocky pool with a starfish (walkable detail)
     fill(ctx, '#a8916a'); speckle(ctx, '#988059', 53, 6);    // wet sand
@@ -2282,7 +2312,11 @@ const buildTiles = (atlas: Atlas) => {
   // tile-by-tile tower read as a crane claw at this scale; this draws the whole
   // iconic concave-leg silhouette in one piece, with two platforms + the grand arch.
   {
-    const eFe = '#6e4a2e', eFeL = '#8a6440', eFeD = '#43301c';
+    // Open IRON LATTICE, not a solid silhouette (the solid fill read as a plywood
+    // cutout): edge chords follow the concave profile, diagonal crosshatch braces
+    // span between them with sky showing through, rungs tie the chords every few
+    // rows, and the two decks + antenna sit solid on top.
+    const eM = '#5a4632', eL = '#7d6547', eD = '#2f261c';
     const W = 112, H = 108, cx = W / 2;
     const [cc, cg] = canvas(W, H);
     // outer half-width of the iron at height y (0 top .. H bottom)
@@ -2292,30 +2326,46 @@ const buildTiles = (atlas: Atlas) => {
       if (y < 68) { const t = (y - 30) / 38; return 11 + 19 * Math.pow(t, 1.7); } // concave legs 11→30
       const t = (y - 68) / (H - 68); return 30 + 22 * t;                          // lower legs 30→52
     };
-    // 1) solid silhouette with horizontal lattice rungs (every 4th row darker)
-    for (let y = 0; y < H; y++) {
+    for (let y = 6; y < H; y++) {
       const w = wEdge(y);
-      cg.fillStyle = (y % 4 === 0) ? eFeD : eFe;
-      cg.fillRect(Math.round(cx - w), y, Math.round(2 * w), 1);
+      const x0 = Math.round(cx - w), x1 = Math.round(cx + w);
+      // edge chords: sunlit on the left, shaded on the right (upper-left light)
+      cg.fillStyle = eL; cg.fillRect(x0, y, 2, 1);
+      cg.fillStyle = eM; cg.fillRect(x1 - 2, y, 2, 1);
+      cg.fillStyle = eD; cg.fillRect(x1 - 1, y, 1, 1);
+      // rung tying the chords every 8 rows
+      if (y % 8 === 0) { cg.fillStyle = eM; cg.fillRect(x0, y, x1 - x0, 1); }
+      // diagonal crosshatch braces — sky stays visible between them
+      cg.fillStyle = eM;
+      for (let x = x0 + 2; x < x1 - 2; x++) {
+        if ((x + y) % 7 === 0 || (x - y + 700) % 7 === 0) cg.fillRect(x, y, 1, 1);
+      }
     }
-    // 2) left-edge highlight for a little dimensional rake
-    cg.fillStyle = eFeL;
-    for (let y = 6; y < H; y++) cg.fillRect(Math.round(cx - wEdge(y)), y, 1, 1);
-    // 3) the two observation decks
-    cg.fillStyle = eFe; cg.fillRect(cx - 16, 30, 32, 4); cg.fillRect(cx - 34, 67, 68, 5);
-    cg.fillStyle = eFeD; cg.fillRect(cx - 16, 33, 32, 1); cg.fillRect(cx - 34, 71, 68, 1);
-    cg.fillStyle = eFeL; cg.fillRect(cx - 16, 30, 32, 1); cg.fillRect(cx - 34, 67, 68, 1);
-    // 4) antenna + a red aircraft beacon
-    cg.fillStyle = eFe; cg.fillRect(cx - 1, 0, 2, 8);
-    cg.fillStyle = '#e0564e'; cg.fillRect(cx - 1, 0, 2, 2);
-    // 5) carve the open lattice: the gap between the legs + the grand arch
+    // carve the openings clean: the gap between the legs + the grand arch
     cg.globalCompositeOperation = 'destination-out';
-    cg.beginPath(); cg.moveTo(cx, 38); cg.lineTo(cx - 20, 66); cg.lineTo(cx + 20, 66); cg.closePath(); cg.fill();
+    cg.beginPath(); cg.moveTo(cx, 40); cg.lineTo(cx - 19, 65); cg.lineTo(cx + 19, 65); cg.closePath(); cg.fill();
     cg.beginPath();
-    cg.moveTo(cx - 30, H); cg.lineTo(cx - 30, 88);
-    cg.quadraticCurveTo(cx, 70, cx + 30, 88);
-    cg.lineTo(cx + 30, H); cg.closePath(); cg.fill();
+    cg.moveTo(cx - 29, H); cg.lineTo(cx - 29, 88);
+    cg.quadraticCurveTo(cx, 70, cx + 29, 88);
+    cg.lineTo(cx + 29, H); cg.closePath(); cg.fill();
     cg.globalCompositeOperation = 'source-over';
+    // inner-leg chords hugging the carved arch so the legs read as closed box trusses
+    for (let y = 74; y < H; y++) {
+      const t = (y - 70) / (H - 70 - 2);
+      const ax = Math.round(29 * Math.sqrt(Math.max(0, 1 - Math.pow(1 - t, 2))));  // approximates the arch curve
+      cg.fillStyle = eM; cg.fillRect(cx - ax - 1, y, 2, 1); cg.fillRect(cx + ax - 1, y, 2, 1);
+    }
+    // the two observation decks (solid, over the lattice)
+    cg.fillStyle = eM; cg.fillRect(cx - 16, 30, 32, 4); cg.fillRect(cx - 34, 67, 68, 5);
+    cg.fillStyle = eD; cg.fillRect(cx - 16, 33, 32, 1); cg.fillRect(cx - 34, 71, 68, 1);
+    cg.fillStyle = eL; cg.fillRect(cx - 16, 30, 32, 1); cg.fillRect(cx - 34, 67, 68, 1);
+    // warm deck lamps (tiny, cozy)
+    cg.fillStyle = '#ffd24a';
+    for (let i = -30; i <= 30; i += 12) cg.fillRect(cx + i, 69, 1, 1);
+    // upper column cap + antenna + a red aircraft beacon
+    cg.fillStyle = eM; cg.fillRect(cx - 2, 4, 4, 4); cg.fillRect(cx - 1, 0, 2, 8);
+    cg.fillStyle = eL; cg.fillRect(cx - 2, 4, 1, 4);
+    cg.fillStyle = '#e0564e'; cg.fillRect(cx - 1, 0, 2, 2);
     atlas['eiffel-big'] = cc;
   }
 
@@ -2328,12 +2378,12 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#e8e0d0'; ctx.fillRect(0, 7, 16, 2); ctx.fillRect(7, 0, 2, 16); // white mullion frame
     ctx.fillStyle = '#c4bca8'; ctx.fillRect(0, 14, 16, 2);                            // base shadow
   });
-  // Floor: pale gravel flagstones with the odd stray sprout.
+  // Floor: soft gravel-earth (the old flagstone joints read as brick WALL at scale).
   atlas['t-gh-floor'] = tile(ctx => {
     fill(ctx, '#d8cdb0');
-    ctx.fillStyle = '#c9bd9e'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1); ctx.fillRect(5, 0, 1, 5); ctx.fillRect(10, 6, 1, 5);
-    speckle(ctx, '#bfb18e', 61, 7);
-    ctx.fillStyle = '#7cb86a'; ctx.fillRect(2, 13, 1, 1); ctx.fillRect(13, 3, 1, 1);
+    speckle(ctx, '#c9bd9e', 61, 9); speckle(ctx, '#bfb18e', 67, 7); speckle(ctx, '#e2d9c0', 71, 5);
+    ctx.fillStyle = '#b3a98e'; ctx.fillRect(3, 4, 2, 1); ctx.fillRect(11, 9, 2, 1); ctx.fillRect(6, 13, 2, 1); // pebbles
+    ctx.fillStyle = '#7cb86a'; ctx.fillRect(2, 13, 1, 1); ctx.fillRect(13, 3, 1, 1);  // stray sprouts
   });
   // Empty soil plot (raised wooden bed): tilled earth with furrows + plank frame.
   atlas['t-gh-soil'] = tile(ctx => {
@@ -2365,6 +2415,26 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#b5642f'; ctx.fillRect(4, 9, 8, 5);                               // terracotta pot
     ctx.fillStyle = '#c97a3e'; ctx.fillRect(4, 9, 8, 1); ctx.fillRect(5, 9, 1, 4);     // rim + left highlight
     ctx.fillStyle = '#8a4a22'; ctx.fillRect(4, 13, 8, 1); ctx.fillRect(10, 10, 2, 3);  // base + right shadow
+  });
+  // Stepping-stone path through the gravel (walkable — guides door → beds → counter).
+  atlas['t-gh-path'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');
+    speckle(ctx, '#bfb18e', 61, 7);
+    ctx.fillStyle = '#b3a98e'; ctx.fillRect(2, 2, 12, 5); ctx.fillRect(3, 9, 10, 5);  // two flat stones
+    ctx.fillStyle = '#c6bda2'; ctx.fillRect(2, 2, 12, 1); ctx.fillRect(3, 9, 10, 1);  // lit tops
+    ctx.fillStyle = '#9a917a'; ctx.fillRect(2, 6, 12, 1); ctx.fillRect(3, 13, 10, 1); // stone undersides
+    ctx.fillStyle = '#7cb86a'; ctx.fillRect(1, 7, 1, 1); ctx.fillRect(14, 8, 1, 1);   // sprouts at the edges
+  });
+  // Riot-of-blooms flower bed (decor, solid): pink/gold/white blossoms in a planter.
+  atlas['t-gh-flowers'] = tile(ctx => {
+    fill(ctx, '#d8cdb0');
+    ctx.fillStyle = '#8a5a2a'; ctx.fillRect(1, 3, 14, 12);   // planter box
+    ctx.fillStyle = '#a5703a'; ctx.fillRect(1, 3, 14, 1);    // rim highlight
+    ctx.fillStyle = '#4d7a2e'; ctx.fillRect(2, 4, 12, 10);   // foliage
+    ctx.fillStyle = '#6e9e3a'; ctx.fillRect(3, 5, 4, 3); ctx.fillRect(9, 8, 4, 3);    // lit leaf clumps
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(4, 5, 2, 2) ; ctx.fillRect(11, 9, 2, 2);  // pink blooms
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 6, 2, 2); ctx.fillRect(3, 10, 2, 2);   // gold blooms
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(12, 5, 2, 2); ctx.fillRect(6, 11, 2, 2);  // white blooms
   });
   // Hanging fern basket (decor, solid): trailing fronds on a chain from the roof.
   atlas['t-gh-vine'] = tile(ctx => {
@@ -3955,42 +4025,43 @@ const buildMisc = (atlas: Atlas) => {
 
   // ---- Black stray cat (found in the dumpster, then lives at home) ----------
   // SIDE PROFILE (not front-facing). Head on the RIGHT: one green eye + a pink nose
-  // at the muzzle, two pointy ears on top, a curved back, an upright tail at the
-  // rear (left), and four legs. He's black, but flat black reads as a blob — so:
+  // at the muzzle, two pointy ears on top, an arched back, an S-curve tail at the
+  // rear (left), and four slender legs. He's black, but flat black reads as a blob — so:
   // k=body black, s=fur sheen on the top/back rim (light from upper-left),
-  // d=deep shadow on the underside/feet, g=green eye, p=pink nose / inner-ear.
-  const CATPAL = { k: '#16161c', s: '#26262f', d: '#0e0e13', g: '#86e06a', p: '#e0879f' };
-  // Shared upper body (head + back + raised tail) reused by both walk frames; the
-  // frames differ only in the legs (gather vs stride) so he visibly steps. Feet sit
-  // on rows 13-14 so the drawn floor contact-shadow grounds him.
+  // d=deep shadow on the underside / far-side legs, g=green eye, p=pink nose / inner-ear.
+  const CATPAL = { k: '#16161c', s: '#2b2b36', d: '#0e0e13', g: '#8ef07a', p: '#e0879f' };
+  // Shared upper body (head + back + tail) reused by both walk frames; the frames
+  // differ only in the legs — a 2-frame trot where each near leg (k) and far leg (d)
+  // splits fore/aft so he visibly steps. Feet reach row 13 so the drawn floor
+  // contact-shadow grounds him.
   const CAT_UP = [
-    '.k..............', // 0  tail tip (curls back-left)
-    '.k........k..k..', // 1  tail + ear tips
-    '.kk......kkk.kk.', // 2  tail + ears (left 9-11, right 13-14)
-    '..k......kpkkpk.', // 3  tail + pink inner ears
-    '..kk....skkkkkk.', // 4  tail base + head top (sheen on neck)
-    '..skkkkkskkkgkk.', // 5  back (sheen rim) + head + green eye
-    '..skkkkkkkkkkkkp', // 6  body + head + pink nose (muzzle, right edge)
-    '...kkkkkkkkkkkk.', // 7  belly / jaw
-    '...kkkkkkkkkkk..', // 8  lower body
+    '.kk.............', // 0  tail tip (curls back-left)
+    '.kk.......k..k..', // 1  tail + ear tips (10, 13)
+    '..kk.....kkk.kk.', // 2  tail + ears (left 9-11, right 13-14)
+    '...k.....kpkkpk.', // 3  tail + pink inner ears
+    '...k....skkkkkk.', // 4  tail base + head top (sheen)
+    '...kk..skkkkgkk.', // 5  back rising into head + green eye
+    '....skkkkkkkkkkp', // 6  back sheen rim + muzzle + pink nose
+    '....kkkkkkkkkkk.', // 7  body / jaw
+    '....dkkkkkkkkk..', // 8  belly (deep shadow on the underside)
   ];
   const catR0 = strSprite([
     ...CAT_UP,
-    '....kk....kk....', // 9  legs gathered (back 4-5, front 10-11)
-    '....kk....kk....', // 10
-    '....kk....kk....', // 11
-    '....kk....kk....', // 12
+    '....dk....dk....', // 9  legs gathered — near leg k, far leg d (depth)
+    '....dk....dk....', // 10
+    '....dk....dk....', // 11
+    '....dk....dk....', // 12
     '....dd....dd....', // 13 feet (deep-shadow contact)
     '................', // 14
     '................', // 15
   ], CATPAL);
   const catR1 = strSprite([
     ...CAT_UP,
-    '...kk......kk...', // 9  mid-stride (back steps left, front steps right)
-    '...kk......kk...', // 10
-    '...kk......kk...', // 11
-    '...kk......kk...', // 12
-    '...dd......dd...', // 13 feet
+    '...d..k..d..k...', // 9  mid-trot — near legs stride forward, far legs back
+    '...d..k..d..k...', // 10
+    '...d..k..d..k...', // 11
+    '...d..k..d..k...', // 12
+    '...d..k..d..k...', // 13 feet
     '................', // 14
     '................', // 15
   ], CATPAL);
@@ -3998,10 +4069,11 @@ const buildMisc = (atlas: Atlas) => {
   atlas['cat-r-1'] = catR1; atlas['cat-l-1'] = mirror(catR1);
   // Aliases (frame 0) so any `cat-r` / `cat-l` reference still resolves.
   atlas['cat-r'] = catR0; atlas['cat-l'] = mirror(catR0);
-  // Sitting / napping (classic curled cat): a narrow upright torso with the head
-  // high on the right, wide tucked haunches forming a triangular base, front paws
-  // down, and the tail sweeping up to curl around the front of the base.
-  const catSitR = strSprite([
+  // Sitting (classic upright cat): a narrow upright torso with the head high on
+  // the right, wide tucked haunches forming a triangular base, front paws down,
+  // and the tail sweeping around the front of the base. Two frames: the tail tip
+  // lifts and flicks (idle life without moving the body).
+  const CAT_SIT_UP = [
     '................', // 0
     '..........k..k..', // 1  ear tips
     '..........kkkkk.', // 2  head top + ears (10-14)
@@ -4015,11 +4087,44 @@ const buildMisc = (atlas: Atlas) => {
     '....skkkkkkkkk..', // 10 haunch
     '...skkkkkkkkkk..', // 11 haunch
     '..skkkkkkkkkkk..', // 12 sitting base (widest)
-    '..kkkkkkkkkkkdk.', // 13 base + tail curl rising at the front
+  ];
+  const catSitR0 = strSprite([
+    ...CAT_SIT_UP,
+    '..kkkkkkkkkkkdk.', // 13 base + tail curl resting at the front
     '..dkkkkkkkkkkdk.', // 14 paws + tail wrapping the front
     '................', // 15
   ], CATPAL);
-  atlas['cat-sit-r'] = catSitR; atlas['cat-sit-l'] = mirror(catSitR);
+  const catSitR1 = strSprite([
+    ...CAT_SIT_UP,
+    '..kkkkkkkkkkkdkd', // 13 tail tip flicks up and out
+    '..dkkkkkkkkkkd..', // 14 paws
+    '................', // 15
+  ], CATPAL);
+  atlas['cat-sit-r-0'] = catSitR0; atlas['cat-sit-l-0'] = mirror(catSitR0);
+  atlas['cat-sit-r-1'] = catSitR1; atlas['cat-sit-l-1'] = mirror(catSitR1);
+  // Aliases (frame 0) so any `cat-sit-r` / `cat-sit-l` reference still resolves.
+  atlas['cat-sit-r'] = catSitR0; atlas['cat-sit-l'] = mirror(catSitR0);
+  // Napping (curled loaf): a low mound, head tucked to the right with a closed
+  // eye (sheen dash) and the tail wrapped around the front. Ears still poke up.
+  const catNapR = strSprite([
+    '................', // 0
+    '................', // 1
+    '................', // 2
+    '................', // 3
+    '................', // 4
+    '................', // 5
+    '................', // 6
+    '................', // 7
+    '................', // 8
+    '.......kk..k.k..', // 9  back rim + ear tips
+    '.....kkkkkkkkk..', // 10 curled back
+    '....skkkkkkkkkk.', // 11 sheen rim + head side
+    '...skkkkkkkskkk.', // 12 body + closed eye (sheen dash)
+    '...kkkkkkkkkkpk.', // 13 body + tucked muzzle (pink nose)
+    '...dkkkkkkkkkd..', // 14 tail wrapped along the floor
+    '................', // 15
+  ], CATPAL);
+  atlas['cat-nap-r'] = catNapR; atlas['cat-nap-l'] = mirror(catNapR);
 
   // ---- Hidden museum collectible: a small glinting curio on the ground --------
   atlas['t-relic'] = tile(ctx => {

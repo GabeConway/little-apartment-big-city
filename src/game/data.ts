@@ -126,8 +126,6 @@ export const CROPS: Record<string, Crop> = {
     blurb: 'Blooms in colors that only exist after midnight. The shrine keeps its seeds.' },
 };
 
-export const cropById = (id: string): Crop | undefined => CROPS[id];
-
 // Quality multipliers for a harvest: normal / silver / gold.
 export const CROP_QUALITY = ['', 'Silver ', 'Gold '];
 export const CROP_QUALITY_MULT = [1, 1.4, 2];
@@ -327,7 +325,6 @@ export const MINERALS: Mineral[] = [
 ];
 export const mineralById = (id: string): Mineral => MINERALS.find(m => m.id === id)!;
 
-export const MINE_COST = 5;            // energy per swing with bare hands (tier 0)
 export const WAND_PRICE = 3000;        // The Manager's price for the wand
 export const WAND2_PRICE = 9000;       // The Manager's price for the wand upgrade (pierces, brighter)
 export const CRAWLER_HIT_ENERGY = 8;   // energy lost when a crawler gets you
@@ -381,9 +378,6 @@ export const MINE_CHALLENGES: MineChallenge[] = [
   { id: 'deep',     name: 'The Deep Calls',  desc: 'Ore skews rarer the deeper you go.',  color: '#b06ad0' },
   { id: 'geode',    name: 'Geode Day',      desc: 'Sealed geodes are plentiful.',         color: '#ff7cc4' },
 ];
-
-// Floors that fire a one-off milestone (achievement + Manager text).
-export const DEPTH_MILESTONES = [5, 10];
 
 // Craft the Manager's rare furniture from minerals. Each recipe is deliberately
 // pinned to a depth/pickaxe tier so the rares unlock in a progression ladder —
@@ -505,7 +499,6 @@ export const ERRANDS: Errand[] = [
     ask: 'A gig pings in, the message faintly scented with rum: "Darling — the tiki bar is dry on coconuts. Courier me one from Kiwami Island? ¥550. — L"',
     thanks: 'The slot clunks; ¥550 dispenses, still warm. Lulu pays her debts.' },
 ];
-export const errandById = (id: string): Errand => ERRANDS.find(e => e.id === id) ?? ERRANDS[0];
 
 // ---- Random daily street events ---------------------------------------------
 // One-off CITY vignettes, seeded per day (state.ts → streetEventFor): roughly one
@@ -546,7 +539,6 @@ export const STREET_EVENTS: StreetEvent[] = [
   // owner's reward (cash + a cold can for your trouble).
   { id: 'lost-ferret', sprite: 'prop-ferret', x: 20, y: 10, dir: 'down', label: 'Lost ferret', cost: 0 },
 ];
-export const streetEventById = (id: string): StreetEvent | undefined => STREET_EVENTS.find(e => e.id === id);
 // Cryptic fortunes — atmospheric only, deliberately vague, no concrete spoilers.
 export const FORTUNES: string[] = [
   '"A small kindness you have already forgotten will find its way back to your door."',
@@ -1171,8 +1163,6 @@ export const FESTIVALS: Festival[] = [
   },
 ];
 
-export const festivalById = (id: string): Festival | undefined => FESTIVALS.find(f => f.id === id);
-
 // Cadence: a festival lands on every `FESTIVAL_PERIOD`-th day (one roughly every
 // two weeks), and they rotate through `FESTIVALS` in order. The scheme is a clean
 // deterministic modulo window — a given `day` ALWAYS resolves to the same result,
@@ -1192,7 +1182,6 @@ export function festivalFor(day: number): Festival | null {
 
 // Festival rewards are about charm, not income — modest by design.
 export const FESTIVAL_REWARD_YEN = 600;            // small cash keepsake for playing a festival minigame
-export const FESTIVAL_LUCKY_DAYS = 1;              // tanabata wish / hatsumode fortune grant a 1-day 'lucky' glow
 
 // ---- Fishing Tournament ----------------------------------------------------
 // The whole town wanders down to the waterline to fish elbow-to-elbow against a
