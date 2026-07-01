@@ -118,7 +118,7 @@ export const CROPS: Record<string, Crop> = {
   melon: { id: 'melon', name: 'Melon', seedCost: 400, growDays: 5, reward: 1400, tier: 1,
     sprites: ['t-crop-melon-0', 't-crop-melon-1', 't-crop-melon-2', 't-crop-melon-3'],
     blurb: 'Slow, thirsty, and the single biggest payout per plot.' },
-  tea: { id: 'tea', name: 'Tea Bush', seedCost: 650, growDays: 4, reward: 320, tier: 1, regrow: 2,
+  tea: { id: 'tea', name: 'Tea Bush', seedCost: 350, growDays: 4, reward: 320, tier: 1, regrow: 2,
     sprites: ['t-crop-tea-0', 't-crop-tea-1', 't-crop-tea-2', 't-crop-tea-3'],
     blurb: 'Pricey to start, but it leafs out every couple of days forever. Pure passive income.' },
   moonflower: { id: 'moonflower', name: 'Moonflower', seedCost: 0, growDays: 6, reward: 3000, tier: 2,
@@ -273,7 +273,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'scammed', title: 'Tape and Regret', desc: "One of Jimmy's deals broke on the way home.", hint: 'The discount knows why.' },
   { id: 'bargain', title: 'Told You. Quality.', desc: "One of Jimmy's deals actually survived.", hint: 'Sometimes the truck is kind.' },
   { id: 'backrooms', title: 'No Back Wall', desc: 'Stepped through the crack behind the konbini.', hint: 'Corporate says there is no back wall.' },
-  { id: 'rare-one', title: 'Customer of the Void', desc: 'Acquired furniture from The Manager.', hint: 'It bows politely. It does not take cash.' },
+  { id: 'rare-one', title: 'Customer of the Void', desc: 'Bought something from The Manager.', hint: 'It bows politely. It sells more than furniture.' },
   { id: 'hat', title: '$67', desc: "Bought Tex's cowboy hat.", hint: 'One hat. One price. One dream.' },
   { id: 'gacha-set', title: 'Ten of Ten', desc: 'Completed the gachapon set.', hint: 'Mr. Maeda has had nine for three years.' },
   { id: 'shift-5', title: 'Employee of the Months', desc: 'Worked five konbini shifts.', hint: 'Yuki appreciates the company.' },
@@ -281,7 +281,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'night-owl', title: 'Past Last Train', desc: 'Stayed out past 2 AM and woke up home anyway.', hint: 'The city carries you back, eventually.' },
   { id: 'wand', title: 'Magical Girl', desc: 'Bought the wand from The Manager.', hint: 'It handles most transactions down there.' },
   { id: 'miner', title: 'Yellow Rock Candy', desc: 'Mined your first mineral.', hint: 'The backrooms go further down.' },
-  { id: 'slayer', title: 'Sparkle Sparkle', desc: 'Defeated a crawler with the wand.', hint: 'They scatter like bad thoughts.' },
+  { id: 'slayer', title: 'Sparkle Sparkle', desc: 'Defeated a crawler.', hint: 'They scatter like bad thoughts.' },
   { id: 'crafted', title: 'Void Carpenter', desc: 'Crafted furniture from minerals.', hint: 'The Manager accepts more than money.' },
   { id: 'delver', title: 'Going Down', desc: 'Descended to mine floor 5.', hint: 'The ladder is not the bottom.' },
   { id: 'abyss', title: 'The Down There', desc: 'Descended to mine floor 10.', hint: 'Keep climbing down. It keeps going.' },
@@ -300,7 +300,15 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'heart2heart', title: 'Heart to Heart', desc: 'Shared a deeper, one-of-a-kind moment with a friend.', hint: 'Keep someone close. Some conversations only open once you truly know each other.' },
   { id: 'housewarming', title: 'Housewarming', desc: 'A friend felt close enough to drop by your apartment.', hint: 'Grow a friendship deep enough that someone wants to see where you live.' },
   { id: 'first-delivery', title: 'Special Delivery', desc: 'Ran your first delivery for Kojima Motors.', hint: "There's a dispatch clipboard at the garage. Kojima needs a driver." },
-  { id: 'ace-driver', title: 'Drift King', desc: 'Delivered the package in under 34 seconds.', hint: 'Cut the corners. Trust the slide. Beat the clock.' },
+  { id: 'ace-driver', title: 'Drift King', desc: 'Beat the ace time on a delivery course.', hint: 'Cut the corners. Trust the slide. Beat the clock.' },
+  { id: 'first-dish', title: 'Home Cooking', desc: 'Cooked your first dish.', hint: 'A fridge, a microwave, and something worth putting in them.' },
+  { id: 'institute-grad', title: 'Correspondence Chef', desc: 'Cooked every Institute recipe at least once.', hint: 'The course has six lessons. Graduation is a full stomach.' },
+  { id: 'high-roller', title: "Beginner's Luck", desc: 'Won your first casino bet.', hint: 'The house always wins. Almost always.' },
+  { id: 'grand-marlin', title: 'Top of the Chalkboard', desc: 'Placed Grand Marlin tier in the fishing derby.', hint: 'Some days the whole town fishes. Out-fish the town.' },
+  { id: 'matsuri', title: 'Festival Nights', desc: 'Played a festival minigame.', hint: 'Every couple of weeks, the lanterns go up somewhere.' },
+  { id: 'encore', title: 'Encore!', desc: 'Finished a karaoke song hitting 80% of the notes.', hint: 'The club keeps a mic for anyone brave enough to hold the beat.' },
+  { id: 'nine-lives', title: 'Nine Lives', desc: 'Met David the cat.', hint: 'Something in a Downtown back corner is watching you. Patiently.' },
+  { id: 'bon-voyage', title: 'Bon Voyage', desc: 'Reached Paris.', hint: 'The yellow place is not the end of the line.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------
@@ -703,6 +711,8 @@ export interface MsgCtx {
   fishCount: number;
   visited: string[];
   gameAch: string[];
+  gangPaid: boolean;            // paid the yakuza toll into Downtown
+  friendsMet: string[];         // FRIENDS ids in the phone (people you've actually met)
 }
 
 export interface MessageDef {
@@ -743,6 +753,17 @@ export const MESSAGES: MessageDef[] = [
       'Hello, valued human. This is ZamaZonk™ — the Everything Store. We got your number. We get everyone\'s number.',
       'How it works: open your phone (📱 / P) → tap the ZamaZonk app → pick furniture → it pays up front and arrives in your boxes by morning. Then open ARRANGE ROOM in your Bag to place it.',
       'Why visit a store when a store can visit you, forever? Keep tapping. 📦',
+    ],
+  },
+  {
+    id: 'charlie-downtown', from: 'Charlie 🎬', avatar: '🎬',
+    // A gentle toll nudge: by day 3, if you've met Charlie and the east alley is
+    // still "spoken for," he texts you what the whole east side is worth.
+    when: c => c.day >= 3 && !c.gangPaid && c.friendsMet.includes('charlie'),
+    body: [
+      "yo, charlie here — got your number off the konbini crew. hope that's cool. 🎬",
+      "been location-scouting past the east alley for the doc. the boys holding it down will wave you through for ¥5,000 — one-time thing. think of it as a toll booth with tattoos. great texture, honestly.",
+      "and listen, the east side is WORTH the ticket: Club Kaiju, Kojima's garage, the Kinryū Lounge, even a little museum. pure cinema over there. go shoot your own scene.",
     ],
   },
   {

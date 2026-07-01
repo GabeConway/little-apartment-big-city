@@ -157,8 +157,6 @@ const city: SceneDef = {
     'Y': T('t-sakura', true),      // cherry-blossom tree shading the garden ('C' is taken by the t-bld-c storefront)
     'q': T('t-sakura-petals'),     // fallen petals beside the trail (walkable)
     'u': T('t-pond', true),        // garden koi pond (solid)
-    '1': T('t-post-grass', true),  // wayfinding signpost on grass (its SCENE_SIGNS plate is the board)
-    '2': T('t-post-walk', true),   // wayfinding signpost on the sidewalk
   },
   outdoor: true,
   grid: [
@@ -171,12 +169,12 @@ const city: SceneDef = {
     'llllllllllllllllllllllllllllllll',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr',
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwwwwwwwwwwwwwwww2ww',
+    'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww',
     'gTggggwwggggggRRRRggggggggggggfg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
     'ggHHHHDDHHggggEGGEggTgggxxgYggfg',
-    's1gggpwwpggggggggggfgfgOxxOggggg',
+    'sggggpwwpggggggggggfgfgOxxOggggg',
     'kwwwwwwwgggggggggggggggnXXnouuog',
     'kwwwwwwwggggggggggggggojxxjouugg',
     'ssggFgggggggggFggggggggqxxqggggg',
@@ -229,6 +227,7 @@ export interface SceneSign {
   bg?: string; border?: string; blink?: boolean;
   font?: number;        // px size; >6 also switches to sans-serif for CJK glyphs
   vertical?: boolean;   // stacked characters, Kabukicho-style
+  guide?: boolean;      // municipal wayfinding: slim flat plate + baked-in pole, matte (no bevel/shadow/night bloom)
 }
 export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   city: [
@@ -241,11 +240,12 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'PAWN', x: 22, y: 1, color: '#e89a7c', bg: 'rgba(0,0,0,0.55)' },
     { text: 'ガチャ', x: 27, y: 0, color: '#fff', bg: '#e857a8', border: '#ffd5ec', blink: true, font: 8 },
     { text: 'GACHA!', x: 27, y: 1, color: '#e857a8', bg: 'rgba(0,0,0,0.55)' },
-    // Wayfinding boards are painted WOOD mounted on planted post tiles ('1'/'2'
-    // in the grid, one row below each plate) so they read as in-world signposts,
-    // not floating UI. The shrine has no sign — the torii gate IS the sign.
-    { text: '← BEACH', x: 0, y: 13, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
-    { text: 'DOWNTOWN →', x: 27, y: 8, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
+    // Wayfinding is municipal guide signage (slim navy enamel plate on a grey
+    // pole, baked into one sprite — see the `guide` branch of the sign renderer)
+    // so it reads as Tokyo street furniture. The shrine has no sign — the torii
+    // gate IS the sign.
+    { text: '← BEACH', x: 0, y: 13, color: '#e8f0f4', bg: '#27517c', guide: true },
+    { text: 'DOWNTOWN →', x: 27, y: 8, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
   // Signs sit over the four venue facades of the 28-wide strip:
   // club N (cols 1-4), garage G (cols 7-10), casino K (cols 13-16), museum U (cols 19-24).
@@ -258,7 +258,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'CASINO', x: 13, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: 'はくぶつかん', x: 19, y: 0, color: '#16181d', bg: '#e8d8a0', border: '#c9a227', font: 8 },
     { text: 'MUSEUM', x: 19, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
-    { text: '← STATION', x: 0, y: 6, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
+    { text: '← STATION', x: 0, y: 6, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
   museum: [
     { text: 'カワマチ びじゅつかん', x: 1, y: 9, color: '#3a3322', bg: '#e0d8c4', border: '#b08a50', font: 7 },
@@ -269,7 +269,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   ],
   shore: [
     // Mirror of the city's '← BEACH' gate — the boardwalk at the NE corner leads back to town.
-    { text: 'TOWN →', x: 18, y: 2, color: '#ffe9a0', bg: '#5a3c24', border: '#8a6644' },
+    { text: 'TOWN →', x: 18, y: 2, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
   garage: [
     { text: 'こじまモータース せいび', x: 2, y: 0, color: '#ffd24a', bg: '#33302a', border: '#c9a227', font: 8 },
@@ -396,14 +396,13 @@ const shore: SceneDef = {
     'b': T('t-buoy', true),
     'U': T('t-parasol', true),
     'J': T('t-crate', true),
-    '1': T('t-post-dune', true),   // wayfinding signpost (TOWN → board = SCENE_SIGNS plate)
   },
   outdoor: true,
   grid: [
     'PgdvggPddvggdPvdggPdvggP',
     'gdvddvgddvddgddvvddvgddv',
     'vddvUdJddvddvddvdvddPddd',
-    'ddsddsdsddsssddssds1kkkk',
+    'ddsddsdsddsssddssdsdkkkk',
     'sssossssssUsssssLssssskk',
     'ssssssssssssssssssssssss',
     'ssssssssssssssssssssssss',
@@ -442,7 +441,6 @@ const shore: SceneDef = {
 
 const BADTOWN_L = {
   'p': T('t-sidewalk-bad'),
-  '1': T('t-post-plaza', true),  // wayfinding signpost (← STATION board = SCENE_SIGNS plate)
   'E': T('t-bld-neon', true),
   'q': T('t-chochin', true),
   'r': T('t-asphalt'),
@@ -473,7 +471,7 @@ const badtown: SceneDef = {
     'ppppppVppppppppppppppppppppp',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
     'rrrrrrrrrrrrrrrrrrrrrrrrrrrr',
-    'p1pppppppppppppppppppppppppp',
+    'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',
     'pppppppppppppppppppppppppppp',

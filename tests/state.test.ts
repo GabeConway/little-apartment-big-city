@@ -762,9 +762,14 @@ describe('cooking', () => {
     expect(canCook(s, recipeById('donburi')!)).toBe(true);
     expect(cook(s, 'donburi')).toBe(true);
     expect(s.dishes['donburi']).toBe(1);
+    expect(s.cookedLog).toEqual(['donburi']); // ever-cooked log records the first make
     expect(s.fishInv.length).toBe(0);
     expect(s.pantry['rice'] ?? 0).toBe(0);
     expect(cook(s, 'donburi')).toBe(false); // out of ingredients now
+    // A second successful cook of the same dish does NOT duplicate the log entry.
+    s.fishInv = ['minnow']; s.pantry = { rice: 1 };
+    expect(cook(s, 'donburi')).toBe(true);
+    expect(s.cookedLog).toEqual(['donburi']);
   });
   it('refuses to cook an unknown recipe even with ingredients', () => {
     const s = newSave();

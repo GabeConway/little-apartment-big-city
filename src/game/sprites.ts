@@ -1869,20 +1869,6 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 6, 6, 1);    // smile arrow
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 7, 1, 1); ctx.fillRect(12, 7, 1, 1); // sparkle
   });
-  // Wayfinding post: a planted wooden pole — the readable board is the matching
-  // SCENE_SIGNS text plate rendered over the SAME tile, so the plate reads as the
-  // post's board instead of a floating UI panel. One variant per host ground.
-  const signpostTile = (bg: (ctx: CanvasRenderingContext2D) => void) => tile(ctx => {
-    bg(ctx);
-    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(5, 14, 6, 1);  // ground shadow (planted)
-    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(7, 2, 2, 12);           // pole
-    ctx.fillStyle = '#8a6644'; ctx.fillRect(7, 2, 1, 12);           // lit edge
-    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 8, 2, 1);            // grain node
-  });
-  atlas['t-post-grass'] = signpostTile(ctx => { fill(ctx, '#5e8a4f'); speckle(ctx, '#6f9e5e', 13, 8); });
-  atlas['t-post-dune'] = signpostTile(ctx => { fill(ctx, '#7e9460'); speckle(ctx, '#cdbb8e', 19, 6); });
-  atlas['t-post-walk'] = signpostTile(ctx => { fill(ctx, '#9aa0a6'); ctx.fillStyle = '#878d93'; ctx.fillRect(0, 8, 16, 1); });
-  atlas['t-post-plaza'] = signpostTile(ctx => { fill(ctx, '#6e7276'); ctx.fillStyle = '#5a5e62'; ctx.fillRect(0, 8, 16, 1); });
   atlas['t-island-sign'] = tile(ctx => {                    // weathered island signpost planted in the sand
     fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 19, 6);   // sand base (legend tiles REPLACE the floor — transparent showed black)
     ctx.fillStyle = '#4a3f36'; ctx.fillRect(5, 15, 7, 1);   // ground contact shadow (reads as planted)

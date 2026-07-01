@@ -143,3 +143,17 @@ describe('loadSave — cat-depth + missions fields (default-safe)', () => {
     expect(s.missionsDone).toEqual([]);
   });
 });
+
+describe('loadSave — cookedLog field (default-safe)', () => {
+  it('a v2 save from before cookedLog gains the empty log', () => {
+    const blob = { ...newSave(), money: 555, day: 6 } as Record<string, unknown>;
+    delete blob.cookedLog;
+    seed(JSON.stringify(blob));
+    expect(loadSave()!.cookedLog).toEqual([]);
+  });
+
+  it('an existing cookedLog round-trips untouched', () => {
+    persistSave({ ...newSave(), cookedLog: ['onigiri', 'ramen'] });
+    expect(loadSave()!.cookedLog).toEqual(['onigiri', 'ramen']);
+  });
+});

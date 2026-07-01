@@ -121,6 +121,7 @@ export interface GameSave {
   produce: Record<string, number>;  // greenhouse crops KEPT (not shipped) for cooking (cropId -> count)
   dishes: Record<string, number>;   // cooked, uneaten dishes (recipeId -> count)
   recipes: string[];                // recipe ids the player knows
+  cookedLog: string[];              // recipe ids EVER cooked (drives cooking achievements)
   buff: { id: BuffId; day: number } | null; // active food buff (only valid while day matches)
   decor: { wall: string; floor: string };   // applied room style (DECOR ids; 'default' = original tiles)
   ownedDecor: string[];             // DECOR ids owned (wall/floor/rug)
@@ -315,6 +316,7 @@ export const newSave = (): GameSave => ({
   produce: {},
   dishes: {},
   recipes: [...STARTER_RECIPES],
+  cookedLog: [],
   buff: null,
   decor: { ...DEFAULT_DECOR },
   ownedDecor: [...STARTER_DECOR],
@@ -1421,6 +1423,8 @@ const msgCtx = (s: GameSave): MsgCtx => ({
   fishCount: Object.values(s.fishLog).reduce((a, b) => a + b, 0),
   visited: s.visited,
   gameAch: s.gameAch,
+  gangPaid: s.gangPaid,
+  friendsMet: Object.keys(s.friends),
 });
 
 export const syncMessages = (s: GameSave): PhoneMessage[] => {
@@ -1561,6 +1565,7 @@ export const cook = (s: GameSave, recipeId: string): boolean => {
   if (!r || !canCook(s, r)) return false;
   for (const i of r.ingredients) consumeIngredient(s, i.kind, i.n);
   s.dishes[recipeId] = (s.dishes[recipeId] ?? 0) + 1;
+  if (!s.cookedLog.includes(recipeId)) s.cookedLog.push(recipeId); // ever-cooked log (achievements)
   persistSave(s);
   return true;
 };
