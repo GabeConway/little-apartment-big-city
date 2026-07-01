@@ -107,6 +107,13 @@ export const CHECKS = [
     assert: "money===1600 && save.storySeen.includes('festival-summer-matsuri-14') && save.gameAch.includes('matsuri')",
   },
   {
+    name: 'derby-board-readable',
+    note: 'derby day (day≡5 mod 10): the shore chalkboard DERBY sign opens the tier-list dialog',
+    save: { scene: 'shore', px: 96, py: 92, dir: 'up', day: 15, canFish: true, visited: ['shore'] },
+    keys: 'e',                                // facing the sign at (6,5) from (6,6)
+    assert: "overlay==='dialog' && overlayData && /chalkboard/.test(overlayData.line)",
+  },
+  {
     name: 'phone-settings-tab',
     note: 'phone Settings app opens (save codes live on the title MANAGE SAVE panel, covered by unit tests)',
     save: { scene: 'city', px: 96, py: 224, visited: ['city'] },

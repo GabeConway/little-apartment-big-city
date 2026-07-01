@@ -14,7 +14,9 @@ import {
   FRIENDS, FRIEND_HEART_LINES, HANGOUTS, HOME_VISITS,
   SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
   MISSIONS,
+  fishingTournamentDay, tournamentTierFor,
 } from './data';
+import type { TournamentTier } from './data';
 import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind, Fish, FishSky, Mission } from './data';
 import type { HangoutScene, HomeVisit } from './data';
 import type { CropRequest } from './data';
@@ -1468,6 +1470,23 @@ export const pushMessage = (s: GameSave, m: Omit<PhoneMessage, 'day' | 'read'>):
   if (s.messages.some(x => x.id === m.id)) return;
   s.messages.push({ ...m, day: s.day, read: false });
 };
+
+// ---- Fishing-derby payout (pure core) ---------------------------------------
+// Settle a derby run: pay the tier prize for `score` points and push Genji's
+// chalkboard text. Guarded so it's safe to call from EVERY path that can end a
+// run (walking off the shore, sleeping/collapsing, Save&Quit) — the storySeen
+// `tournament-prize-<day>` stamp pays at most once per derby day. Returns the
+// tier paid, or null if nothing settled (no score / not a derby day / paid).
+// The caller owns the transient bits (score ref, toast, sfx, achievement).
+export function settleDerbyPrize(s: GameSave, score: number): TournamentTier | null {
+  if (score <= 0 || !fishingTournamentDay(s.day) || s.storySeen.includes(`tournament-prize-${s.day}`)) return null;
+  s.storySeen.push(`tournament-prize-${s.day}`);
+  const tier = tournamentTierFor(score);
+  s.money += tier.prize;
+  pushMessage(s, { id: `tournament-prize-${s.day}`, from: 'Genji 🎣', avatar: '🎣', company: false,
+    body: [`Genji chalks your name on the board: "${score} points — that's the ${tier.name}, kid." The gathered crowd gives a warm cheer as he presses ¥${tier.prize} into your hand. "Tide's turning. Same shore next derby."`] });
+  return tier;
+}
 
 // ---- ZamaZonk (the everything store) ----------------------------------------
 // An aggressively convenient megacorp. Order furniture from the phone; it pays

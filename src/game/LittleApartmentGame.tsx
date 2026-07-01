@@ -58,10 +58,10 @@ import {
   keepsakeById,
   SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
   festivalFor, FESTIVAL_REWARD_YEN,
-  fishingTournamentDay, tournamentScore, tournamentTierFor, TOURNAMENT_NAME, TOURNAMENT_BLURB, TOURNAMENT_SCENE,
+  fishingTournamentDay, tournamentScore, tournamentTierFor, TOURNAMENT_NAME, TOURNAMENT_BLURB, TOURNAMENT_SCENE, TOURNAMENT_TIERS,
   MISSIONS,
 } from './data';
-import type { BingusFetch, GiftKind, GiftTier, IngredientKind, DecorItem, StreetEvent, Festival } from './data';
+import type { BingusFetch, GiftKind, GiftTier, IngredientKind, DecorItem, StreetEvent, Festival, TournamentTier } from './data';
 import type { HangoutScene, HomeVisit } from './data';
 import type { StoryBeat, Fish } from './data';
 import {
@@ -91,6 +91,7 @@ import {
   sanitizeName,
   petCat, catPetToday, catGiftMorning, catGiftFor,
   syncMissions, biteTableFor,
+  settleDerbyPrize,
   exportSaveCode, importSaveCode,
 } from './state';
 import type { OreNode, CrawlerKind } from './state';
@@ -442,7 +443,7 @@ const HACK_LINES = [
 
 // ---- overlay model ----------------------------------------------------------
 
-type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji' | 'landlord'
+type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji'
   | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch'
   | 'greenhouse-plot' | 'greenhouse-supply' | 'street';
 
@@ -1874,25 +1875,29 @@ const LittleApartmentGame: React.FC = () => {
     }
   }, []);
 
+  // Derby payout: settle the day's run — Genji reads off your placement tier and
+  // hands over the prize. `settleDerbyPrize` (state.ts, pure) owns the money +
+  // phone bulletin and the once-per-derby dedupe (storySeen `tournament-prize-
+  // <day>`, no save field); this wrapper owns the transient bits (score ref,
+  // toast, sfx, achievement). Called from EVERY path that can end a run —
+  // leaving the shore (enterScene), sleeping/collapsing (finishSleep, before
+  // passNight bumps the day), and SAVE&QUIT (quitToMenu) — so sleeping on the
+  // sand or quitting mid-derby can no longer silently eat the prize.
+  const settleDerby = useCallback((s: GameSave) => {
+    if (derbyDayRef.current !== s.day) return;
+    const tier = settleDerbyPrize(s, derbyScoreRef.current);
+    if (!tier) return;
+    if (tier.name === 'Grand Marlin') award('grand-marlin');
+    sfxCoin();
+    showToast(`🏆 ${tier.name}!`, `Derby ${derbyScoreRef.current} pts · +¥${tier.prize}`);
+  }, [award, showToast]);
+
   const enterScene = useCallback((id: string, tx: number, ty: number, dir: Dir) => {
     const s = saveRef.current;
-    // Derby payout: leaving the shore on a tournament day after landing at least
-    // one fish settles the board. Genji reads off your placement tier and hands
-    // over the prize — once per derby, gated on storySeen `tournament-prize-<day>`
-    // (no save field). Result arrives as a phone bulletin + toast so it never
-    // fights the scene-change.
-    if (sceneRef.current.id === TOURNAMENT_SCENE && id !== TOURNAMENT_SCENE
-        && fishingTournamentDay(s.day) && derbyDayRef.current === s.day && derbyScoreRef.current > 0
-        && !s.storySeen.includes(`tournament-prize-${s.day}`)) {
-      s.storySeen.push(`tournament-prize-${s.day}`);
-      const tier = tournamentTierFor(derbyScoreRef.current);
-      s.money += tier.prize;
-      if (tier.name === 'Grand Marlin') award('grand-marlin');
-      sfxCoin();
-      showToast(`🏆 ${tier.name}!`, `Derby ${derbyScoreRef.current} pts · +¥${tier.prize}`);
-      pushMessage(s, { id: `tournament-prize-${s.day}`, from: 'Genji 🎣', avatar: '🎣', company: false,
-        body: [`Genji chalks your name on the board: "${derbyScoreRef.current} points — that's the ${tier.name}, kid." The gathered crowd gives a warm cheer as he presses ¥${tier.prize} into your hand. "Tide's turning. Same shore next derby."`] });
-    }
+    // Leaving the shore on a tournament day after landing at least one fish
+    // settles the derby board (toast + phone bulletin, never fights the
+    // scene-change).
+    if (sceneRef.current.id === TOURNAMENT_SCENE && id !== TOURNAMENT_SCENE) settleDerby(s);
     // First time you LEAVE the konbini: timestamp it so the job offer can text
     // you about an hour later (see the 'konbini-job' message).
     if (sceneRef.current.id === 'konbini' && id !== 'konbini' && s.leftKonbiniAt == null) {
@@ -1933,7 +1938,7 @@ const LittleApartmentGame: React.FC = () => {
     playMusicFor(id);
     if (id === 'nightclub') award('club');
     checkRegular(); // catches an all-cast save on scene enter (e.g. a loaded game)
-  }, [computeSolids, refreshHud, playMusicFor, award, checkRegular, showToast, checkMissions]);
+  }, [computeSolids, refreshHud, playMusicFor, award, checkRegular, settleDerby, checkMissions]);
 
   // ---- interactions ----------------------------------------------------------
 
@@ -1944,6 +1949,7 @@ const LittleApartmentGame: React.FC = () => {
     if (!pending) return;
     const s = saveRef.current;
     if (sleepTimerRef.current) { window.clearTimeout(sleepTimerRef.current); sleepTimerRef.current = null; }
+    settleDerby(s); // a derby run open at bedtime (slept/collapsed on the shore) pays out BEFORE the day ticks over
     passNight(s); // day+1, restore energy, reset today's tally
     if (pending.collapsed || pending.nursed) {
       // You wake up next to the bed, however you got there.
@@ -2016,7 +2022,7 @@ const LittleApartmentGame: React.FC = () => {
     refreshHud();
     setOverlayBoth({ type: 'endday', recap: pending.recap });
     playMusicFor('endofday'); // dedicated end-of-day theme over the recap
-  }, [setOverlayBoth, checkStory, refreshHud, computeSolids, playMusicFor, award, showToast]);
+  }, [setOverlayBoth, checkStory, refreshHud, computeSolids, playMusicFor, award, showToast, settleDerby]);
 
   const closeEndDay = useCallback(() => {
     const pending = pendingWakeRef.current;
@@ -2263,7 +2269,7 @@ const LittleApartmentGame: React.FC = () => {
     sfxBuy(); persistSave(s); refreshHud();
     setOverlayBoth(null);
     showDialog([
-      'You slide the cash through the slot. A long pause, then the buzz of a door release.',
+      'You send the transfer. The three dots hover for a long, long moment.',
       '"Pleasure doing business. Keys are in the lockbox. The wall between the units is already... thin. You\'ll see."',
       '(Your apartment now has a SECOND ROOM — go home and decorate it. Furniture, rugs, the works.)',
     ], 'Landlord');
@@ -2468,6 +2474,9 @@ const LittleApartmentGame: React.FC = () => {
       if (derbyDayRef.current !== s.day) { derbyDayRef.current = s.day; derbyScoreRef.current = 0; }
       const pts = tournamentScore(fish.value);
       derbyScoreRef.current += pts;
+      // Float the points over the player (the mine floating-text rig) so the
+      // score gain lands visually right where the catch happened.
+      mineTextRef.current = { x: posRef.current.x, y: posRef.current.y - 6, text: `+${pts} pts`, color: '#7ce8e0', t: 1.4 };
       showToast(`🎣 Derby: ${derbyScoreRef.current} pts`, `+${pts} for the ${fish.name} — keep casting before the tide turns.`);
       derbyLine = [`That's +${pts} on the derby board — ${derbyScoreRef.current} pts so far.`];
     }
@@ -2823,6 +2832,27 @@ const LittleApartmentGame: React.FC = () => {
       if (gam) { showDialog([gam.line]); return; }
     }
 
+    // Derby chalkboard (shore, derby days only): the drawn DERBY sign is readable —
+    // the four prize tiers plus today's running tally. Transient like the casino
+    // patrons above (nothing added to maps.ts); the board spans two tiles.
+    if (scene.id === TOURNAMENT_SCENE && fishingTournamentDay(s.day)) {
+      const onSign = (tt: Vec) => tt.y === DERBY_SIGN.y && (tt.x === DERBY_SIGN.x || tt.x === DERBY_SIGN.x + 1);
+      if (onSign(faced) || onSign(feet)) {
+        const pts = derbyDayRef.current === s.day ? derbyScoreRef.current : 0;
+        const next = TOURNAMENT_TIERS.find(tr => pts < tr.minScore);
+        const tierLine = (tr: TournamentTier) => `${tr.name} ${tr.minScore}+ pts → ¥${tr.prize.toLocaleString()}`;
+        showDialog([
+          `${TOURNAMENT_NAME} — today's chalkboard:`,
+          `${tierLine(TOURNAMENT_TIERS[0])} · ${tierLine(TOURNAMENT_TIERS[1])}`,
+          `${tierLine(TOURNAMENT_TIERS[2])} · ${tierLine(TOURNAMENT_TIERS[3])}`,
+          pts > 0
+            ? `Your tally: ${pts} pts — that's the ${tournamentTierFor(pts).name} so far${next ? `. ${next.name} needs ${next.minScore}.` : '. Top of the board!'}`
+            : 'Your tally: 0 pts — land a fish off this shore to chalk your name up.',
+        ]);
+        return;
+      }
+    }
+
     // Prefer a wanderer at the faced tile (they move; their static tile is stale).
     const wanderHit = wanderersRef.current.find(w => Math.round(w.x / TILE) === faced.x && Math.round(w.y / TILE) === faced.y);
     const npc = wanderHit
@@ -3123,12 +3153,6 @@ const LittleApartmentGame: React.FC = () => {
         }
         break;
       }
-      case 'landlord':
-        // The landlord now lives in your phone as a texting thread you can reply
-        // to (apartment expansion + the private onsen). The overlay renders the
-        // right messages/replies for your current state.
-        setOverlayBoth({ type: 'shop', shop: 'landlord' });
-        break;
       case 'vending': useVending(); break;
       case 'gig-terminal': {
         // First-ever look at the kiosk: explain the courier-terminal loop in-world
@@ -3795,6 +3819,18 @@ const LittleApartmentGame: React.FC = () => {
       const rt = routineTargetFor(w.id, saveRef.current.timeMin);
       if (rt) { w.homeX = rt.x * TILE; w.homeY = rt.y * TILE; }
       w.stepT -= dt;
+      // A player standing right next to a walker makes them PAUSE and turn to
+      // face you (Stardew-style) — chasing a moving NPC to talk (Bingus!) felt
+      // bad. Dancers keep dancing. Resumes naturally once you step away (the
+      // re-decision timer only starts counting back down then).
+      {
+        const pdx = posRef.current.x - w.x, pdy = posRef.current.y - w.y;
+        if (Math.abs(pdx) <= 22 && Math.abs(pdy) <= 22 && !DANCER_IDS.has(w.id)) {
+          if (w.moving) { w.moving = false; w.walkPhase = 0; }
+          w.dir = Math.abs(pdx) > Math.abs(pdy) ? (pdx > 0 ? 'right' : 'left') : (pdy > 0 ? 'down' : 'up');
+          w.stepT = Math.max(w.stepT, 0.8); // hold still while being addressed
+        }
+      }
       if (w.stepT <= 0) {
         w.stepT = 1.2 + Math.random() * 2.8;
         const dx = w.homeX - w.x, dy = w.homeY - w.y;
@@ -4692,6 +4728,26 @@ const LittleApartmentGame: React.FC = () => {
         const key = slot.kind === 'art' ? 't-frame-full' : 't-pedestal-full';
         ctx.drawImage(atlas[key], slot.x * TILE - cam.x, slot.y * TILE - cam.y);
       }
+      // Gallery spotlights: a steady warm pool over EVERY display slot (cached
+      // sprite via glowSpriteRef — glow() is declared later in the draw, and
+      // per-frame createRadialGradient is the KB-banned pattern).
+      let spot = glowSpriteRef.current.get('museum-spot');
+      if (!spot) {
+        const S = 64;
+        spot = document.createElement('canvas'); spot.width = S; spot.height = S;
+        const gx = spot.getContext('2d')!;
+        const rg = gx.createRadialGradient(S / 2, S / 2, 2, S / 2, S / 2, S / 2);
+        rg.addColorStop(0, 'rgba(255,214,140,1)'); rg.addColorStop(1, 'rgba(255,214,140,0)');
+        gx.fillStyle = rg; gx.fillRect(0, 0, S, S);
+        glowSpriteRef.current.set('museum-spot', spot);
+      }
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.15;
+      for (const slot of MUSEUM_SLOTS) {
+        ctx.drawImage(spot, slot.x * TILE + 8 - 18 - cam.x, slot.y * TILE + 6 - 18 - cam.y, 36, 36);
+      }
+      ctx.restore();
     }
 
     // Paris: the Eiffel Tower, one big sprite rising over the sky behind the plaza.
@@ -5383,8 +5439,10 @@ const LittleApartmentGame: React.FC = () => {
     // Rain: a looping ambient track over the scene music + slanted streaks, on
     // rainy days while you're anywhere outdoors (the shrine counts; interiors,
     // mines and the backrooms don't). `isRainyDay` is day-1-safe and seeded.
+    // Kiwami Island (and the bay you sail to reach it) sits outside the weather
+    // front — it NEVER rains there; the island is the postcard escape.
     {
-      const raining = scene.outdoor && isRainyDay(saveRef.current);
+      const raining = scene.outdoor && scene.id !== 'island' && scene.id !== 'deepsea' && isRainyDay(saveRef.current);
       syncRain(raining);
       if (raining) {
         ctx.save();
@@ -5875,6 +5933,22 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // Derby HUD: on a derby day at the shore, a small always-on banner tracks the
+    // live run — points so far + the next tier to chase (mine-challenge / vault-
+    // banner style: cheap stroked text, no gradients, nothing allocated).
+    if (scene.id === TOURNAMENT_SCENE && fishingTournamentDay(saveRef.current.day)) {
+      const dPts = derbyDayRef.current === saveRef.current.day ? derbyScoreRef.current : 0;
+      const nextTier = TOURNAMENT_TIERS.find(tr => dPts < tr.minScore);
+      const dTxt = `🎣 DERBY · ${dPts} pts · ${nextTier ? `next: ${nextTier.name} at ${nextTier.minScore}` : 'top tier!'}`;
+      ctx.save();
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'left';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.strokeText(dTxt, 4, 10);
+      ctx.fillStyle = '#ffe9a0'; ctx.fillText(dTxt, 4, 10);
+      ctx.restore();
+    }
+
     // interact prompt
     if (!overlayRef.current && !fm) {
       const faced = facedTile(p, dirRef.current);
@@ -5899,6 +5973,11 @@ const LittleApartmentGame: React.FC = () => {
       }
       // Kinryū patrons: facing a seated gambler offers a chat (they'll decline).
       if (scene.id === 'casino' && casinoGamblersFor(sv.day).some(g => g.x === faced.x && g.y === faced.y)) label = 'Talk';
+      // Derby chalkboard: name the readable sign so it invites a look (2 tiles wide).
+      {
+        const onSign = (tt: Vec) => tt.y === DERBY_SIGN.y && (tt.x === DERBY_SIGN.x || tt.x === DERBY_SIGN.x + 1);
+        if (scene.id === TOURNAMENT_SCENE && fishingTournamentDay(sv.day) && (onSign(faced) || onSign(feet))) label = 'Derby board';
+      }
       // Festival stall game: name the prop so the tappable thing is obvious.
       {
         const festP = festivalFor(sv.day);
@@ -7498,6 +7577,7 @@ const LittleApartmentGame: React.FC = () => {
 
   // Save and bail back to the title screen mid-game.
   const quitToMenu = useCallback(() => {
+    settleDerby(saveRef.current); // an open derby run settles into the save instead of vanishing with the refs
     persistSave(saveRef.current);
     setPlacingItem(null);
     setOverlayBoth(null);
@@ -7506,7 +7586,7 @@ const LittleApartmentGame: React.FC = () => {
     karaokeAudioRef.current?.pause();
     setSaveTick(t => t + 1); // refresh the title's save summary
     setScreen('title');      // the title effect handles swapping music
-  }, [setOverlayBoth]);
+  }, [setOverlayBoth, settleDerby]);
 
   const applyCheat = () => {
     const s = saveRef.current;
@@ -7980,6 +8060,49 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const threadMsg = ov.thread ? s.messages.find(m => m.id === ov.thread) : undefined;
+    // The landlord is a contact you can actually REPLY to: his welcome thread
+    // grows situational status bubbles + reply-chip actions (apartment expansion /
+    // private onsen) at the bottom — moved here from the old city Lease-office
+    // intercom panel, same gating and copy (payLandlord / buyHomeOnsenFromLandlord).
+    const landlordTail = (() => {
+      if (threadMsg?.id !== 'welcome-landlord') return null;
+      const canExpand = s.backroomsUnlocked && !s.roomUnlocked;
+      const canOnsen = !s.homeOnsen;
+      const incoming: string[] = [];
+      incoming.push('Funny old building, the Nakatomi. Damn near everyone you\'ve met lives stacked in it — Granny, the cat, the whole block under one roof. Easier that way. We look after our own.');
+      if (!s.backroomsUnlocked) incoming.push('That unit next to yours is still occupied. Particular tenant — keeps strange hours, hums through the wall. Can\'t knock through till they clear out.');
+      if (s.roomUnlocked) incoming.push('Knock-through\'s done already. Enjoy the second room. Try not to fill it with fish.');
+      if (canExpand) incoming.push(`Good news: the unit next door finally cleared out. ¥${ROOM_PRICE.toLocaleString()} and I knock through the wall — a whole second room, yours to furnish however you like.`);
+      if (s.homeOnsen) incoming.push('You\'ve got the private onsen in already. Soak whenever — that\'s what it\'s there for.');
+      if (canOnsen) incoming.push(`Side offer: I can plumb a private hot spring into your unit. Hinoki tub, mineral water, the lot. ¥${HOME_ONSEN_PRICE.toLocaleString()}, one-time. Soak once a day — come up rested and warmed.`);
+      const replyCls = 'self-end max-w-[88%] text-left rounded-2xl rounded-br-sm px-3 py-2 text-base leading-snug shadow active:translate-y-px transition-all disabled:opacity-40 disabled:pointer-events-none';
+      return (
+        <>
+          {incoming.map((line, i) => (
+            <div key={i} className="self-start max-w-[85%] bg-[#2b2f3a] text-[#e8e0d0] rounded-2xl rounded-tl-sm px-3 py-1.5 text-base leading-snug shadow">{line}</div>
+          ))}
+          {(canExpand || canOnsen) ? (
+            <>
+              <p className="self-center text-xs opacity-40 mt-1">— reply —</p>
+              {canExpand && (
+                <button disabled={s.money < ROOM_PRICE} onClick={payLandlord} className={`${replyCls} bg-[#2e6f47] text-[#eafff0]`}>
+                  Knock through into the next unit
+                  <span className="block text-sm opacity-80">{s.money < ROOM_PRICE ? `Need ¥${ROOM_PRICE.toLocaleString()}` : `Send ¥${ROOM_PRICE.toLocaleString()} — a whole second room`}</span>
+                </button>
+              )}
+              {canOnsen && (
+                <button disabled={s.money < HOME_ONSEN_PRICE} onClick={buyHomeOnsenFromLandlord} className={`${replyCls} bg-[#2e6f47] text-[#eafff0]`}>
+                  Add a private onsen
+                  <span className="block text-sm opacity-80">{s.money < HOME_ONSEN_PRICE ? `Need ¥${HOME_ONSEN_PRICE.toLocaleString()}` : `Send ¥${HOME_ONSEN_PRICE.toLocaleString()} — soak at home daily`}</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="self-center text-xs opacity-40 mt-1">— delivered —</p>
+          )}
+        </>
+      );
+    })();
     const messagesApp = threadMsg ? (
       // one conversation: chat bubbles
       <div className="px-3 py-3 flex flex-col gap-2">
@@ -7995,7 +8118,7 @@ const LittleApartmentGame: React.FC = () => {
             {line}
           </div>
         ))}
-        <p className="self-center text-xs opacity-40 mt-1">— delivered —</p>
+        {landlordTail ?? <p className="self-center text-xs opacity-40 mt-1">— delivered —</p>}
       </div>
     ) : (
       // thread list, newest first
@@ -8758,54 +8881,6 @@ const LittleApartmentGame: React.FC = () => {
             <button className={btnCls} onClick={close}>WALK AWAY</button>
           </div>
         </ShopFrame>
-      );
-    }
-
-    if (ov.shop === 'landlord') {
-      // A phone text thread you can reply to (replaces the old intercom shop).
-      const canExpand = s.backroomsUnlocked && !s.roomUnlocked;
-      const canOnsen = !s.homeOnsen;
-      const incoming: string[] = ['Lease office. Texting me now, are you. Fine — what do you need.'];
-      incoming.push('Funny old building, the Nakatomi. Damn near everyone you\'ve met lives stacked in it — Granny, the cat, the whole block under one roof. Easier that way. We look after our own.');
-      if (!s.backroomsUnlocked) incoming.push('That unit next to yours is still occupied. Particular tenant — keeps strange hours, hums through the wall. Can\'t knock through till they clear out.');
-      if (s.roomUnlocked) incoming.push('Knock-through\'s done already. Enjoy the second room. Try not to fill it with fish.');
-      if (canExpand) incoming.push(`Good news: the unit next door finally cleared out. ¥${ROOM_PRICE.toLocaleString()} and I knock through the wall — a whole second room, yours to furnish however you like.`);
-      if (s.homeOnsen) incoming.push('You\'ve got the private onsen in already. Soak whenever — that\'s what it\'s there for.');
-      if (canOnsen) incoming.push(`Side offer: I can plumb a private hot spring into your unit. Hinoki tub, mineral water, the lot. ¥${HOME_ONSEN_PRICE.toLocaleString()}, one-time. Soak once a day — come up rested and warmed.`);
-      const replyCls = 'self-end max-w-[88%] text-left rounded-2xl rounded-br-sm px-3 py-2 text-base leading-snug shadow active:translate-y-px transition-all disabled:opacity-40 disabled:pointer-events-none';
-      return (
-        <div className={`${panelCls} w-full max-w-sm max-h-full overflow-y-auto px-0 pt-0 pb-3`}>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
-            <span className="text-2xl shrink-0">🏢</span>
-            <div className="leading-tight flex-grow min-w-0">
-              <p className="text-base">Landlord</p>
-              <p className="text-xs opacity-50">Lease Office · Day {s.day}</p>
-            </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-black/40 border border-[#ffd24a]/30 px-2.5 py-1 text-[#ffd24a] text-sm leading-none tabular-nums shrink-0">
-              <span className="text-[#ffe9a0]">¥</span>{s.money.toLocaleString()}
-            </span>
-            <button aria-label="Close" onClick={close} className="w-7 h-7 shrink-0 rounded-full border border-[#ffd24a]/40 text-[#ffd24a]/80 hover:bg-[#ffd24a] hover:text-black active:translate-y-px transition-all flex items-center justify-center text-sm leading-none">✕</button>
-          </div>
-          <div className="px-3 py-3 flex flex-col gap-2">
-            {incoming.map((line, i) => (
-              <div key={i} className="self-start max-w-[85%] bg-[#2b2f3a] text-[#e8e0d0] rounded-2xl rounded-tl-sm px-3 py-1.5 text-base leading-snug shadow">{line}</div>
-            ))}
-            <p className="self-center text-xs opacity-40 mt-1">— reply —</p>
-            {canExpand && (
-              <button disabled={s.money < ROOM_PRICE} onClick={payLandlord} className={`${replyCls} bg-[#2e6f47] text-[#eafff0]`}>
-                Knock through into the next unit
-                <span className="block text-sm opacity-80">{s.money < ROOM_PRICE ? `Need ¥${ROOM_PRICE.toLocaleString()}` : `Send ¥${ROOM_PRICE.toLocaleString()} — a whole second room`}</span>
-              </button>
-            )}
-            {canOnsen && (
-              <button disabled={s.money < HOME_ONSEN_PRICE} onClick={buyHomeOnsenFromLandlord} className={`${replyCls} bg-[#2e6f47] text-[#eafff0]`}>
-                Add a private onsen
-                <span className="block text-sm opacity-80">{s.money < HOME_ONSEN_PRICE ? `Need ¥${HOME_ONSEN_PRICE.toLocaleString()}` : `Send ¥${HOME_ONSEN_PRICE.toLocaleString()} — soak at home daily`}</span>
-              </button>
-            )}
-            <button onClick={close} className={`${replyCls} bg-[#3a3f4a] text-[#e8e0d0]`}>Maybe later</button>
-          </div>
-        </div>
       );
     }
 

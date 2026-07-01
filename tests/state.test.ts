@@ -1471,3 +1471,40 @@ describe('biteTableFor (weather-gated species)', () => {
     expect(biteTableFor(s, DEEP_FISH)).toHaveLength(DEEP_FISH.length);
   });
 });
+
+// ---- Fishing-derby payout (pure core) --------------------------------------------
+import { settleDerbyPrize } from '../src/game/state';
+
+describe('settleDerbyPrize (pays once, from any exit path)', () => {
+  it('pays the earned tier + pushes Genji\'s chalkboard text on a derby day', () => {
+    const s = newSave();
+    s.day = 15;                                       // day ≡ 5 (mod 10) → derby
+    const m0 = s.money;
+    const tier = settleDerbyPrize(s, 320);
+    expect(tier?.name).toBe('Gold Hook');
+    expect(s.money).toBe(m0 + 1100);
+    expect(s.storySeen).toContain('tournament-prize-15');
+    expect(s.messages.some(m => m.id === 'tournament-prize-15')).toBe(true);
+  });
+
+  it('settles at most once per derby (storySeen dedupe survives sleep/quit re-calls)', () => {
+    const s = newSave();
+    s.day = 25;
+    const m0 = s.money;
+    expect(settleDerbyPrize(s, 50)?.name).toBe('Bronze Lure');
+    expect(s.money).toBe(m0 + 200);
+    expect(settleDerbyPrize(s, 999)).toBeNull();      // a later exit path can't double-pay
+    expect(s.money).toBe(m0 + 200);
+  });
+
+  it('no-ops without a score, and off derby days', () => {
+    const s = newSave();
+    const m0 = s.money;
+    s.day = 15;
+    expect(settleDerbyPrize(s, 0)).toBeNull();        // cast nothing, win nothing
+    s.day = 16;
+    expect(settleDerbyPrize(s, 100)).toBeNull();      // not a derby day
+    expect(s.money).toBe(m0);
+    expect(s.storySeen).toHaveLength(0);
+  });
+});

@@ -206,7 +206,6 @@ const city: SceneDef = {
   interactables: [
     { id: 'vending', x: 8, y: 4, label: 'Vending machine' },
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
-    { id: 'landlord', x: 9, y: 13, label: 'Lease office' },
   ],
   npcs: [
     { id: 'charlie', x: 17, y: 3, sprite: 'npc-charlie', dir: 'down' },
@@ -1045,16 +1044,19 @@ const museum: SceneDef = {
     'A': T('t-frame-empty', true),  // empty wall art frame
     'D': T('t-door'),
     'm': T('t-doormat'),
+    'c': T('t-mus-carpet'),         // red runner, door -> hall (walkable)
+    'r': T('t-mus-rope', true),     // velvet rope barrier flanking the hall
+    'B': T('t-mus-banner', true),   // hanging gallery tapestry (wall row)
   },
   grid: [
-    '##A##A##A##A####',
+    '#BA##A##A##A#B##',
     '#..............#',
     '#.p..p..p..p...#',
     '#..............#',
     '#.p..p..p..p...#',
-    '#..............#',
-    '#..............#',
-    '#..............#',
+    '#......cc......#',
+    '#.rr...cc...rr.#',
+    '#......cc......#',
     '#......mm......#',
     '#######DD#######',
   ],

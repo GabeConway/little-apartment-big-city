@@ -1378,24 +1378,34 @@ const buildTiles = (atlas: Atlas) => {
   });
 
   // Museum (Bingus Doofelsmurt's gallery) — pale marble, cream walls, gilt frames
-  atlas['t-museum-floor'] = tile(ctx => {                    // pale marble with faint veins + tile seams
-    fill(ctx, '#d4ccba');
-    ctx.fillStyle = '#c6bda8';                                // seams (parquet/marble grid)
-    ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1); ctx.fillRect(8, 0, 1, 8); ctx.fillRect(3, 9, 1, 7);
-    speckle(ctx, '#e0d8c8', 29, 5);
-    ctx.fillStyle = '#bcb09a'; ctx.fillRect(2, 3, 3, 1); ctx.fillRect(11, 11, 3, 1); // hairline veins
-  });
+  // Gallery parquet: dark polished wood blocks + sheen glints (the old pale
+  // marble read identical to the walls — the room had no depth).
+  // Same recipe as the apartment's proven t-wood, one shade darker (dense seam
+  // grids at this scale kept reading as masonry).
+  const museumFloor = (ctx: CanvasRenderingContext2D) => {
+    fill(ctx, '#8a6a4e');
+    ctx.fillStyle = '#79593f';
+    ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1);    // plank rows
+    ctx.fillStyle = '#6e4f38'; ctx.fillRect(4, 0, 1, 5); ctx.fillRect(11, 6, 1, 5); ctx.fillRect(6, 12, 1, 4); // joints
+    speckle(ctx, '#97785c', 7, 6);
+  };
+  atlas['t-museum-floor'] = tile(museumFloor);
   // A museum wall + its picture rail + wainscot — the gallery's bones.
+  // Deep gallery navy so the gold frames + cream plinths POP.
   const museumWall = (ctx: CanvasRenderingContext2D) => {
-    fill(ctx, '#cfc4ab');                                     // cream plaster
-    ctx.fillStyle = '#bdb094'; ctx.fillRect(0, 0, 16, 3);     // top band
+    fill(ctx, '#232c3a');                                     // gallery navy
+    ctx.fillStyle = '#2a3547'; ctx.fillRect(0, 0, 16, 3);     // top band
     ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 3, 16, 1);     // gold picture rail
-    ctx.fillStyle = '#a89a7c'; ctx.fillRect(0, 13, 16, 3);    // wainscot base
+    ctx.fillStyle = '#7a621a'; ctx.fillRect(0, 4, 16, 1);     // rail shadow
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(0, 11, 16, 5);    // cream wainscot
+    ctx.fillStyle = '#e0d5b8'; ctx.fillRect(0, 11, 16, 1);    // wainscot top light
+    ctx.fillStyle = '#b3a279'; ctx.fillRect(5, 12, 1, 3); ctx.fillRect(10, 12, 1, 3); // panel joints
+    ctx.fillStyle = '#8a7a5a'; ctx.fillRect(0, 15, 16, 1);    // base shadow
   };
   atlas['t-museum-wall'] = tile(museumWall);
-  // A floor plinth/pedestal (empty). Solid. Sits on the marble floor.
+  // A floor plinth/pedestal (empty). Solid. Sits on the parquet.
   const plinth = (ctx: CanvasRenderingContext2D) => {
-    fill(ctx, '#d4ccba');                                     // floor under it
+    museumFloor(ctx);                                         // floor under it
     ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillRect(3, 14, 11, 2); // contact shadow
     ctx.fillStyle = '#b8ae98'; ctx.fillRect(4, 4, 8, 11);     // column body
     ctx.fillStyle = '#8a8070'; ctx.fillRect(4, 4, 1, 11);     // side shade
@@ -1404,6 +1414,33 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#9a907a'; ctx.fillRect(3, 14, 10, 1);    // base lip
   };
   atlas['t-pedestal'] = tile(plinth);
+  atlas['t-mus-carpet'] = tile(ctx => {                       // red runner, gold-edged (door -> hall)
+    fill(ctx, '#9e3a3a'); speckle(ctx, '#8e2a1e', 41, 6);
+    ctx.fillStyle = '#b34a4a'; ctx.fillRect(2, 0, 12, 16);    // lit center  hmm keep edges
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(3, 0, 10, 16);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 0, 1, 16); ctx.fillRect(15, 0, 1, 16); // gold edges
+    ctx.fillStyle = '#7a2820'; ctx.fillRect(1, 0, 1, 16); ctx.fillRect(14, 0, 1, 16); // edge shadow
+  });
+  atlas['t-mus-rope'] = tile(ctx => {                         // velvet rope barrier (solid)
+    museumFloor(ctx);
+    ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillRect(1, 13, 4, 1); ctx.fillRect(11, 13, 4, 1);
+    ctx.fillStyle = '#c0392b';                                // red velvet swag between posts
+    ctx.fillRect(4, 7, 2, 1); ctx.fillRect(6, 8, 4, 1); ctx.fillRect(10, 7, 2, 1);
+    for (const px of [2, 12]) {                               // brass posts, ball tops
+      ctx.fillStyle = '#c9a227'; ctx.fillRect(px, 4, 2, 9);
+      ctx.fillStyle = '#ffd24a'; ctx.fillRect(px, 3, 2, 2); ctx.fillRect(px, 4, 1, 8);
+      ctx.fillStyle = '#8a6a30'; ctx.fillRect(px - 1, 12, 4, 1); // foot
+    }
+  });
+  atlas['t-mus-banner'] = tile(ctx => {                       // hanging gallery tapestry (wall row)
+    museumWall(ctx);
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(3, 1, 10, 1);     // rod
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(4, 2, 8, 11);     // banner field
+    ctx.fillStyle = '#b34a4a'; ctx.fillRect(4, 2, 1, 11);     // lit edge
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(4, 2, 8, 1); ctx.fillRect(4, 12, 8, 1); // gold trim
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 5, 2, 2); ctx.fillRect(6, 8, 4, 1);  // emblem
+    ctx.fillStyle = '#7a2820'; ctx.fillRect(5, 13, 1, 1); ctx.fillRect(8, 13, 1, 1); ctx.fillRect(11, 13, 1, 1); // fringe
+  });
   atlas['t-pedestal-full'] = tile(ctx => {                    // plinth + a generic gilded artifact on top
     plinth(ctx);
     ctx.fillStyle = '#8a6a30'; ctx.fillRect(6, 0, 5, 3);      // artifact (a small urn) base
