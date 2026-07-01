@@ -1322,3 +1322,23 @@ export function tournamentTierFor(score: number): TournamentTier {
   }
   return earned;
 }
+
+// ---------------------------------------------------------------------------
+// NPC gossip — flavor lines for the journal's RUMORS section. One is mixed in
+// (day-seeded) alongside the locked-achievement whispers. These are visible
+// from day 1, so they stay vague: atmosphere and soft nudges, never spoilers.
+export interface Gossip { who: string; text: string }
+export const GOSSIP: Gossip[] = [
+  { who: 'Granny Soto', text: 'A good meal fixes more than an empty stomach, dear. Cook something warm before a long day.' },
+  { who: 'Genji', text: 'The big ones only bite for patient hands. And better gear. Mostly better gear.' },
+  { who: 'a konbini regular', text: 'They say the shrine keeps count of every coin you drop in that box.' },
+  { who: 'a salaryman at Club Kaiju', text: 'Someone at the casino hit it big last week. Someone else lost their tie. Same guy, probably.' },
+  { who: 'Charlie', text: 'Everybody interesting in this city keeps strange hours. Try talking to people after dark.' },
+  { who: 'Bingus', text: 'Half the museum\'s missing pieces are sitting in somebody\'s pocket right now. Maybe yours.' },
+  { who: 'a miko at the shrine', text: 'Rain never overstays. But if you truly need it gone, the kami take requests.' },
+  { who: 'Tex', text: 'Weather out here turns on a dime, partner. Some nights the whole sky puts on a show.' },
+  { who: 'a pawn shop lurker', text: 'The Manager pays real money for pretty rocks. The deeper ones fetch the most.' },
+  { who: 'a karaoke regular', text: 'Midnight Neon is the only song that matters. Hit the beats and the whole bar sings along.' },
+  { who: 'an old fisherman', text: 'Every derby, somebody swears they saw a golden flash under the pier. Every derby.' },
+  { who: 'a city pigeon feeder', text: 'This town hides its best corners behind its worst ones. Keep walking past where the map seems to end.' },
+];

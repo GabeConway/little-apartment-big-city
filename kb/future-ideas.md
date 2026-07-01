@@ -4,14 +4,8 @@ Parked when the 2026-07-01 session was stopped. Check kb/games.md before picking
 one up — some may be partially done or superseded.
 
 ## Queued next (was about to be built)
-- **Bulletin messages → one conversation**: the phone Messages app treats every
-  message id as its own thread (`ov.thread` = message id; thread view renders one
-  message, `LittleApartmentGame.tsx` ~7982). Regroup the inbox by SENDER: one
-  "Kawamachi Bulletin 📣" thread holding all heralds, ditto Genji/ZamaZonk.
-  NOTE: the landlord thread now carries reply-chip actions (lease-office move) —
-  grouping must keep those chips on his conversation.
-- **RUMORS could mix in NPC gossip** (they rotate day-seeded now but only ever
-  show locked-achievement hints).
+(Both items built 2026-07-01: Messages inbox grouped by sender, RUMORS mix in
+`GOSSIP` NPC lines — see kb/games.md.)
 
 ## Casino backlog (brainstormed, approved-ish, unbuilt)
 - Chinchirorin dice cup (3 dice in a bowl, triples/pairs) as a 4th game.

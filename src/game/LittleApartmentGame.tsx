@@ -2,7 +2,7 @@
 // World simulation lives in refs and a fixed-timestep loop; React renders the
 // HUD and modal overlays (title, dialogue, shops, letters, sleep, ending).
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   TILE, VIEW_PW, VIEW_PH, RR, Input, startLoop, tryMove, unstickDirs, feetTile, facedTile,
   cameraFor, sceneSize, isSolid, tileAt, mulberry32,
@@ -49,7 +49,7 @@ import {
   FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS,
   RODS, rodInfo,
-  GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS,
+  GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS, GOSSIP,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
   itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, CROP_QUALITY, FORAGE, forageById,
@@ -1630,7 +1630,11 @@ const LittleApartmentGame: React.FC = () => {
     setMsgToast(null);
     const s = saveRef.current;
     const m = s.messages.find(x => x.id === id);
-    if (m && !m.read) { m.read = true; persistSave(s); refreshHud(); }
+    if (m) { // the view shows the whole sender conversation, so read the whole group
+      let dirty = false;
+      for (const x of s.messages) if (x.from === m.from && !x.read) { x.read = true; dirty = true; }
+      if (dirty) { persistSave(s); refreshHud(); }
+    }
     setOverlayBoth({ type: 'menu', tab: 'messages', thread: id });
   }, []);
 
@@ -7921,8 +7925,13 @@ const LittleApartmentGame: React.FC = () => {
     const unread = unreadCount(s);
     const open = (tab: PhoneApp, thread?: string) => { setPlacingItem(null); setOverlayBoth({ type: 'menu', tab, thread }); };
     const openThread = (id: string) => {
+      // Threads are grouped by SENDER — opening one marks the whole conversation read.
       const m = s.messages.find(x => x.id === id);
-      if (m && !m.read) { m.read = true; persistSave(s); refreshHud(); }
+      if (m) {
+        let dirty = false;
+        for (const x of s.messages) if (x.from === m.from && !x.read) { x.read = true; dirty = true; }
+        if (dirty) { persistSave(s); refreshHud(); }
+      }
       open('messages', id);
     };
 
@@ -8066,12 +8075,16 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const threadMsg = ov.thread ? s.messages.find(m => m.id === ov.thread) : undefined;
+    // One conversation per SENDER: `ov.thread` stays a message id (toasts/back-nav
+    // unchanged), but the view shows every message sharing that sender's `from`,
+    // oldest → newest, each under its own Day chip.
+    const thread = threadMsg ? s.messages.filter(m => m.from === threadMsg.from) : [];
     // The landlord is a contact you can actually REPLY to: his welcome thread
     // grows situational status bubbles + reply-chip actions (apartment expansion /
     // private onsen) at the bottom — moved here from the old city Lease-office
     // intercom panel, same gating and copy (payLandlord / buyHomeOnsenFromLandlord).
     const landlordTail = (() => {
-      if (threadMsg?.id !== 'welcome-landlord') return null;
+      if (!thread.some(m => m.id === 'welcome-landlord')) return null; // reply chips ride the landlord CONVERSATION, wherever it's opened from
       const canExpand = s.backroomsUnlocked && !s.roomUnlocked;
       const canOnsen = !s.homeOnsen;
       const incoming: string[] = [];
@@ -8116,13 +8129,18 @@ const LittleApartmentGame: React.FC = () => {
           <span className="text-2xl">{threadMsg.avatar}</span>
           <div className="leading-tight">
             <p className="text-base">{threadMsg.from}</p>
-            <p className="text-xs opacity-50">{threadMsg.company ? 'Business account' : 'Contact'} · Day {threadMsg.day}</p>
+            <p className="text-xs opacity-50">{threadMsg.company ? 'Business account' : 'Contact'}{thread.length > 1 ? ` · ${thread.length} messages` : ` · Day ${threadMsg.day}`}</p>
           </div>
         </div>
-        {threadMsg.body.map((line, i) => (
-          <div key={i} className="self-start max-w-[85%] bg-[#2b2f3a] text-[#e8e0d0] rounded-2xl rounded-tl-sm px-3 py-1.5 text-base leading-snug shadow">
-            {line}
-          </div>
+        {thread.map(m => (
+          <Fragment key={m.id}>
+            {thread.length > 1 && <p className="self-center text-xs opacity-40 mt-1">Day {m.day}</p>}
+            {m.body.map((line, i) => (
+              <div key={i} className="self-start max-w-[85%] bg-[#2b2f3a] text-[#e8e0d0] rounded-2xl rounded-tl-sm px-3 py-1.5 text-base leading-snug shadow">
+                {line}
+              </div>
+            ))}
+          </Fragment>
         ))}
         {landlordTail ?? <p className="self-center text-xs opacity-40 mt-1">— delivered —</p>}
       </div>
@@ -8138,23 +8156,33 @@ const LittleApartmentGame: React.FC = () => {
             >Clear all ({unread})</button>
           </div>
         )}
-        {[...s.messages].reverse().map(m => (
-          <button
-            key={m.id}
-            onClick={() => openThread(m.id)}
-            className="w-full flex items-center gap-3 px-3 py-2 text-left border-b border-white/10 hover:bg-white/5 transition-colors"
-          >
-            <span className="text-2xl shrink-0">{m.avatar}</span>
-            <span className="flex-grow min-w-0">
-              <span className="flex items-center gap-2">
-                <span className={`text-base truncate ${m.read ? '' : 'text-[#ffd24a]'}`}>{m.from}</span>
-                <span className="ml-auto text-xs opacity-40 shrink-0">Day {m.day}</span>
-              </span>
-              <span className={`block text-sm truncate ${m.read ? 'opacity-50' : 'opacity-80'}`}>{m.body[0]}</span>
-            </span>
-            {!m.read && <span className="shrink-0 w-2.5 h-2.5 rounded-full bg-[#3da26b]" />}
-          </button>
-        ))}
+        {(() => {
+          // One row per SENDER (newest message previews the conversation), sorted
+          // by most recent activity — the inbox reads like a real messaging app.
+          const seen = new Set<string>();
+          const rows = [...s.messages].reverse().filter(m => seen.has(m.from) ? false : (seen.add(m.from), true));
+          return rows.map(m => {
+            const anyUnread = s.messages.some(x => x.from === m.from && !x.read);
+            const count = s.messages.filter(x => x.from === m.from).length;
+            return (
+              <button
+                key={m.from}
+                onClick={() => openThread(m.id)}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left border-b border-white/10 hover:bg-white/5 transition-colors"
+              >
+                <span className="text-2xl shrink-0">{m.avatar}</span>
+                <span className="flex-grow min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className={`text-base truncate ${anyUnread ? 'text-[#ffd24a]' : ''}`}>{m.from}{count > 1 && <span className="opacity-50 text-sm"> ({count})</span>}</span>
+                    <span className="ml-auto text-xs opacity-40 shrink-0">Day {m.day}</span>
+                  </span>
+                  <span className={`block text-sm truncate ${anyUnread ? 'opacity-80' : 'opacity-50'}`}>{m.body[0]}</span>
+                </span>
+                {anyUnread && <span className="shrink-0 w-2.5 h-2.5 rounded-full bg-[#3da26b]" />}
+              </button>
+            );
+          });
+        })()}
       </div>
     );
 
@@ -8308,12 +8336,16 @@ const LittleApartmentGame: React.FC = () => {
       if (s.backroomsUnlocked && allRaresOwned(s) && !s.parisRevealed) leads.push('The Manager has the air of someone holding one last secret.');
       if (s.parisRevealed && !s.storySeen.includes('paris-intro')) leads.push('A seam waits at the very top of the yellow place. Press into it.');
       if (museumDone > 0 && museumDone < museumTotal) leads.push('Bingus the curator is always asking for one odd thing or another — and some curios turn up fishing, mining, or in far-flung corners.');
-      // RUMORS: at most TWO cryptic achievement whispers (was four — too much).
-      // Day-seeded window over the locked list so the pair ROTATES each morning
-      // instead of parking on the first two forever.
+      // RUMORS: still capped at TWO — one cryptic achievement whisper + one line
+      // of NPC gossip (attributed street flavor), both day-seeded so the pair
+      // ROTATES each morning. All achievements earned → two gossips instead.
       const locked = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id));
       const rumorOff = s.day % Math.max(1, locked.length);
-      const rumors = locked.length <= 2 ? locked : [locked[rumorOff], locked[(rumorOff + 1) % locked.length]];
+      const gossipOff = s.day % GOSSIP.length;
+      const rumors: { key: string; text: string; who?: string }[] = [];
+      if (locked.length > 0) rumors.push({ key: locked[rumorOff].id, text: locked[rumorOff].hint });
+      rumors.push({ key: 'g0', text: GOSSIP[gossipOff].text, who: GOSSIP[gossipOff].who });
+      if (locked.length === 0) rumors.push({ key: 'g1', text: GOSSIP[(gossipOff + 1) % GOSSIP.length].text, who: GOSSIP[(gossipOff + 1) % GOSSIP.length].who });
       const todayEvent = dayEventFor(s);
       const festToday = festivalFor(s.day);
       const derbyToday = fishingTournamentDay(s.day);
@@ -8385,8 +8417,8 @@ const LittleApartmentGame: React.FC = () => {
           </>}
           {rumors.length > 0 && <>
             <p className="text-sm text-[#ffd24a]/80 tracking-wide mt-3 mb-1">RUMORS</p>
-            {rumors.map(a => (
-              <p key={a.id} className="text-sm py-1 border-b border-white/10 opacity-60 leading-tight italic">“{a.hint}”</p>
+            {rumors.map(r => (
+              <p key={r.key} className="text-sm py-1 border-b border-white/10 opacity-60 leading-tight italic">“{r.text}”{r.who && <span className="not-italic opacity-80"> — {r.who}</span>}</p>
             ))}
           </>}
           <p className="text-xs opacity-40 mt-3 italic">Day {s.day} · ¥{s.money.toLocaleString()} · {fishCount} fish caught</p>
