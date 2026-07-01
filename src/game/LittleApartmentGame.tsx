@@ -415,7 +415,7 @@ const MUSIC_VOL = 0.35;
 const MUSIC_FADE_MS = 700;
 // Rain ambience layered OVER the scene music on rainy days while outdoors.
 const RAIN_SRC = '/music/rain.mp3';
-const RAIN_VOL = 0.36; // 20% quieter than the old 0.45
+const RAIN_VOL = 0.18; // halved from 0.36 (user: rain was too loud)
 
 // Fake-hacker terminal lines for the backrooms→Paris "the game got hacked"
 // transition. Purely cosmetic; scrolls past while Paris "loads". (Feature #21.)
@@ -1254,19 +1254,22 @@ const makeWanderers = (scene: SceneDef): Wanderer[] =>
 // `bunting` = the world-space lantern string: swagged between fromX..toX (tiles)
 // at yPx (world px) — it hangs IN the scene and parallaxes with the camera (the
 // first pass pinned it to the top of the SCREEN, which read as UI, not a festival).
-interface FestivalLayout { stall: Vec; banner: Vec; prop: Vec; goers: { x: number; y: number; sprite: string; dir: Dir }[]; bunting: { fromX: number; toX: number; yPx: number } }
+// `groundPx` = where the bunting's bamboo end-poles are planted (world px, the
+// visual base of the poles) — the string has to be HELD UP by something or the
+// lantern chain reads as floating in mid-air.
+interface FestivalLayout { stall: Vec; banner: Vec; prop: Vec; goers: { x: number; y: number; sprite: string; dir: Dir }[]; bunting: { fromX: number; toX: number; yPx: number; groundPx: number } }
 const FESTIVAL_LAYOUT: Record<string, FestivalLayout> = {
   city: {
     // West of the torii garden, clear of granny's anchor (12,16) and the midnight
     // stranger's spot (19,16) so the festival never squats on an NPC tile.
     stall: { x: 10, y: 15 }, banner: { x: 8, y: 15 }, prop: { x: 13, y: 15 },
     goers: [{ x: 9, y: 16, sprite: 'npc-tourist', dir: 'down' }, { x: 14, y: 16, sprite: 'npc-charlie', dir: 'left' }],
-    bunting: { fromX: 7, toX: 16, yPx: 14 * TILE - 10 },
+    bunting: { fromX: 7, toX: 16, yPx: 14 * TILE - 10, groundPx: 16 * TILE + 10 },
   },
   shrine: {
     stall: { x: 4, y: 6 }, banner: { x: 15, y: 6 }, prop: { x: 12, y: 6 },
     goers: [{ x: 6, y: 8, sprite: 'npc-tourist', dir: 'right' }, { x: 14, y: 8, sprite: 'npc-miko', dir: 'left' }],
-    bunting: { fromX: 3, toX: 16, yPx: 5 * TILE - 8 },
+    bunting: { fromX: 3, toX: 16, yPx: 5 * TILE - 8, groundPx: 8 * TILE + 8 },
   },
 };
 // The minigame prop sprite: a goldfish tub for kingyo-sukui, otherwise the
@@ -4583,17 +4586,37 @@ const LittleApartmentGame: React.FC = () => {
       if (festD && layD) {
         // Lantern bunting: a string of chōchin swagged IN WORLD SPACE over the
         // festival lane (it parallaxes with the camera like everything else —
-        // pinning it to the screen top read as UI chrome, not a festival).
+        // pinning it to the screen top read as UI chrome, not a festival). The
+        // string is HELD UP: bamboo poles planted at both ends + one continuous
+        // cord following the same sag the lantern tiles ride (without those the
+        // chain floated in mid-air).
         const lant = atlas['t-fest-lanterns'];
         if (lant) {
           const bun = layD.bunting;
           const spanPx = (bun.toX - bun.fromX + 1) * TILE;
+          const sagAt = (bx: number) => Math.sin((bx / spanPx) * Math.PI * 3 + 0.4) * 3 + 3;
+          const swayAt = (wx: number) => Math.sin(t * 1.3 + wx * 0.04) * 1.2;
+          // bamboo end-poles, planted with a contact shadow
+          for (const px of [bun.fromX * TILE - 2, (bun.toX + 1) * TILE]) {
+            const gx = px - cam.x, top = bun.yPx - 2 - cam.y, base = bun.groundPx - cam.y;
+            ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(gx - 2, base - 1, 6, 2);
+            ctx.fillStyle = '#6f9e5e'; ctx.fillRect(gx, top, 2, base - top);
+            ctx.fillStyle = '#4d7440'; ctx.fillRect(gx + 1, top, 1, base - top);       // shaded side
+            ctx.fillStyle = '#557e46'; for (let ny = top + 6; ny < base; ny += 9) ctx.fillRect(gx, ny, 2, 1); // bamboo nodes
+          }
+          // continuous cord (drawn under the lantern tiles, sampled along the sag)
+          ctx.strokeStyle = '#2c3038'; ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let bx = -2; bx <= spanPx + 2; bx += 4) {
+            const wx = bun.fromX * TILE + bx;
+            const y = bun.yPx + sagAt(Math.max(0, Math.min(spanPx, bx))) + swayAt(wx) + 0.5;
+            if (bx <= -2) ctx.moveTo(wx - cam.x, Math.round(y) - cam.y);
+            else ctx.lineTo(wx - cam.x, Math.round(y) - cam.y);
+          }
+          ctx.stroke();
           for (let bx = 0; bx < spanPx; bx += TILE) {
             const wx = bun.fromX * TILE + bx;
-            const k = bx / spanPx;                                                 // 0..1 along the string
-            const sag = Math.sin(k * Math.PI * 3 + 0.4) * 3 + 3;                   // swag between posts
-            const sway = Math.sin(t * 1.3 + wx * 0.04) * 1.2;                      // soft breeze
-            ctx.drawImage(lant, wx - cam.x, Math.round(bun.yPx + sag + sway - cam.y));
+            ctx.drawImage(lant, wx - cam.x, Math.round(bun.yPx + sagAt(bx) + swayAt(wx)) - cam.y);
           }
         }
         // Gathered festival-goers — static, drawn behind the player for liveliness.
