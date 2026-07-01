@@ -258,7 +258,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'CASINO', x: 13, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: 'はくぶつかん', x: 19, y: 0, color: '#16181d', bg: '#e8d8a0', border: '#c9a227', font: 8 },
     { text: 'MUSEUM', x: 19, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
-    { text: '← STATION', x: 0, y: 6, color: '#e8f0f4', bg: '#27517c', guide: true },
+    { text: '← MID TOWN', x: 0, y: 6, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
   museum: [
     { text: 'カワマチ びじゅつかん', x: 1, y: 9, color: '#3a3322', bg: '#e0d8c4', border: '#b08a50', font: 7 },
