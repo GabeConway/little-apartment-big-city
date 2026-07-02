@@ -378,7 +378,10 @@ const shore: SceneDef = {
   // and a boardwalk in from the city, a deep beach of dry then wet sand (rocks,
   // tide pools, driftwood), an animated tide-foam line, a little pier, and the sea.
   // Scrolls vertically (24×16). 'd'/'v' dune, 'P' pine, 'k' boardwalk, 's'/'S' dry/
-  // wet sand, 'f' foam, 'o' beach rock, 't' tide pool, 'L' driftwood, 'D' pier.
+  // wet sand, 'f' foam, 'D' pier. Props bake their backing tile in, so each uses
+  // the variant matching its row: 'o'/'O'/'W'/'w' boulder on dry sand / wet sand /
+  // foam line / open sea, 'L'/'l' driftwood dry/wet. A rocky point (O/W/w col
+  // 20-21) runs from the wet sand out into the water.
   legend: {
     'g': T('t-grass'),
     'd': T('t-dune'),
@@ -389,7 +392,11 @@ const shore: SceneDef = {
     'S': T('t-sand-wet'),
     'f': T('t-foam-0'),
     'o': T('t-beachrock', true),
+    'O': T('t-beachrock-wet', true),  // same boulder, wet-sand backing
+    'W': T('t-beachrock-surf', true), // boulder breaking the foam line
+    'w': T('t-searock', true),        // boulder standing in the sea
     'L': T('t-driftwood', true),
+    'l': T('t-driftwood-wet', true),  // washed-up log, wet-sand backing
     'D': T('t-dock'),
     '~': T('t-water-0', true),
     'b': T('t-buoy', true),
@@ -400,16 +407,16 @@ const shore: SceneDef = {
   grid: [
     'PgdvggPddvggdPvdggPdvggP',
     'gdvddvgddvddgddvvddvgddv',
-    'vddvUdJddvddvddvdvddPddd',
+    'vddvdddddvddvddvdvddPddd',
     'ddsddsdsddsssddssdsdkkkk',
-    'sssossssssUsssssLssssskk',
+    'sssossJsssUsssssLssssskk',
     'ssssssssssssssssssssssss',
-    'ssssssssssssssssssssssss',
+    'sssssssssssssssssUssssss',
     'ssssssssssssssssssssssss',
     'SSSSSSSSSSSSSSSSSSSSSSSS',
-    'SSSSSSSSSoSSSSSLSSSSooSS',
-    'ffDfffffffffffffffffooff',
-    '~~D~~~~~~~~~~~~~~~~~~o~~',
+    'SSSSSSSSSOSSSSSlSSSSOOSS',
+    'ffDfffffffffffffffffWWff',
+    '~~D~~~~~~~~~~~~~~~~~~w~~',
     '~~D~~~~~~~~~~~~~~~~~~~~~',
     '~~~~~~~~b~~~~~~~~~~~~~~~',
     '~~~~~~~~~~~~~~~~~b~~~~~~',

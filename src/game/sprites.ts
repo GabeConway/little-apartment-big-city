@@ -2155,8 +2155,10 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 4, 2, 1); ctx.fillRect(5, 6, 2, 1);                           // highlights
     ctx.fillStyle = '#1f3320'; ctx.fillRect(9, 7, 4, 1); ctx.fillRect(10, 4, 3, 1);                          // shaded right underside
   });
-  atlas['t-beachrock'] = tile(ctx => {                       // sandy-grey boulder on the beach (solid)
-    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 19, 6);    // sand base
+  // The boulder art is shared across ground variants: props bake their backing
+  // tile in (there's no overlay layer), so each placement row needs a matching
+  // base or the rock carries a wrong-colored square onto wet sand / surf / sea.
+  const boulderArt = (ctx: CanvasRenderingContext2D) => {
     ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(3, 13, 11, 2); // contact shadow
     // rounded, irregular silhouette (a square rock reads as a crate at 16px)
     ctx.fillStyle = '#8a96a0';
@@ -2168,6 +2170,31 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#6e7682'; ctx.fillRect(10, 8, 4, 4); ctx.fillRect(6, 11, 6, 2); // shaded lower-right
     ctx.fillStyle = '#5a626c'; ctx.fillRect(9, 6, 1, 3); ctx.fillRect(10, 9, 1, 3);  // weathered seam
     ctx.fillStyle = '#4d7440'; ctx.fillRect(4, 12, 2, 1); ctx.fillRect(12, 10, 1, 1); // bit of seaweed
+  };
+  atlas['t-beachrock'] = tile(ctx => {                       // boulder on dry sand (solid)
+    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 19, 6);    // sand base
+    boulderArt(ctx);
+  });
+  atlas['t-beachrock-wet'] = tile(ctx => {                   // boulder on the wet-sand band (solid)
+    fill(ctx, '#a8916a'); speckle(ctx, '#988059', 29, 9);    // wet sand base (matches t-sand-wet)
+    ctx.fillStyle = '#b8b29c'; ctx.fillRect(1, 3, 4, 1); ctx.fillRect(11, 13, 4, 1); // wet sheen streaks
+    boulderArt(ctx);
+  });
+  atlas['t-beachrock-surf'] = tile(ctx => {                  // boulder breaking the tide-foam line (solid)
+    fill(ctx, '#9a8568'); speckle(ctx, '#8a7860', 23, 8);    // wet sand (matches the foam tiles)
+    ctx.fillStyle = '#b0a07e'; ctx.fillRect(0, 0, 16, 3);    // drier sand band joining the row above
+    ctx.fillStyle = '#7fa0a8'; ctx.fillRect(0, 13, 16, 3);   // shallow water at the foot
+    boulderArt(ctx);
+    ctx.fillStyle = '#f4efe6'; ctx.fillRect(0, 12, 4, 2); ctx.fillRect(12, 12, 4, 2); // wash breaking around the base
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(2, 12, 1, 1); ctx.fillRect(13, 13, 1, 1); // spray bubbles
+  });
+  atlas['t-searock'] = tile(ctx => {                         // boulder standing in the sea (solid)
+    fill(ctx, '#2e5e8e');                                    // mid sea (matches the water tiles)
+    ctx.fillStyle = '#27517c'; ctx.fillRect(0, 6, 16, 5); speckle(ctx, '#3d6e9e', 41, 8);
+    ctx.fillStyle = '#244c75'; ctx.fillRect(0, 11, 16, 5);   // deep band
+    boulderArt(ctx);
+    ctx.fillStyle = '#cfe0e4'; ctx.fillRect(1, 12, 5, 1); ctx.fillRect(10, 12, 5, 1); // foam collar at the waterline
+    ctx.fillStyle = '#f4efe6'; ctx.fillRect(2, 12, 2, 1) ; ctx.fillRect(12, 12, 2, 1);
   });
   atlas['t-tidepool'] = tile(ctx => {                        // rocky pool with a starfish (walkable detail)
     fill(ctx, '#a8916a'); speckle(ctx, '#988059', 53, 6);    // wet sand
@@ -2177,14 +2204,22 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#bdf4ee'; ctx.fillRect(5, 6, 2, 1); ctx.fillRect(9, 9, 2, 1); // glints
     ctx.fillStyle = '#e0885a'; ctx.fillRect(8, 7, 3, 1); ctx.fillRect(9, 6, 1, 3); ctx.fillRect(8, 8, 1, 1); ctx.fillRect(10, 8, 1, 1); // little starfish
   });
-  atlas['t-driftwood'] = tile(ctx => {                       // bleached driftwood log on the sand (solid)
-    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 31, 6);    // sand base
+  const driftwoodArt = (ctx: CanvasRenderingContext2D) => {  // log body, shared by the dry/wet-sand variants
     ctx.fillStyle = '#5a4d42'; ctx.fillRect(1, 12, 14, 2);   // contact shadow
     ctx.fillStyle = '#a89a82'; ctx.fillRect(1, 5, 14, 7);    // weathered log body
     ctx.fillStyle = '#c8bca2'; ctx.fillRect(1, 5, 14, 2);    // sun-bleached top
     ctx.fillStyle = '#8a7e6a'; ctx.fillRect(1, 10, 14, 2);   // underside shadow
     ctx.fillStyle = '#6e6354'; ctx.fillRect(4, 7, 1, 1); ctx.fillRect(10, 8, 1, 1); // knot holes
     ctx.fillStyle = '#766a58'; ctx.fillRect(1, 7, 14, 1);    // grain line
+  };
+  atlas['t-driftwood'] = tile(ctx => {                       // bleached log on dry sand (solid)
+    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 31, 6);    // sand base
+    driftwoodArt(ctx);
+  });
+  atlas['t-driftwood-wet'] = tile(ctx => {                   // log washed up on the wet-sand band (solid)
+    fill(ctx, '#a8916a'); speckle(ctx, '#988059', 29, 9);    // wet sand base (matches t-sand-wet)
+    ctx.fillStyle = '#b8b29c'; ctx.fillRect(2, 14, 5, 1);    // wet sheen streak
+    driftwoodArt(ctx);
   });
   atlas['t-boardwalk'] = tile(ctx => {                       // weathered promenade planks (walkable)
     fill(ctx, '#9a8668');
@@ -4087,6 +4122,7 @@ const buildMisc = (atlas: Atlas) => {
 
   // ---- Downtown dumpster (hides a stray cat) -------------------------------
   atlas['t-dumpster'] = tile(ctx => {
+    fill(ctx, '#6e7276'); speckle(ctx, '#7c8084', 31, 6); speckle(ctx, '#56595d', 37, 4); // sidewalk base (matches t-sidewalk-bad — unfilled px render black)
     ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(1, 14, 14, 2);   // ground shadow
     ctx.fillStyle = '#2f5d3a'; ctx.fillRect(2, 7, 12, 8);            // body
     ctx.fillStyle = '#3a7048'; ctx.fillRect(2, 7, 12, 1);            // top highlight
