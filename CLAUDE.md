@@ -24,6 +24,7 @@ Read before editing the matching area:
 - [kb/art-direction.md](kb/art-direction.md) — visual style law: refs (Tiny Tower/Stardew/Habbo), perspective, master palette, PNG asset pipeline. Read before generating art.
 - [kb/little-apartment-progress.md](kb/little-apartment-progress.md) — build-history checklist.
 - [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
+- [kb/steam.md](kb/steam.md) — Steam release plan (depots, achievements port, Deck-via-Proton; not started).
 - [kb/conventions.md](kb/conventions.md) — coding conventions.
 - [kb/dependencies.md](kb/dependencies.md) — versions, security policy.
 - [kb/testing.md](kb/testing.md) — Vitest setup, CI, pre-commit hook.
