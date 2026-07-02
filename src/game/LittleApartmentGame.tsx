@@ -1362,7 +1362,7 @@ const CASINO_GAMBLER_SPOTS: { x: number; y: number; dir: Dir }[] = [
   { x: 13, y: 2, dir: 'up' },  // top slot bank, east
   { x: 4,  y: 4, dir: 'up' },  // west blackjack table
   { x: 10, y: 4, dir: 'up' },  // east blackjack table
-  { x: 8,  y: 6, dir: 'up' },  // roulette felt
+  { x: 9,  y: 5, dir: 'left' },  // beside the roulette felt (x8,y6 became a poker cabinet)
   { x: 1,  y: 7, dir: 'up' },  // lower slot bank, west
   { x: 11, y: 7, dir: 'up' },  // lower slot bank, east
 ];
@@ -2627,9 +2627,9 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     if (s.bossDuelDay === s.day) {
       showDialog([
-        'The boss does not look up. He pours a fresh cup and watches the leaves settle.',
+        'Towzawa does not look up. He pours a fresh cup and watches the leaves settle.',
         '"One hand a night. That is the arrangement." He finishes his tea. The table is closed until tomorrow.',
-      ], 'The Kinryū Boss');
+      ], 'Shinzo Towzawa');
       return;
     }
     casinoRef.current.duel = freshDuel(bossStakeFor(s));
@@ -3086,27 +3086,43 @@ const LittleApartmentGame: React.FC = () => {
       }
       if (npc.id === 'kinryu-doorman-aside') {
         showDialog([
-          '"Evening." He draws the curtain back a hand-width as you pass. "The boss is expecting you."',
+          '"Evening." He draws the curtain back a hand-width as you pass. "Towzawa-san is expecting you."',
         ], 'Kinryū Doorman');
         return;
       }
       // The Kinryū boss, at the back of the backroom. First audience comps you
       // for the trouble of winning; after that he mostly tolerates you.
       if (npc.id === 'kinryu-boss') {
+        // Shinzo Towzawa — the Kinryū's boss and the game's standing RIVAL. He is
+        // deliberately NOT a friend: no FRIENDS row, no gift hook, no hearts. His
+        // repeat talk reads the duel ledger (bossDuelPlayed / bossDuelLosses) and
+        // he rebuffs whatever you're carrying — the only language he speaks is stakes.
         if (!s.storySeen.includes('backroom-met')) {
           s.storySeen.push('backroom-met');
           s.money += 10000;
           sfxCoin(); persistSave(s); refreshHud();
           showDialog([
             'The back of the room holds one table, one lamp, and one enormous man in a suit that fits like architecture. He does not look up from his tea.',
+            '"Shinzo Towzawa." He says the name the way other men state the weather — a fact, already settled. "The Lounge is mine. The district answers to it. The tea is also mine."',
             `"${BACKROOM_WINS} wins. We keep count, {name}. Most people leave their money here. You keep walking out with ours."`,
             '"I respect a problem I can name." He slides an envelope across the felt without touching your hand. "A courtesy, from the Kinryū. Spend it on the floor, where I can win it back." (+¥10,000)',
-          ], 'The Kinryū Boss');
+          ], 'Shinzo Towzawa');
         } else {
-          showDialog([
-            'He turns a teacup a quarter-rotation on its saucer. The lamp hums.',
-            '"The table is open. The tea is not for you."',
-          ], 'The Kinryū Boss');
+          const played = s.bossDuelPlayed, lost = s.bossDuelLosses; // lost = TOWZAWA's losses
+          const lines =
+            played === 0 ? [
+              'He turns a teacup a quarter-rotation on its saucer. The lamp hums.',
+              '"You found the room. You have not yet found the nerve." His eyes move to the private table, then back to the tea. "The table is open. The tea is not for you."',
+            ] : lost === 0 ? [
+              `He does not look up. "${played} hand${played === 1 ? '' : 's'} at my table. ${played === 1 ? 'Mine' : 'All of them mine'}." The teacup clicks down on its saucer like a verdict.`,
+              '"Come back with your nerve, {name} — or don\'t. The Kinryū profits either way."',
+            ] : [
+              `A slim ledger rests closed at his elbow. He quotes it without opening it. "${played} hand${played === 1 ? '' : 's'}. You have taken ${lost} from me."`,
+              '"I do not forget a hand I lose, {name}. Sit whenever you feel lucky. Luck exhausts itself. I do not."',
+            ];
+          if (giftableItems(s).length > 0)
+            lines.push('His eyes flick to your bag, once, and dismiss it. "Whatever you are carrying — keep it. I do not take gifts. I take stakes."');
+          showDialog(lines, 'Shinzo Towzawa');
         }
         return;
       }
@@ -7013,7 +7029,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     s.casinoWins += 1;
     if (s.casinoWins === BACKROOM_WINS) {
-      showToast('🎴 The house notices', 'The doorman at the velvet curtain steps aside. "The boss will see you now."');
+      showToast('🎴 The house notices', 'The doorman at the velvet curtain steps aside. "Towzawa-san will see you now."');
       computeSolids(); // the doorman moves off the curtain approach right now
     }
   };
@@ -7243,6 +7259,7 @@ const LittleApartmentGame: React.FC = () => {
     if (duel.phase !== 'intro' || s.money < duel.stake) return;
     s.money -= duel.stake;
     s.bossDuelDay = s.day;
+    s.bossDuelPlayed += 1; // Towzawa's ledger — he quotes it when you talk to him
     duel.deck = makeDeck();
     duel.player = [duel.deck.pop()!, duel.deck.pop()!];
     duel.dealer = [duel.deck.pop()!, duel.deck.pop()!];
@@ -7278,6 +7295,15 @@ const LittleApartmentGame: React.FC = () => {
       s.bossDuelLosses += 1;
       duel.say = bossLossLine(s.bossDuelLosses);
       sfxCasinoWin(); award('boss-duel'); countCasinoWin();
+      // A rival, not a friend: his first loss earns you a stiff one-off text
+      // from the Lounge instead of anything so warm as congratulations.
+      if (s.bossDuelLosses === 1) pushMessage(s, {
+        id: 'towzawa-first-loss', from: 'Kinryū Lounge', avatar: '🀄', company: true,
+        body: [
+          'The Kinryū Lounge acknowledges a debt of honor, settled in full at the private table.',
+          'Towzawa-san asks us to convey that he does not repeat himself. Neither, he trusts, will the outcome. — K.L.',
+        ],
+      });
     } else if (duel.result === 'lose') {
       duel.say =
         pv > 21 ? '"Greed. It gets everyone eventually." He stacks your chips without counting them.' :
@@ -9615,17 +9641,17 @@ const LittleApartmentGame: React.FC = () => {
       const closeDuel = () => { if (duel.phase === 'player') standDuel(); else close(); };
       const resultText =
         duel.result === 'win' ? `YOU WIN  +¥${(duel.stake * (isBlackjack(duel.player) && rule.id === 'pays2to1' ? 2 : 1)).toLocaleString()}` :
-        duel.result === 'lose' ? `THE HOUSE WINS  −¥${duel.stake.toLocaleString()}` :
+        duel.result === 'lose' ? `TOWZAWA WINS  −¥${duel.stake.toLocaleString()}` :
         duel.result === 'push' ? 'PUSH — the stake comes back' : '';
       return (
-        <ShopFrame title="THE BOSS'S TABLE" subtitle="One hand a night · double or nothing" money={s.money} onClose={closeDuel} panelCls={panelCls} btnCls={btnCls}>
+        <ShopFrame title="TOWZAWA'S TABLE" subtitle="One hand a night · double or nothing" money={s.money} onClose={closeDuel} panelCls={panelCls} btnCls={btnCls}>
           <p className="text-sm text-center tracking-wide text-[#ffd24a] bg-[#c9a227]/10 border border-[#c9a227]/40 rounded px-2 py-1 mb-2">
             🀄 HOUSE RULE TONIGHT — {rule.placard}
           </p>
           {duel.phase === 'intro' ? (
             <div className="py-1">
               <p className="text-lg opacity-85 py-1 leading-snug">
-                The boss sets his teacup down without a sound and squares a single deck against the felt. "One hand. My table, my rule — it's on the placard. ¥{duel.stake.toLocaleString()}, double or nothing."
+                Towzawa sets his teacup down without a sound and squares a single deck against the felt. "One hand. My table, my rule — it's on the placard. ¥{duel.stake.toLocaleString()}, double or nothing."
               </p>
               {s.money < duel.stake && (
                 <p className="text-base opacity-60 py-1 leading-snug">"Come back when you can cover the felt." He picks the teacup back up.</p>
@@ -9640,7 +9666,7 @@ const LittleApartmentGame: React.FC = () => {
           ) : (
             <div className="py-1">
               <div className={`${feltCls} px-3 py-3 mb-2 ${won ? 'casino-win' : ''}`}>
-                <p className="text-xs text-white/70 mb-1">THE BOSS{duel.hideHole ? '' : ` · ${dv}${dv > 21 ? ' BUST' : ''}`}</p>
+                <p className="text-xs text-white/70 mb-1">TOWZAWA{duel.hideHole ? '' : ` · ${dv}${dv > 21 ? ' BUST' : ''}`}</p>
                 <div className="mb-3 min-h-[64px]">{duel.dealer.map((c, i) => cardChip(c, duel.hideHole && i === 1, i))}</div>
                 <p className="text-xs text-white/70 mb-1">YOU · {pv}{pv > 21 ? ' BUST' : ''}</p>
                 <div className="min-h-[64px]">{duel.player.map((c, i) => cardChip(c, false, i))}</div>

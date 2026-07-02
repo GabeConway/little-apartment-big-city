@@ -966,9 +966,9 @@ const casino: SceneDef = {
     '#...B.....B....#',
     '#..............#',
     '#......Rr......#',
-    '#SS.SS....SS.SS#',
+    '#SS.SS.VV.SS.SS#',
     '#..............#',
-    '#VV..........VV#',
+    '#..............#',
     '#######DD#######',
   ],
   warps: [
@@ -987,8 +987,7 @@ const casino: SceneDef = {
     { id: 'casino-blackjack', x: 4, y: 3, w: 1, h: 1, label: 'Blackjack table' },
     { id: 'casino-blackjack', x: 10, y: 3, w: 1, h: 1, label: 'Blackjack table' },
     { id: 'casino-roulette', x: 7, y: 5, w: 2, h: 1, label: 'Roulette table' },
-    { id: 'casino-poker', x: 1, y: 8, w: 2, h: 1, label: 'Video poker' },
-    { id: 'casino-poker', x: 13, y: 8, w: 2, h: 1, label: 'Video poker' },
+    { id: 'casino-poker', x: 7, y: 6, w: 2, h: 1, label: 'Video poker' },
   ],
   npcs: [
     { id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' },
@@ -1009,7 +1008,7 @@ const backroom: SceneDef = {
   legend: {
     '#': T('t-casino-wall', true),
     '.': T('t-vip-carpet'),        // richer crimson pile than the floor outside
-    'B': T('t-blackjack', true),
+    'B': T('t-blackjack-vip', true), // same table, baked on the VIP pile (no base-color box)
     'C': T('t-casino-curtain'),
     'L': T('t-vip-lantern', true), // wall lanterns flanking the mural
     '1': T('t-dragon-0', true),    // the 金龍 itself — 4-tile gold-dragon mural

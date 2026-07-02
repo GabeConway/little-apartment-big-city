@@ -41,5 +41,6 @@ describe('the duel gate fields', () => {
     const s = newSave();
     expect(s.bossDuelDay).toBe(0);
     expect(s.bossDuelLosses).toBe(0);
+    expect(s.bossDuelPlayed).toBe(0);
   });
 });

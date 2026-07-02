@@ -135,7 +135,8 @@ export interface GameSave {
   casinoWins: number;               // lifetime winning casino bets (any game); opens the Kinryū backroom
   jackpotDay: number;               // day the progressive slots jackpot was last hit (0 = never; pot grows since)
   bossDuelDay: number;              // day of the last boss-duel hand (0 = never; one hand a night)
-  bossDuelLosses: number;           // times the BOSS has lost the duel — his gracious line quiets down
+  bossDuelLosses: number;           // times TOWZAWA has lost the duel — his gracious line quiets down
+  bossDuelPlayed: number;           // total duel hands dealt — Towzawa keeps the ledger, and quotes it
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -335,6 +336,7 @@ export const newSave = (): GameSave => ({
   jackpotDay: 0,
   bossDuelDay: 0,
   bossDuelLosses: 0,
+  bossDuelPlayed: 0,
 });
 
 // Merge a parsed (possibly older / partial) save blob over fresh defaults and run
@@ -675,7 +677,7 @@ export const ROUTINES: Record<string, RoutineStop[]> = {
     { block: 'evening', tile: { x: 18, y: 6 } },  // up among the palm grove
     { block: 'night', tile: { x: 5, y: 9 } },     // back by the island signpost
   ],
-  // --- Kinryū Lounge (carpet only; avoids slots S / blackjack B / roulette R r) -
+  // --- Kinryū Lounge (carpet only; avoids slots S / poker V / blackjack B / roulette R r) -
   'casino-host': [
     { block: 'morning', tile: { x: 2, y: 4 } },   // greets near the west slots
     { block: 'midday', tile: { x: 7, y: 7 } },    // working the centre floor

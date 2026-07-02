@@ -12,7 +12,8 @@ one up — some may be partially done or superseded.
 table-talk, Jacks-or-Better video poker on the main floor, PLUS same-session
 additions: `BACKROOM_WINS` 15→30, a visible doorman gating the curtain, and the
 backroom VIP re-dress w/ the gold-dragon mural.)
-- Later maybe: head-to-head ledger vs the boss + milestone comps (see comp-tiers below).
+- Later maybe: milestone comps off the duel ledger (bossDuelPlayed/bossDuelLosses now EXIST
+  and Towzawa quotes them in talk — comps would hang off those; see comp-tiers below).
 
 ## Casino backlog (brainstormed, approved-ish, unbuilt)
 - Chinchirorin dice cup (3 dice in a bowl, triples/pairs) as a 5th floor game.

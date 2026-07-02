@@ -311,7 +311,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'bon-voyage', title: 'Bon Voyage', desc: 'Reached Paris.', hint: 'The yellow place is not the end of the line.' },
   { id: 'jackpot', title: 'Neon Rain', desc: 'Hit the progressive jackpot on the Kinryū slots.', hint: 'Three sevens. The pot has been growing for days.' },
   { id: 'inner-circle', title: 'The Inner Circle', desc: 'Got waved past the velvet curtain into the Kinryū backroom.', hint: 'The house counts its winners. Become a problem worth counting.' },
-  { id: 'boss-duel', title: 'Finish His Tea', desc: 'Beat the Kinryū Boss at his own table.', hint: 'Behind the curtain, the house has a face. Faces can lose.' },
+  { id: 'boss-duel', title: 'Finish His Tea', desc: 'Beat Shinzo Towzawa at his own table.', hint: 'Behind the curtain, the house has a face. Faces can lose.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------
@@ -1336,6 +1336,8 @@ export const GOSSIP: Gossip[] = [
   { who: 'Genji', text: 'The big ones only bite for patient hands. And better gear. Mostly better gear.' },
   { who: 'a konbini regular', text: 'They say the shrine keeps count of every coin you drop in that box.' },
   { who: 'a salaryman at Club Kaiju', text: 'Someone at the casino hit it big last week. Someone else lost their tie. Same guy, probably.' },
+  { who: 'a pit dealer, off the clock', text: "Towzawa doesn't gamble. He collects. There's a difference, and it's upholstered in velvet." },
+  { who: 'a Kinryū regular, quietly', text: 'The man behind the curtain remembers every hand he has ever lost. All of them. It is a short list, and he is not fond of it.' },
   { who: 'Charlie', text: 'Everybody interesting in this city keeps strange hours. Try talking to people after dark.' },
   { who: 'Bingus', text: 'Half the museum\'s missing pieces are sitting in somebody\'s pocket right now. Maybe yours.' },
   { who: 'a miko at the shrine', text: 'Rain never overstays. But if you truly need it gone, the kami take requests.' },

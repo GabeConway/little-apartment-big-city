@@ -1426,7 +1426,8 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(13, 7, 1, 1);
   });
   atlas['t-slot'] = tile(ctx => {
-    fill(ctx, '#2a1822');
+    fill(ctx, '#7a2230');                                   // casino carpet base (dark bases read as black boxes)
+    ctx.fillStyle = '#8e2a38'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1); // carpet weave carries through
     ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 1, 12, 14);  // red cabinet
     ctx.fillStyle = '#9e3a3a'; ctx.fillRect(2, 1, 12, 1); ctx.fillRect(2, 14, 12, 1);
     ctx.fillStyle = '#16181d'; ctx.fillRect(3, 3, 10, 5);   // reel window
@@ -1439,7 +1440,9 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#d05050'; ctx.fillRect(14, 4, 2, 2);   // lever knob
   });
   atlas['t-videopoker'] = tile(ctx => {                     // video-poker cabinet: blue shell, five-card screen
-    fill(ctx, '#2a1822');
+    fill(ctx, '#7a2230');                                   // casino carpet base (a dark base read as a black box)
+    ctx.fillStyle = '#8e2a38'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1); // carpet weave lines carry through
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(2, 14, 13, 1); // floor shadow
     ctx.fillStyle = '#2e5f8a'; ctx.fillRect(2, 1, 12, 14);  // blue cabinet
     ctx.fillStyle = '#4a7fae'; ctx.fillRect(2, 1, 12, 1);   // lit top edge
     ctx.fillStyle = '#1d3f5e'; ctx.fillRect(2, 14, 12, 1);  // base shade
@@ -1453,8 +1456,11 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillRect(4, 11, 1, 1); ctx.fillRect(6, 11, 1, 1); ctx.fillRect(8, 11, 1, 1); ctx.fillRect(10, 11, 1, 1);
     ctx.fillStyle = '#d05050'; ctx.fillRect(11, 11, 1, 1);  // DRAW button
   });
-  atlas['t-blackjack'] = tile(ctx => {                      // fake-3D card table: wood rail, felt, fanned cards + chip stacks
-    fill(ctx, '#2a1822');                                   // casino carpet base
+  // The card table draws on whichever carpet it stands on — the main floor's
+  // crimson or the backroom's deeper VIP pile — so neither room gets a base-color box.
+  const blackjackTable = (ctx: CanvasRenderingContext2D, base: string, weave: string) => {
+    fill(ctx, base);
+    ctx.fillStyle = weave; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1); // carpet weave carries through
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(2, 13, 13, 2); // floor shadow
     ctx.fillStyle = '#5a3c24'; ctx.fillRect(1, 2, 14, 12);  // wooden rail
     ctx.fillStyle = '#8a6644'; ctx.fillRect(1, 2, 14, 1); ctx.fillRect(1, 2, 1, 11);  // rail lit edge (upper-left)
@@ -1468,11 +1474,14 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#d05050'; ctx.fillRect(10, 6, 2, 1);
     ctx.fillStyle = '#50a0d0'; ctx.fillRect(11, 7, 2, 1);   // blue chip stack (lit top)
     ctx.fillStyle = '#3d6e9e'; ctx.fillRect(11, 8, 2, 1);
-  });
+  };
+  atlas['t-blackjack'] = tile(ctx => blackjackTable(ctx, '#7a2230', '#8e2a38'));     // main floor
+  atlas['t-blackjack-vip'] = tile(ctx => blackjackTable(ctx, '#5e1a26', '#6e2230')); // backroom pile
   // Roulette table = a 2-tile prop: left tile is the wheel, right tile the felt
   // betting layout. Author neutral; the gold/green read matches the other tables.
   atlas['t-roulette'] = tile(ctx => {                       // wheel half
-    fill(ctx, '#2a1822');
+    fill(ctx, '#7a2230');                                   // casino carpet base
+    ctx.fillStyle = '#8e2a38'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1);
     ctx.fillStyle = '#1f5233'; ctx.fillRect(1, 2, 15, 12);  // felt to the right edge (meets the layout)
     ctx.fillStyle = '#2c6e44'; ctx.fillRect(1, 2, 15, 2);   // felt highlight
     // wheel disk — gold rim, drawn as stacked rows for a round silhouette
@@ -1491,7 +1500,8 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#e8e0d0'; ctx.fillRect(9,6,1,1);       // the ball
   });
   atlas['t-roulette-felt'] = tile(ctx => {                  // betting-layout half
-    fill(ctx, '#2a1822');
+    fill(ctx, '#7a2230');                                   // casino carpet base
+    ctx.fillStyle = '#8e2a38'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1);
     ctx.fillStyle = '#1f5233'; ctx.fillRect(0, 2, 15, 12);  // felt (meets the wheel on the left)
     ctx.fillStyle = '#2c6e44'; ctx.fillRect(0, 2, 15, 2);
     ctx.fillStyle = '#1a4429'; ctx.fillRect(0, 12, 15, 2);  // felt shadow
