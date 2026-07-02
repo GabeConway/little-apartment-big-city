@@ -10,11 +10,14 @@ one up — some may be partially done or superseded.
 ## Casino backlog (brainstormed, approved-ish, unbuilt)
 - Chinchirorin dice cup (3 dice in a bowl, triples/pairs) as a 4th game.
 - Daily high-roller table: one ¥10k double-or-nothing hand vs the boss, seeded/day.
+  (The boss + his private table now EXIST — the `backroom` scene; this would hang off him.)
 - Comp tiers off lifetime wagered (`save.casinoWagered`): free bar soda, a
   members-only accessory, gold card in the phone.
-- Hidden backroom after N total wins (mini-scene off the casino) + achievement.
 - "Kinryū Credit" flavor texts on big losses (atmosphere only, no debt).
-- Progressive slots jackpot counter (seeded growth, bulletin mentions).
+
+(Built 2026-07-02: **hidden backroom** after 15 total wins (`backroom` scene,
+`save.casinoWins`, `inner-circle` ach) and the **progressive slots jackpot**
+(`jackpotFor`, `save.jackpotDay`, bulletin heralds, `jackpot` ach) — see kb/games.md.)
 
 ## Smaller parked ideas
 - Aquarium renders tiny sprites of fish you've actually caught (`save.fishLog`).

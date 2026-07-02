@@ -72,6 +72,7 @@ import {
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey, lootVault,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
+  jackpotFor, backroomOpen, BACKROOM_WINS,
   restoreShrine, sponsorCharlie, buyHomeOnsen, homeSoak,
   grantKeepsake, hasKeepsake,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
@@ -379,6 +380,7 @@ const SCENE_MUSIC: Record<string, string> = {
   garage: '/music/garage-theme.mp3',
   badtown: '/music/badside.mp3',
   casino: '/music/casino.mp3',
+  backroom: '/music/casino.mp3',  // the VIP room keeps the lounge's soundtrack
   backrooms: '/music/backrooms.mp3',
   mines: '/music/mines.mp3',
   seacave: '/music/mines.mp3',   // reuse the cave theme for the island's hidden sea cave
@@ -499,10 +501,12 @@ const SLOT_SYMBOLS = ['\u{1F352}', '\u{1F514}', '\u{1F34B}', '⭐', '\u{1F48E}',
 const SLOT_POOL = [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]; // weighted draw pool
 const pickSlot = () => SLOT_POOL[Math.floor(Math.random() * SLOT_POOL.length)];
 // Payout in yen for a settled spin (bet already debited; this is the credit).
+const SLOT_SEVEN = 5; // index of 7️⃣ in SLOT_SYMBOLS — the 50× line AND the progressive trigger
+const isTripleSeven = (reels: number[]): boolean => reels.every(n => n === SLOT_SEVEN);
 const slotPayout = (reels: number[], bet: number): number => {
   const [a, b, c] = reels;
   if (a === b && b === c) {
-    if (a === 5) return bet * 50;   // 7️⃣ jackpot
+    if (a === SLOT_SEVEN) return bet * 50; // 7️⃣ jackpot
     if (a === 4) return bet * 20;   // 💎
     if (a === 3) return bet * 10;   // ⭐
     return bet * 5;                 // any other three-of-a-kind
@@ -1942,6 +1946,7 @@ const LittleApartmentGame: React.FC = () => {
     refreshHud();
     playMusicFor(id);
     if (id === 'nightclub') award('club');
+    if (id === 'backroom') award('inner-circle'); // stepping past the curtain is the trophy
     checkRegular(); // catches an all-cast save on scene enter (e.g. a loaded game)
   }, [computeSolids, refreshHud, playMusicFor, award, checkRegular, settleDerby, checkMissions]);
 
@@ -2021,6 +2026,17 @@ const LittleApartmentGame: React.FC = () => {
     // shore. Fresh id per day (pushMessage dedupes) — mirrors the festival herald.
     if (fishingTournamentDay(s.day)) pushMessage(s, { id: `tournament-${s.day}`, from: 'Kawamachi Bulletin 📣', avatar: '🎣', company: true,
       body: [`🎣 ${TOURNAMENT_NAME} is TODAY! ${TOURNAMENT_BLURB} The whole town is gathering down at ${SCENES[TOURNAMENT_SCENE]?.name ?? 'the shore'} — reel in your biggest haul and place on the board for a prize.`] });
+    // Progressive-jackpot herald: the Kinryū slots pot ticks up nightly; make it
+    // town news each time it swells past another ¥10,000 line. Deterministic
+    // (the pot derives from day + jackpotDay), so this fires exactly once per line.
+    {
+      const potNow = jackpotFor(s);
+      // passNight already ticked s.day, so jackpotDay ≤ day-1 always holds here.
+      const potPrev = jackpotFor({ day: s.day - 1, jackpotDay: s.jackpotDay });
+      if (Math.floor(potNow / 10000) > Math.floor(potPrev / 10000))
+        pushMessage(s, { id: `jackpot-${s.day}`, from: 'Kawamachi Bulletin 📣', avatar: '🎰', company: true,
+          body: [`🎰 The progressive jackpot at the Kinryū Lounge has swollen past ¥${(Math.floor(potNow / 10000) * 10000).toLocaleString()}. Nobody has hit it in days. The slots are getting looked at.`] });
+    }
     checkStory();
     checkMessages(true); // deliver overnight texts silently — the recap covers the screen; closeEndDay buzzes for them
     persistSave(s);
@@ -2382,6 +2398,31 @@ const LittleApartmentGame: React.FC = () => {
     return [{ label: '🎁 Give a gift', onPick: () => setOverlayBoth({ type: 'gift', npcId: friendId }) }];
   };
 
+  // Bingus's regular museum talk — extracted so BOTH paths reach it: the plain
+  // E-talk, and the "JUST CHAT" button on the donation confirm (which otherwise
+  // swallows the conversation whenever you're carrying something he's after).
+  const bingusTalk = () => {
+    const s = saveRef.current;
+    const have = s.museum.donated.length;
+    const total = MUSEUM_SLOTS.length;
+    const intro = have === 0
+      ? 'AH! A visitor! Welcome, welcome, to the Kawamachi Museum! I am Bingus Doofelsmurt, curator, founder, and — at present — sole staff.'
+      : 'Welcome BACK! The collection grows, doesn\'t it? Squint and you can almost feel it becoming important.';
+    const ask = bingusNextAsk(s);
+    const lines = [
+      intro,
+      have >= total
+        ? 'And it is COMPLETE. Every plinth filled, every frame occupied. I may weep. I am weeping. Do not look at me.'
+        : `The displays are, ah, "between acquisitions." ${have} of ${total} filled.`,
+      ask
+        ? `Here is one thing you could do for the COLLECTION: ${ask.ask} (A donation, mind — it goes straight onto a display, not into my pockets.)`
+        : 'A few pieces are still out there in the world — alleys, shores, the deep places. You will know them when you see them.',
+    ];
+    const flavor = friendFlavorLine(s, 'bingus'); // the heart-warmed closing line the NPC path would add
+    if (flavor) lines.push(flavor);
+    showDialog(lines, 'Bingus Doofelsmurt', giftActionFor('bingus'));
+  };
+
   // Pet David (once a day, via the cat dialog's trailing action): a purr, a
   // floating heart over wherever he's sat, and a small friendship bump (petCat
   // routes the points through the same clamp as gifting — see state.ts).
@@ -2523,13 +2564,14 @@ const LittleApartmentGame: React.FC = () => {
   }, [setOverlayBoth]);
   const startSlots = useCallback(() => {
     const slot = casinoRef.current.slot;
-    if (slot.timer != null) { window.clearInterval(slot.timer); }
+    settleSlots(true); // a bailed-out spin still pays what the reels had fixed — never eat a bet
     casinoRef.current.slot = { ...freshSlots(), bet: slot.bet };
     setOverlayBoth({ type: 'shop', shop: 'slots' });
     setShopTick(v => v + 1);
   }, [setOverlayBoth]);
   const startRoulette = useCallback(() => {
     const prev = casinoRef.current.roul;
+    settleRoulette(true); // same: a wheel already spun keeps its result (and clears its interval)
     casinoRef.current.roul = { ...freshRoulette(), bet: prev.bet, kind: prev.kind, pick: prev.pick };
     setOverlayBoth({ type: 'shop', shop: 'roulette' });
     setShopTick(v => v + 1);
@@ -2959,6 +3001,26 @@ const LittleApartmentGame: React.FC = () => {
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
       if (npc.id === 'mechanic') { startDelivery(); return; } // Kojima hands out the delivery gig in person
       if (npc.id === 'casino-host') { setOverlayBoth({ type: 'shop', shop: 'casino' }); return; }
+      // The Kinryū boss, at the back of the backroom. First audience comps you
+      // for the trouble of winning; after that he mostly tolerates you.
+      if (npc.id === 'kinryu-boss') {
+        if (!s.storySeen.includes('backroom-met')) {
+          s.storySeen.push('backroom-met');
+          s.money += 10000;
+          sfxCoin(); persistSave(s); refreshHud();
+          showDialog([
+            'The back of the room holds one table, one lamp, and one enormous man in a suit that fits like architecture. He does not look up from his tea.',
+            `"${BACKROOM_WINS} wins. We keep count, {name}. Most people leave their money here. You keep walking out with ours."`,
+            '"I respect a problem I can name." He slides an envelope across the felt without touching your hand. "A courtesy, from the Kinryū. Spend it on the floor, where I can win it back." (+¥10,000)',
+          ], 'The Kinryū Boss');
+        } else {
+          showDialog([
+            'He turns a teacup a quarter-rotation on its saucer. The lamp hums.',
+            '"The table is open. The tea is not for you."',
+          ], 'The Kinryū Boss');
+        }
+        return;
+      }
       if (npc.id === 'monster') {
         // Once you own every one of his rares, The Manager lets you in on the
         // secret: there's a way to Paris hidden in the backrooms. (Feature #19.)
@@ -3042,24 +3104,10 @@ const LittleApartmentGame: React.FC = () => {
       }
       // Bingus the curator: introduces the museum + reports donation progress.
       if (npc.id === 'bingus') {
-        // If you're carrying something Bingus is after, hand it over (GIVE/KEEP).
+        // Carrying something he's after → offer the donation first (the confirm
+        // panel spells out donation-vs-gift and has a JUST CHAT escape hatch).
         if (bingusHeldFetch(s)) { setOverlayBoth({ type: 'shop', shop: 'bingus-fetch' }); return; }
-        const have = s.museum.donated.length;
-        const total = MUSEUM_SLOTS.length;
-        const intro = have === 0
-          ? 'AH! A visitor! Welcome, welcome, to the Kawamachi Museum! I am Bingus Doofelsmurt, curator, founder, and — at present — sole staff.'
-          : 'Welcome BACK! The collection grows, doesn\'t it? Squint and you can almost feel it becoming important.';
-        const ask = bingusNextAsk(s);
-        const lines = [
-          intro,
-          have >= total
-            ? 'And it is COMPLETE. Every plinth filled, every frame occupied. I may weep. I am weeping. Do not look at me.'
-            : `The displays are, ah, "between acquisitions." ${have} of ${total} filled.`,
-          ask
-            ? `Here is one thing you could do for me: ${ask.ask}`
-            : 'A few pieces are still out there in the world — alleys, shores, the deep places. You will know them when you see them.',
-        ];
-        showDialog(warm(lines), 'Bingus Doofelsmurt', giftAct);
+        bingusTalk();
         return;
       }
       // Granny Soto (out in the city): she gatekeeps the community greenhouse
@@ -3567,6 +3615,7 @@ const LittleApartmentGame: React.FC = () => {
       case 'casino-slots': startSlots(); break;
       case 'casino-blackjack': startBlackjack(); break;
       case 'casino-roulette': startRoulette(); break;
+      case 'backroom-table': startBlackjack(); break; // the boss's private table deals the same game
       case 'fish-tropical': startCast(faced, 'tropical'); break;
       case 'fish-spot': startCast(faced, 'shallow'); break;
       case 'museum-display': {
@@ -4382,7 +4431,8 @@ const LittleApartmentGame: React.FC = () => {
       // speak the line on a fresh approach — never every frame held into the door.
       const lockedGate =
         (warp?.to === 'badtown' && !s.gangPaid) ||
-        (warp?.to === 'greenhouse' && !s.greenhouseUnlocked);
+        (warp?.to === 'greenhouse' && !s.greenhouseUnlocked) ||
+        (warp?.to === 'backroom' && !backroomOpen(s));
       // Some retail shops randomly take a sick day (~10%, seeded). Bounce off the
       // door with a closed-sign note, same as a locked gate.
       const closedStore = warp != null && storeClosedToday(s.day, warp.to);
@@ -4395,6 +4445,9 @@ const LittleApartmentGame: React.FC = () => {
             showDialog(['A handwritten sign hangs crooked in the door: "Sorry — shut today, I\'m a bit under the weather. Back tomorrow. 🙇"']);
           else if (warp!.to === 'badtown')
             showDialog(['A yakuza enforcer steps into your path, gold watch glinting. "Private district."', 'Face one of them and press E to pay the ¥5,000 toll.'], 'Enforcer');
+          else if (warp!.to === 'backroom')
+            showDialog(['A wall of a man in a black suit fills the curtain gap. "Members only."',
+              `He taps a small ledger without opening it. "The house counts its winners. Keep playing." (${s.casinoWins}/${BACKROOM_WINS} wins)`], 'Kinryū Doorman');
           else
             showDialog(['The greenhouse door is locked tight. Granny Soto keeps the key — do her a kindness first.', '(Word around the block is she loves a fresh fish.)']);
         }
@@ -6849,6 +6902,16 @@ const LittleApartmentGame: React.FC = () => {
 
   // ---- casino game actions --------------------------------------------------
 
+  // Every winning bet (any game) ticks the lifetime counter that eventually
+  // parts the backroom curtain. Crossing the threshold gets a nudge so the
+  // player knows something opened.
+  const countCasinoWin = () => {
+    const s = saveRef.current;
+    s.casinoWins += 1;
+    if (s.casinoWins === BACKROOM_WINS)
+      showToast('🎴 The house notices', 'The host glances at the velvet curtain in the back. "The boss will see you now."');
+  };
+
   const setBjBet = (bet: number) => {
     const bj = casinoRef.current.bj;
     if (bj.phase !== 'bet') return;
@@ -6872,7 +6935,7 @@ const LittleApartmentGame: React.FC = () => {
     bj.phase = 'done';
     if (payout > 0) { s.money += payout; sfxCasinoWin(); }
     else if (bj.result === 'lose') sfxCasinoLose();
-    if (bj.result === 'win' || bj.result === 'blackjack') award('high-roller'); // a push isn't a win
+    if (bj.result === 'win' || bj.result === 'blackjack') { award('high-roller'); countCasinoWin(); } // a push isn't a win
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
   };
   const dealBlackjack = () => {
@@ -6909,6 +6972,35 @@ const LittleApartmentGame: React.FC = () => {
     slot.bet = bet;
     setShopTick(v => v + 1);
   };
+  // Settle the in-flight spin from slot.final. The reels' outcome is fixed the
+  // moment you PULL, so this is shared by the reel-stop interval (with sfx) and
+  // the mid-spin bail in startSlots (silent) — bailing out of the panel while
+  // the reels turn must never eat a bet or a jackpot.
+  const settleSlots = (silent = false) => {
+    const slot = casinoRef.current.slot;
+    if (slot.timer != null) { window.clearInterval(slot.timer); slot.timer = null; }
+    if (slot.phase !== 'spin') return;
+    slot.reels = [...slot.final];
+    slot.stopped = [true, true, true];
+    slot.phase = 'done';
+    const s2 = saveRef.current;
+    let win = slotPayout(slot.final, slot.bet);
+    // Triple-7s ALSO drain the progressive pot (on top of the 50× line),
+    // then the pot reseeds from today (jackpotDay = the reset marker).
+    if (isTripleSeven(slot.final)) {
+      win += jackpotFor(s2);
+      s2.jackpotDay = s2.day;
+      award('jackpot');
+    }
+    slot.win = win;
+    if (win > 0) {
+      s2.money += win;
+      if (!silent) sfxCasinoWin();
+      award('high-roller'); countCasinoWin();
+      persistSave(s2); refreshHud();
+    } else if (!silent) sfxCasinoLose();
+    setShopTick(v => v + 1);
+  };
   const spinSlots = () => {
     const s = saveRef.current;
     const slot = casinoRef.current.slot;
@@ -6929,16 +7021,7 @@ const LittleApartmentGame: React.FC = () => {
         else slot.reels[i] = Math.floor(Math.random() * SLOT_SYMBOLS.length);
       }
       setShopTick(v => v + 1);
-      if (slot.stopped[2]) {
-        if (slot.timer != null) window.clearInterval(slot.timer);
-        slot.timer = null;
-        slot.phase = 'done';
-        const win = slotPayout(slot.final, slot.bet);
-        slot.win = win;
-        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCasinoWin(); award('high-roller'); persistSave(s2); refreshHud(); }
-        else sfxCasinoLose();
-        setShopTick(v => v + 1);
-      }
+      if (slot.stopped[2]) settleSlots();
     }, 80);
   };
 
@@ -6961,6 +7044,26 @@ const LittleApartmentGame: React.FC = () => {
     roul.kind = 'number';
     setShopTick(v => v + 1);
   };
+  // Settle the in-flight wheel from roul.result — shared by the spin interval
+  // (with sfx) and the mid-spin bail in startRoulette (silent), same deal as
+  // settleSlots: the ball's pocket is fixed at SPIN, bailing can't eat the bet.
+  const settleRoulette = (silent = false) => {
+    const roul = casinoRef.current.roul;
+    if (roul.timer != null) { window.clearInterval(roul.timer); roul.timer = null; }
+    if (roul.phase !== 'spin') return;
+    roul.display = roul.result;
+    roul.phase = 'done';
+    const win = roulettePayout(roul.kind, roul.pick, roul.result, roul.bet);
+    roul.win = win;
+    if (win > 0) {
+      const s2 = saveRef.current;
+      s2.money += win;
+      if (!silent) sfxCasinoWin();
+      award('high-roller'); countCasinoWin();
+      persistSave(s2); refreshHud();
+    } else if (!silent) sfxCasinoLose();
+    setShopTick(v => v + 1);
+  };
   const spinRoulette = () => {
     const s = saveRef.current;
     const roul = casinoRef.current.roul;
@@ -6975,15 +7078,7 @@ const LittleApartmentGame: React.FC = () => {
     roul.timer = window.setInterval(() => {
       const el = performance.now() - start;
       if (el >= SPIN_MS) {
-        roul.display = roul.result;
-        if (roul.timer != null) window.clearInterval(roul.timer);
-        roul.timer = null;
-        roul.phase = 'done';
-        const win = roulettePayout(roul.kind, roul.pick, roul.result, roul.bet);
-        roul.win = win;
-        if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCasinoWin(); award('high-roller'); persistSave(s2); refreshHud(); }
-        else sfxCasinoLose();
-        setShopTick(v => v + 1);
+        settleRoulette();
       } else {
         roul.display = Math.floor(Math.random() * 37); // flicker while it spins
         setShopTick(v => v + 1);
@@ -8898,6 +8993,9 @@ const LittleApartmentGame: React.FC = () => {
                   <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doGift(ov.npcId, it)}>GIVE</button>
                 </div>
               ))}
+        {ov.npcId === 'bingus' && (
+          <p className="text-xs opacity-50 mt-2 italic leading-snug">A personal gift — Bingus keeps this one. Pieces for the museum are separate: he asks for those in conversation, as donations, and they go straight on display.</p>
+        )}
         {hearts >= 2 && (
           <p className="text-xs opacity-55 mt-2 italic">Loves: {f.loved.join(', ')}{f.liked.length ? ` · Likes: ${f.liked.join(', ')}` : ''}</p>
         )}
@@ -8965,13 +9063,15 @@ const LittleApartmentGame: React.FC = () => {
       if (!f) { close(); return null; }
       const slot = MUSEUM_SLOTS.find(sl => sl.id === f.slot)!;
       return (
-        <ShopFrame title="BINGUS DOOFELSMURT" subtitle="The curator's eyes go wide" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        <ShopFrame title="MUSEUM DONATION" subtitle="Bingus Doofelsmurt — the curator's eyes go wide" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
           <p className="text-lg opacity-85 py-1 leading-snug">"Is that— yes! YES! Exactly the thing I asked for. Hand it here and I shall make it ART."</p>
-          <p className="text-base opacity-60 py-1 leading-snug">He'll place it on display as <span className="text-[#ffd24a]">"{slot.label}"</span>.</p>
+          <p className="text-base opacity-60 py-1 leading-snug">He'll donate it to the collection as <span className="text-[#ffd24a]">"{slot.label}"</span> — it goes on display, not into his pockets.</p>
           <div className="flex items-center gap-3 mt-3">
-            <button className={`${btnCls} flex-grow`} onClick={giveBingusFetch}>GIVE IT TO BINGUS</button>
+            <button className={`${btnCls} flex-grow`} onClick={giveBingusFetch}>DONATE TO THE MUSEUM</button>
+            <button className={btnCls} onClick={bingusTalk}>JUST CHAT</button>
             <button className={btnCls} onClick={close}>KEEP IT</button>
           </div>
+          <p className="text-xs opacity-50 mt-2 italic leading-snug">A donation fills a museum display — it isn't a personal gift. To warm Bingus up instead, JUST CHAT and pick 🎁 Give a gift at the end.</p>
         </ShopFrame>
       );
     }
@@ -9105,9 +9205,10 @@ const LittleApartmentGame: React.FC = () => {
           </p>
           <div className="flex flex-col gap-2 mt-3">
             <button className={`${btnCls} w-full`} onClick={startBlackjack}>🃏 BLACKJACK — beat the dealer to 21</button>
-            <button className={`${btnCls} w-full`} onClick={startSlots}>🎰 SLOT MACHINES — pull for the jackpot</button>
+            <button className={`${btnCls} w-full`} onClick={startSlots}>🎰 SLOT MACHINES — jackpot at ¥{jackpotFor(s).toLocaleString()}</button>
             <button className={`${btnCls} w-full`} onClick={startRoulette}>🔴 ROULETTE — pick a color, a number, your fate</button>
           </div>
+          {backroomOpen(s) && <p className="text-xs text-[#ffd24a]/70 mt-3">✦ The velvet curtain at the back of the hall hangs open for you.</p>}
           <p className="text-xs opacity-40 mt-3">Bet responsibly. The maneki-neko is watching.</p>
         </ShopFrame>
       );
@@ -9159,6 +9260,11 @@ const LittleApartmentGame: React.FC = () => {
       );
       const profit = bj.payout - bj.bet;
       const won = bj.result === 'win' || bj.result === 'blackjack';
+      // At the boss's private table there IS no lobby — the back button just
+      // leaves the table instead of teleporting the Lounge UI into the backroom.
+      const inBackroom = sceneRef.current.id === 'backroom';
+      const toLobby = () => inBackroom ? close() : setOverlayBoth({ type: 'shop', shop: 'casino' });
+      const lobbyLabel = inBackroom ? 'LEAVE THE TABLE' : '← BACK TO LOBBY';
       const resultText =
         bj.result === 'blackjack' ? `BLACKJACK! +¥${profit.toLocaleString()}` :
         bj.result === 'win' ? `YOU WIN  +¥${profit.toLocaleString()}` :
@@ -9173,7 +9279,7 @@ const LittleApartmentGame: React.FC = () => {
                 {chips.map(c => chipBtn(c, bj.bet === c, s.money < c, () => setBjBet(c)))}
               </div>
               <button className={`${btnCls} w-full`} disabled={s.money < bj.bet} onClick={dealBlackjack}>DEAL · bet ¥{bj.bet.toLocaleString()}</button>
-              <button className={`${btnCls} w-full mt-2 text-sm`} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
+              <button className={`${btnCls} w-full mt-2 text-sm`} onClick={toLobby}>{lobbyLabel}</button>
             </div>
           ) : (
             <div className="py-2">
@@ -9193,7 +9299,7 @@ const LittleApartmentGame: React.FC = () => {
                   <p className={`text-xl mb-2 text-center ${bj.result === 'lose' ? 'text-[#d05050]' : bj.result === 'push' ? 'text-[#e8e0d0]' : 'text-[#7ce8a0]'}`}>{resultText}</p>
                   <div className="flex gap-2">
                     <button className={`${btnCls} flex-grow`} disabled={s.money < bj.bet} onClick={() => { casinoRef.current.bj = { ...freshBlackjack(), bet: bj.bet }; setShopTick(v => v + 1); }}>NEW HAND</button>
-                    <button className={btnCls} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>LOBBY</button>
+                    <button className={btnCls} onClick={toLobby}>{inBackroom ? 'LEAVE' : 'LOBBY'}</button>
                   </div>
                 </div>
               )}
@@ -9226,8 +9332,10 @@ const LittleApartmentGame: React.FC = () => {
         );
       };
       const winText = slot.phase === 'done' ? (slot.win > 0 ? `WIN  +¥${slot.win.toLocaleString()}!` : 'No match. Spin again.') : (spinning ? 'good luck…' : ' ');
+      const pot = jackpotFor(s);
       return (
-        <ShopFrame title="SLOT MACHINES" subtitle="Line up three · 7️⃣7️⃣7️⃣ = 50× your bet" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        <ShopFrame title="SLOT MACHINES" subtitle="Line up three · 7️⃣7️⃣7️⃣ = 50× your bet + the JACKPOT" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-center text-sm tracking-widest text-[#ffd24a] mt-1">✦ PROGRESSIVE JACKPOT · ¥{pot.toLocaleString()} ✦</p>
           <div className={`relative mx-auto w-fit rounded-xl border-4 border-[#c9a227] bg-gradient-to-b from-[#3a2230] to-[#170d14] px-3 py-4 my-2 ${won ? 'casino-win' : ''}`}>
             {/* payline across the middle */}
             <div className="absolute left-3 right-3 top-1/2 -translate-y-1/2 h-[1px] bg-[#ffd24a]/70 shadow-[0_0_6px_rgba(255,210,74,0.8)] pointer-events-none" />
@@ -9239,7 +9347,8 @@ const LittleApartmentGame: React.FC = () => {
           </div>
           <button className={`${btnCls} w-full text-xl`} disabled={spinning || s.money < slot.bet} onClick={spinSlots}>{spinning ? 'SPINNING…' : `PULL · bet ¥${slot.bet.toLocaleString()}`}</button>
           <button className={`${btnCls} w-full mt-2 text-sm`} disabled={spinning} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
-          <p className="text-xs opacity-40 mt-2 text-center">7️⃣×3 = 50× · 💎×3 = 20× · ⭐×3 = 10× · any 3 = 5× · any pair = 2×</p>
+          <p className="text-xs opacity-40 mt-2 text-center">7️⃣×3 = 50× + jackpot · 💎×3 = 20× · ⭐×3 = 10× · any 3 = 5× · any pair = 2×</p>
+          <p className="text-xs opacity-40 mt-1 text-center">The jackpot grows every day until somebody hits it.</p>
         </ShopFrame>
       );
     }

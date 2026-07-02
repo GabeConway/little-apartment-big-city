@@ -54,6 +54,22 @@ export const CHECKS = [
     assert: "scene==='island'",
   },
   {
+    name: 'casino-backroom-curtain',
+    note: 'with 15 lifetime casino wins the velvet curtain warps into the Kinryū backroom',
+    save: { scene: 'casino', px: 112, py: 32, gangPaid: true, casinoWins: 15, visited: ['casino'] },
+    hold: ['ArrowUp:700'],
+    wait: 1200,
+    assert: "scene==='backroom'",
+  },
+  {
+    name: 'casino-backroom-locked',
+    note: 'under 15 wins the curtain bounces you off the threshold (doorman gate)',
+    save: { scene: 'casino', px: 112, py: 32, gangPaid: true, casinoWins: 3, visited: ['casino'] },
+    hold: ['ArrowUp:700'],
+    wait: 800,
+    assert: "scene==='casino'",
+  },
+  {
     name: 'collapse-at-2am',
     note: 'clock passing 26:00 forces the OUT COLD collapse-sleep overlay',
     save: { scene: 'apartment', px: 112, py: 80, timeMin: 1556, visited: ['apartment'] },

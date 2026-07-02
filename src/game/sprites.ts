@@ -1313,6 +1313,24 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#e857a8'; ctx.fillRect(2, 6, 2, 4); ctx.fillRect(12, 6, 2, 4); // neon sconces
     ctx.fillStyle = '#ffd5ec'; ctx.fillRect(2, 6, 1, 4); ctx.fillRect(12, 6, 1, 4);
   });
+  // The velvet curtain to the Kinryū backroom — parted red drapes on a gold rod,
+  // set into the casino wall (same header band + trim so it reads as the wall's
+  // doorway). Walkable: the warp/gate lives on this tile.
+  atlas['t-casino-curtain'] = tile(ctx => {
+    fill(ctx, '#2a1822');                                   // casino wall base
+    ctx.fillStyle = '#3a2230'; ctx.fillRect(0, 0, 16, 3);   // wall header band
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 3, 16, 1);   // gold trim carries across
+    ctx.fillStyle = '#16181d'; ctx.fillRect(5, 4, 6, 12);   // dark parting between drapes
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(1, 4, 14, 1);   // gold curtain rod
+    ctx.fillStyle = '#8e2a1e';                              // velvet drapes
+    ctx.fillRect(1, 5, 5, 11); ctx.fillRect(10, 5, 5, 11);
+    ctx.fillStyle = '#9e3a3a';                              // fold ridges
+    ctx.fillRect(2, 5, 1, 11); ctx.fillRect(4, 5, 1, 11); ctx.fillRect(11, 5, 1, 11); ctx.fillRect(13, 5, 1, 11);
+    ctx.fillStyle = '#d05050';                              // upper-left light catches the folds
+    ctx.fillRect(2, 5, 1, 3); ctx.fillRect(4, 5, 1, 2); ctx.fillRect(11, 5, 1, 2);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(1, 10, 5, 1); ctx.fillRect(10, 10, 5, 1); // tiebacks
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 10, 1, 1); ctx.fillRect(11, 10, 1, 1); // tieback glint
+  });
   atlas['t-slot'] = tile(ctx => {
     fill(ctx, '#2a1822');
     ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 1, 12, 14);  // red cabinet

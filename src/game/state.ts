@@ -132,6 +132,8 @@ export interface GameSave {
   jukeboxUnlocked: boolean;         // bought the home jukebox from DJ Tanuki (gates the Music phone app)
   homeTrack: string | null;         // jukebox: scene id whose music plays at the apartment (null = default theme)
   skills: { fish: number; mine: number; farm: number }; // gathering XP per skill (level derived)
+  casinoWins: number;               // lifetime winning casino bets (any game); opens the Kinryū backroom
+  jackpotDay: number;               // day the progressive slots jackpot was last hit (0 = never; pot grows since)
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -327,6 +329,8 @@ export const newSave = (): GameSave => ({
   jukeboxUnlocked: false,
   homeTrack: null,
   skills: { fish: 0, mine: 0, farm: 0 },
+  casinoWins: 0,
+  jackpotDay: 0,
 });
 
 // Merge a parsed (possibly older / partial) save blob over fresh defaults and run
@@ -852,6 +856,32 @@ export const donateToMuseum = (s: GameSave, slotId: string): boolean => {
 
 export const museumComplete = (s: GameSave): boolean =>
   MUSEUM_SLOTS.every(sl => s.museum.donated.includes(sl.id));
+
+// ---- Kinryū Lounge: progressive jackpot + the backroom -------------------------------
+// The slots' progressive jackpot grows a seeded ¥400–899 every day since it was
+// last hit (s.jackpotDay; 0 = never, so it's been building since before day 1 —
+// a brand-new save already sees base + day 1's growth). Deterministic — the
+// slots panel, the lobby and the morning bulletin all derive the same number.
+// Capped so a long-untouched pot (or a veteran save meeting the feature) can't
+// balloon absurdly; the pot plateaus around day ~70 untouched. Triple-7s pay it
+// out on top of the normal 50× line. The panel re-derives this every render
+// (including the 80ms reel-spin ticks), so the last result is memoized — the
+// value only changes when day or jackpotDay does.
+export const JACKPOT_BASE = 4000;
+export const JACKPOT_CAP = 50000;
+let jackpotMemo = { day: -1, jackpotDay: -1, pot: JACKPOT_BASE };
+export const jackpotFor = (s: Pick<GameSave, 'day' | 'jackpotDay'>): number => {
+  if (s.day === jackpotMemo.day && s.jackpotDay === jackpotMemo.jackpotDay) return jackpotMemo.pot;
+  let pot = JACKPOT_BASE;
+  for (let d = s.jackpotDay + 1; d <= s.day && pot < JACKPOT_CAP; d++)
+    pot += 400 + Math.floor(mulberry32(d * 1299709 + 43)() * 500); // +¥400..899/day
+  pot = Math.min(pot, JACKPOT_CAP);
+  jackpotMemo = { day: s.day, jackpotDay: s.jackpotDay, pot };
+  return pot;
+};
+// Lifetime winning bets that part the velvet curtain at the back of the hall.
+export const BACKROOM_WINS = 15;
+export const backroomOpen = (s: GameSave): boolean => s.casinoWins >= BACKROOM_WINS;
 
 // Shrine luck: tier 1 at ¥5,000 donated, tier 2 at ¥20,000. Each tier makes
 // the rarer (valuable) fish noticeably more willing to bite. Funding the shrine's

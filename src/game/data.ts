@@ -309,6 +309,8 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'encore', title: 'Encore!', desc: 'Finished a karaoke song hitting 80% of the notes.', hint: 'The club keeps a mic for anyone brave enough to hold the beat.' },
   { id: 'nine-lives', title: 'Nine Lives', desc: 'Met David the cat.', hint: 'Something in a Downtown back corner is watching you. Patiently.' },
   { id: 'bon-voyage', title: 'Bon Voyage', desc: 'Reached Paris.', hint: 'The yellow place is not the end of the line.' },
+  { id: 'jackpot', title: 'Neon Rain', desc: 'Hit the progressive jackpot on the Kinryū slots.', hint: 'Three sevens. The pot has been growing for days.' },
+  { id: 'inner-circle', title: 'The Inner Circle', desc: 'Got waved past the velvet curtain into the Kinryū backroom.', hint: 'The house counts its winners. Become a problem worth counting.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------

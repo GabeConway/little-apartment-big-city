@@ -27,7 +27,7 @@ const PORT = Number(process.env.PLAYTEST_PORT || 5179);
 // px = tile * 16. Coords below land the player on a walkable tile in each scene
 // (taken from the warp targets in maps.ts), so a teleport never drops you in a wall.
 // Safe spawn tile per scene (px/py = warp-target tile ×16, walkable on arrival).
-// Covers all 20 scenes so `--save <scene>` and the `smoke` command can reach
+// Covers all 21 scenes so `--save <scene>` and the `smoke` command can reach
 // every map. Tiles sourced from the `to:'<scene>'` warp targets in maps.ts.
 const SCENE_SPAWN = {
   apartment: { px: 112, py: 80 },
@@ -43,6 +43,7 @@ const SCENE_SPAWN = {
   nightclub: { px: 112, py: 128 },
   garage: { px: 128, py: 112 },
   casino: { px: 112, py: 112 },
+  backroom: { px: 80, py: 80 },
   museum: { px: 112, py: 128 },
   backrooms: { px: 128, py: 32 },
   mines: { px: 32, py: 32 },
@@ -60,6 +61,7 @@ const SCENE_EXTRA = {
   backrooms: { backroomsUnlocked: true, wand: true },
   mines: { backroomsUnlocked: true, wand: true },
   casino: { gangPaid: true },
+  backroom: { gangPaid: true, casinoWins: 15 },
   paris: { backroomsUnlocked: true, parisRevealed: true },
   island: { vehicles: ['boat'] },
   seacave: { vehicles: ['boat'] },

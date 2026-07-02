@@ -956,10 +956,11 @@ const casino: SceneDef = {
     'R': T('t-roulette', true),
     'r': T('t-roulette-felt', true),
     'D': T('t-door'),
+    'C': T('t-casino-curtain'), // velvet curtain to the backroom (walkable warp, win-gated)
   },
   grid: [
-    '################',
-    '#SS.SS.SS.SS.SS#',
+    '#######CC#######',
+    '#SS.SS....SS.SS#',
     '#..............#',
     '#...B.....B....#',
     '#..............#',
@@ -972,9 +973,14 @@ const casino: SceneDef = {
   warps: [
     { x: 7, y: 9, to: 'badtown', tx: 14, ty: 3, dir: 'down' },
     { x: 8, y: 9, to: 'badtown', tx: 15, ty: 3, dir: 'down' },
+    // The backroom curtain: gated on BACKROOM_WINS lifetime wins (bounced in the
+    // warp check like the yakuza toll — see lockedGate in the monolith).
+    { x: 7, y: 0, to: 'backroom', tx: 5, ty: 5, dir: 'up' },
+    { x: 8, y: 0, to: 'backroom', tx: 6, ty: 5, dir: 'up' },
   ],
   interactables: [
-    { id: 'casino-slots', x: 1, y: 1, w: 14, h: 1, label: 'Slot machine' },
+    { id: 'casino-slots', x: 1, y: 1, w: 5, h: 1, label: 'Slot machine' },
+    { id: 'casino-slots', x: 10, y: 1, w: 5, h: 1, label: 'Slot machine' },
     { id: 'casino-slots', x: 1, y: 6, w: 5, h: 1, label: 'Slot machine' },
     { id: 'casino-slots', x: 10, y: 6, w: 5, h: 1, label: 'Slot machine' },
     { id: 'casino-blackjack', x: 4, y: 3, w: 1, h: 1, label: 'Blackjack table' },
@@ -982,6 +988,37 @@ const casino: SceneDef = {
     { id: 'casino-roulette', x: 7, y: 5, w: 2, h: 1, label: 'Roulette table' },
   ],
   npcs: [{ id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' }],
+};
+
+// ---- The Kinryū backroom (the hidden VIP room behind the casino curtain) ---------------
+// Parted open only after BACKROOM_WINS lifetime winning bets (gated at the warp).
+// Small and plush: one private table, one enormous boss who keeps the count.
+const backroom: SceneDef = {
+  id: 'backroom',
+  name: 'Kinryū Backroom',
+  legend: {
+    '#': T('t-casino-wall', true),
+    '.': T('t-casino-carpet'),
+    'B': T('t-blackjack', true),
+    'C': T('t-casino-curtain'),
+  },
+  grid: [
+    '############',
+    '#..........#',
+    '#..........#',
+    '#.....B....#',
+    '#..........#',
+    '#..........#',
+    '#####CC#####',
+  ],
+  warps: [
+    { x: 5, y: 6, to: 'casino', tx: 7, ty: 1, dir: 'down' },
+    { x: 6, y: 6, to: 'casino', tx: 8, ty: 1, dir: 'down' },
+  ],
+  interactables: [
+    { id: 'backroom-table', x: 6, y: 3, w: 1, h: 1, label: 'Private table' },
+  ],
+  npcs: [{ id: 'kinryu-boss', x: 6, y: 2, sprite: 'npc-yakuza', dir: 'down' }],
 };
 
 // ---- Paris (the secret entrance behind the backrooms) ---------------------------------
@@ -1077,5 +1114,5 @@ const museum: SceneDef = {
 };
 
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, deepsea, casino, paris, museum,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, deepsea, casino, backroom, paris, museum,
 };
