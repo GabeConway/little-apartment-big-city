@@ -4730,8 +4730,15 @@ const LittleApartmentGame: React.FC = () => {
       const donated = saveRef.current.museum.donated;
       for (const slot of MUSEUM_SLOTS) {
         if (!donated.includes(slot.id)) continue;
-        const key = slot.kind === 'art' ? 't-frame-full' : 't-pedestal-full';
-        ctx.drawImage(atlas[key], slot.x * TILE - cam.x, slot.y * TILE - cam.y);
+        if (slot.kind === 'art') {
+          // per-piece painting inside the frame (falls back to the generic one)
+          ctx.drawImage(atlas[`t-frame-full-${slot.id}`] ?? atlas['t-frame-full'], slot.x * TILE - cam.x, slot.y * TILE - cam.y);
+        } else {
+          // per-piece artifact, raised 9px so it stands proud of the plinth cap
+          const spr = atlas[`mus-${slot.id}`];
+          if (spr) ctx.drawImage(spr, slot.x * TILE - cam.x, slot.y * TILE - cam.y - 9);
+          else ctx.drawImage(atlas['t-pedestal-full'], slot.x * TILE - cam.x, slot.y * TILE - cam.y);
+        }
       }
       // Gallery spotlights: a steady warm pool over EVERY display slot (cached
       // sprite via glowSpriteRef — glow() is declared later in the draw, and

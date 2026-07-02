@@ -1467,6 +1467,98 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#5e8a4f'; ctx.fillRect(4, 9, 8, 2);      // hill
     ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 12, 4, 1);     // nameplate
   });
+  // ---- Donated museum displays — one DISTINCT piece per MUSEUM_SLOTS id ------
+  // The old generic urn was a 5×3 speck lost against the wall; donations were
+  // invisible. Each art slot gets its own painting (t-frame-full-<id>, wall
+  // baked in) and each artifact a transparent 16×16 sprite (mus-<id>) that the
+  // museum draw overlay raises above the plinth cap so it stands tall.
+  const framed = (paint: (ctx: CanvasRenderingContext2D) => void) => tile(ctx => {
+    museumWall(ctx);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(2, 3, 12, 10);    // gold frame
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 3, 12, 1);     // lit top edge
+    ctx.fillStyle = '#8a6a30'; ctx.fillRect(3, 4, 10, 8);     // inner lip
+    ctx.save(); ctx.beginPath(); ctx.rect(4, 5, 8, 6); ctx.clip(); paint(ctx); ctx.restore(); // 8×6 canvas at (4,5)
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 12, 4, 1);     // nameplate
+  });
+  atlas['t-frame-full-art-alley'] = framed(ctx => {           // The Vanishing Alley — dark backstreet, one neon slit
+    ctx.fillStyle = '#222831'; ctx.fillRect(4, 5, 8, 6);
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 5, 3, 6); ctx.fillRect(10, 5, 2, 6); // looming buildings
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(8, 5, 1, 5);      // neon slit down the gap
+    ctx.fillStyle = '#b06ad0'; ctx.fillRect(7, 10, 3, 1);     // glow pooling on the ground
+  });
+  atlas['t-frame-full-art-madonna'] = framed(ctx => {         // Neon Madonna — after-midnight colors
+    ctx.fillStyle = '#1d1826'; ctx.fillRect(4, 5, 8, 6);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(6, 5, 4, 1);      // halo
+    ctx.fillStyle = '#e857a8'; ctx.fillRect(7, 6, 2, 2);      // face
+    ctx.fillStyle = '#b06ad0'; ctx.fillRect(6, 8, 4, 3);      // robe
+  });
+  atlas['t-frame-full-art-bento'] = framed(ctx => {           // Still Life with Konbini Bento
+    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(4, 5, 8, 6);      // tabletop
+    ctx.fillStyle = '#d05050'; ctx.fillRect(5, 7, 6, 3);      // bento tray
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(5, 7, 3, 2);      // rice
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 7, 2, 1);      // tamago
+    ctx.fillStyle = '#50c878'; ctx.fillRect(10, 8, 1, 1);     // token vegetable
+  });
+  atlas['t-frame-full-art-cat'] = framed(ctx => {             // Portrait of a Stray, Unbothered (back turned)
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(4, 5, 8, 6);
+    ctx.fillStyle = '#16181d'; ctx.fillRect(6, 7, 4, 4); ctx.fillRect(7, 5, 3, 3); // seated back + head
+    ctx.fillStyle = '#16181d'; ctx.fillRect(6, 5, 1, 1); ctx.fillRect(10, 5, 1, 1); // ears
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(5, 10, 1, 1);     // tail curl
+  });
+  // Artifacts: transparent overlays, base line at y13 so they sit on the plinth
+  // cap when drawn 9px above the pedestal tile. Chunky ~8px reads at a glance.
+  atlas['mus-arti-coin'] = tile(ctx => {                      // First Coin of the Realm — upright on a stand
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(5, 4, 6, 8); ctx.fillRect(4, 5, 8, 6); // coin disc
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 4, 3, 2); ctx.fillRect(4, 5, 2, 3); // upper-left shine
+    ctx.fillStyle = '#8a6a30'; ctx.fillRect(10, 9, 2, 2); ctx.fillRect(7, 6, 2, 4); // shadow edge + struck ¥ bar
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(6, 13, 4, 1);     // little display stand
+  });
+  atlas['mus-arti-token'] = tile(ctx => {                     // A Single Chicken Nugget
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(5, 7, 7, 5); ctx.fillRect(4, 8, 9, 3); ctx.fillRect(6, 6, 4, 1); // irregular nugget mass
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 7, 3, 2);      // crispy lit top
+    ctx.fillStyle = '#8a6644'; ctx.fillRect(10, 10, 3, 1); ctx.fillRect(6, 11, 5, 1); // fried shadow
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 12, 8, 1); ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 13, 8, 1); // glass display base
+  });
+  atlas['mus-arti-onigiri'] = tile(ctx => {                   // Fossilized Onigiri — gone full mineral
+    ctx.fillStyle = '#c4bcab'; ctx.fillRect(6, 5, 4, 1); ctx.fillRect(5, 6, 6, 3); ctx.fillRect(4, 9, 8, 4); // triangle body
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(6, 5, 2, 1); ctx.fillRect(5, 6, 2, 2); // lit facet
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(9, 7, 2, 2); ctx.fillRect(10, 9, 2, 4); // stone shade
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(6, 10, 4, 3);     // petrified nori band
+  });
+  atlas['mus-arti-rock'] = tile(ctx => {                      // A Perfectly Ordinary Rock ("allegedly")
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(5, 7, 7, 6); ctx.fillRect(4, 9, 9, 3); // ordinary mass
+    ctx.fillStyle = '#a6b0b8'; ctx.fillRect(5, 7, 3, 2);      // upper-left light
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(9, 10, 3, 2);     // shade
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(6, 8, 1, 1);      // one suspicious glint
+  });
+  atlas['mus-arti-lure'] = tile(ctx => {                      // Genji's Lost Lure — bobber on a stand
+    ctx.fillStyle = '#d05050'; ctx.fillRect(6, 4, 4, 3);      // red cap
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(6, 7, 4, 3);      // cream belly
+    ctx.fillStyle = '#9e3a3a'; ctx.fillRect(9, 4, 1, 3);      // cap shade
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(7, 3, 2, 1); ctx.fillRect(8, 10, 1, 2); ctx.fillRect(7, 12, 2, 1); // eyelet + trailing hook
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(6, 13, 4, 1);     // stand
+  });
+  atlas['mus-arti-shard'] = tile(ctx => {                     // Shard of the Deep — still humming
+    ctx.fillStyle = '#50a0d0'; ctx.fillRect(7, 3, 3, 9); ctx.fillRect(6, 5, 5, 5); // crystal spire
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(7, 3, 1, 8); ctx.fillRect(6, 5, 1, 4); // lit facet
+    ctx.fillStyle = '#2e5e8e'; ctx.fillRect(9, 5, 2, 6);      // deep facet
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(7, 4, 1, 1);      // hum glint
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(5, 12, 7, 1); ctx.fillStyle = '#9aa0a6'; ctx.fillRect(5, 13, 7, 1); // glass case base
+  });
+  atlas['mus-arti-capsule'] = tile(ctx => {                   // The Last Gachapon Capsule
+    ctx.fillStyle = '#d05050'; ctx.fillRect(5, 5, 6, 4) ; ctx.fillRect(6, 4, 4, 1); // red dome
+    ctx.fillStyle = '#e8746a'; ctx.fillRect(6, 4, 2, 1); ctx.fillRect(5, 5, 2, 2);  // dome shine
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(5, 9, 6, 3); ctx.fillRect(6, 12, 4, 1); // clear empty bottom
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(5, 9, 6, 1) ; ctx.fillRect(9, 10, 2, 2); // seam + glass shade
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(6, 13, 4, 1);     // stand
+  });
+  atlas['mus-arti-meteor'] = tile(ctx => {                    // Meteorite (or Burnt Toast)
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(5, 6, 7, 6); ctx.fillRect(4, 8, 9, 3); // charred mass
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(5, 6, 3, 2);      // lit crust
+    ctx.fillStyle = '#e0552e'; ctx.fillRect(7, 8, 3, 1); ctx.fillRect(9, 10, 1, 2); // cooling cracks
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 8, 1, 1);      // hottest seam
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 12, 8, 1); ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 13, 8, 1); // glass display base
+  });
   // Museum exterior facade — neoclassical pale stone with seamless fluting,
   // so a row of these reads as one stately storefront amid grimy Downtown.
   atlas['t-museum-front'] = tile(ctx => {                      // dark stately stone, fits the neon street
