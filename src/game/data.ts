@@ -1006,6 +1006,10 @@ export const KEEPSAKES: Keepsake[] = [
     flavor: '"PATRON — LEVEL ONE," hand-laminated and slightly sticky. Wear with terrifying pride.' },
   { id: 'hatband', name: 'Silver Concho Hatband', sprite: 'i-hatband', effect: 'display',
     flavor: "Real silver conchos from a cowboy who don't do weepy. Worth more than the hat." },
+  // Not a friendship capstone — the RIVAL capstone. Granted by the tea ceremony
+  // after taking five duel hands off Towzawa (see the kinryu-boss talk branch).
+  { id: 'hanafuda', name: "Towzawa's Hanafuda", sprite: 'i-hanafuda', effect: 'display',
+    flavor: 'A single dragon card, worn soft at the corners. He carried it thirty years. Now it keeps an eye on you.' },
 ];
 export const keepsakeById = (id: string): Keepsake | undefined => KEEPSAKES.find(k => k.id === id);
 

@@ -6,6 +6,7 @@ import {
   newSave, bossStakeFor, houseRuleFor, HOUSE_RULES,
   BOSS_STAKE_BASE, BOSS_STAKE_CAP, BACKROOM_WINS,
 } from '../src/game/state';
+import { keepsakeById } from '../src/game/data';
 
 describe('bossStakeFor', () => {
   it('starts at the base stake the day the backroom opens', () => {
@@ -42,5 +43,10 @@ describe('the duel gate fields', () => {
     expect(s.bossDuelDay).toBe(0);
     expect(s.bossDuelLosses).toBe(0);
     expect(s.bossDuelPlayed).toBe(0);
+  });
+
+  it("the rival-capstone keepsake exists (Towzawa's Hanafuda, granted at 5 duel wins)", () => {
+    expect(keepsakeById('hanafuda')).toBeDefined();
+    expect(keepsakeById('hanafuda')!.effect).toBe('display');
   });
 });

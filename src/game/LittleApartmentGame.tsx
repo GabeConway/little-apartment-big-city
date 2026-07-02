@@ -590,6 +590,7 @@ const bossLossLine = (losses: number): string =>
   losses === 1 ? 'A long silence. Then he inclines his head, exactly one degree. "...Well played. Take it — money returns. The hand, I will remember." He refills his tea, unhurried.'
   : losses === 2 ? '"Hm." He pushes the envelope across and pours himself more tea.'
   : losses === 3 ? 'He nods once at the envelope. The tea steams.'
+  : losses === 5 ? 'He is very still for a long moment. Then, quietly: "Stay. When the felt is settled — speak with me." Something in the room has shifted.'
   : 'He says nothing at all. The envelope is already on the felt.';
 
 interface CasinoState { bj: BlackjackState; slot: SlotState; roul: RouletteState; poker: PokerState; duel: DuelState }
@@ -3107,9 +3108,25 @@ const LittleApartmentGame: React.FC = () => {
             `"${BACKROOM_WINS} wins. We keep count, {name}. Most people leave their money here. You keep walking out with ours."`,
             '"I respect a problem I can name." He slides an envelope across the felt without touching your hand. "A courtesy, from the Kinryū. Spend it on the floor, where I can win it back." (+¥10,000)',
           ], 'Shinzo Towzawa');
+        } else if (s.bossDuelLosses >= 5 && !s.storySeen.includes('towzawa-tea')) {
+          // The rival capstone: take five hands off him and the man who says
+          // "the tea is not for you" pours a second cup. Once, ever.
+          s.storySeen.push('towzawa-tea');
+          grantKeepsake(s, 'hanafuda');
+          persistSave(s); refreshHud();
+          showDialog([
+            'He studies you across the felt for a long, unhurried moment. Then he turns, takes a second cup from the shelf behind him — plain, older than anything else in the room — and sets it beside his own.',
+            'He pours. Steam rises between you. "Five hands. No one has taken five hands from this table. Not the families. Not the house. You."',
+            '"I do not make friends, {name}. I keep accounts." He slides the cup across the felt, and something that is almost respect crosses his face. "This one stays open."',
+            "The tea is for you. It tastes of smoke and long patience. (Received: Towzawa's Hanafuda — a single dragon card, worn soft at the corners.)",
+          ], 'Shinzo Towzawa');
         } else {
           const played = s.bossDuelPlayed, lost = s.bossDuelLosses; // lost = TOWZAWA's losses
           const lines =
+            s.storySeen.includes('towzawa-tea') ? [
+              'A second cup dries on the shelf behind him now, kept apart from the others. He does not mention it, and would not thank you for mentioning it.',
+              '"The table is open, {name}. For you it is always open." A beat. "That is not a kindness."',
+            ] :
             played === 0 ? [
               'He turns a teacup a quarter-rotation on its saucer. The lamp hums.',
               '"You found the room. You have not yet found the nerve." His eyes move to the private table, then back to the tea. "The table is open. The tea is not for you."',

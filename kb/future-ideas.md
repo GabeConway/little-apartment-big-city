@@ -1,31 +1,26 @@
 # kb/future-ideas.md — parked work & ideas backlog
 
-Parked when the 2026-07-01 session was stopped. Check kb/games.md before picking
-one up — some may be partially done or superseded.
+Check kb/games.md before picking anything up — some may be partially done or superseded.
 
-## Queued next (was about to be built)
-(Both items built 2026-07-01: Messages inbox grouped by sender, RUMORS mix in
-`GOSSIP` NPC lines — see kb/games.md.)
-
-## Boss duel + poker (APPROVED 2026-07-02 — BUILT 2026-07-02, see kb/games.md)
-(All shipped: boss-duel blackjack once/night w/ daily house-rule placard + boss
-table-talk, Jacks-or-Better video poker on the main floor, PLUS same-session
-additions: `BACKROOM_WINS` 15→30, a visible doorman gating the curtain, and the
-backroom VIP re-dress w/ the gold-dragon mural.)
-- Later maybe: milestone comps off the duel ledger (bossDuelPlayed/bossDuelLosses now EXIST
-  and Towzawa quotes them in talk — comps would hang off those; see comp-tiers below).
-
-## Casino backlog (brainstormed, approved-ish, unbuilt)
-- Chinchirorin dice cup (3 dice in a bowl, triples/pairs) as a 5th floor game.
-- ~~Daily high-roller table: one ¥10k double-or-nothing hand vs the boss, seeded/day.~~
-  (BUILT 2026-07-02 as the boss duel — see above.)
-- Comp tiers off lifetime wagered (`save.casinoWagered`): free bar soda, a
-  members-only accessory, gold card in the phone.
-- "Kinryū Credit" flavor texts on big losses (atmosphere only, no debt).
-
-(Built 2026-07-02: **hidden backroom** after 15 total wins (raised to 30 later that day) (`backroom` scene,
-`save.casinoWins`, `inner-circle` ach) and the **progressive slots jackpot**
-(`jackpotFor`, `save.jackpotDay`, bulletin heralds, `jackpot` ach) — see kb/games.md.)
+## Casino backlog (ranked 2026-07-02 with the owner; unbuilt)
+The whole 2026-07-02 casino wave is DONE (jackpot, backroom @30 wins, doorman,
+boss duel w/ house rules, video poker, Shinzo Towzawa rival buildout + ledger
+talk + first-loss taunt text, tea-ceremony capstone → `hanafuda` keepsake).
+See kb/games.md Casino section + the four 07-02 "Recent changes" batches. Left:
+- **Comp tiers** off lifetime wagered (new `save.casinoWagered` field): free
+  lounge tea/soda → members-only accessory (visible on player) → gold card in
+  the phone. Silver-lining for losing; fits the luxury-sink economy. (Owner
+  ranked this #2 of the brainstorm.)
+- **Chinchirorin dice cup** as a 5th floor game (3 dice in a bowl,
+  triples/pairs/4-5-6 — most yakuza-authentic game there is). (Ranked #3.)
+- **Placard mastery achievement** — win the boss duel under all 5 house rules
+  ("Read the Placard"). Pure data + a per-rule-won tracking field.
+- **"Kinryū Credit" flavor texts** on big losses (atmosphere only, no debt);
+  pairs with the existing `towzawa-first-loss` taunt text.
+- **Patrons react to you** — gambler brush-off lines vary after you've hit the
+  jackpot / entered the backroom ("that's the one the curtain opens for").
+- Skip (owner-aligned 2026-07-02): shrine-luck affecting casino odds, and any
+  chips/second-currency indirection.
 
 ## Smaller parked ideas
 - Aquarium renders tiny sprites of fish you've actually caught (`save.fishLog`).

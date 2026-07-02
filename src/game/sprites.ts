@@ -3513,6 +3513,19 @@ const buildDecorFood = (atlas: Atlas) => {
     ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 8, 5, 1); ctx.fillRect(8, 7, 1, 5); ctx.fillRect(7, 10, 3, 1); // gold kanji
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 11, 1, 1);
   });
+  atlas['i-hanafuda'] = tile(ctx => {
+    // Towzawa's hanafuda — a single dragon card off a lacquer-black deck,
+    // corners worn soft from thirty years of his thumb.
+    ctx.fillStyle = '#16181d'; ctx.fillRect(4, 2, 9, 13);   // lacquer card back peeking
+    ctx.fillStyle = '#2a2a34'; ctx.fillRect(4, 2, 9, 1); ctx.fillRect(4, 2, 1, 13); // worn lit edge
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(5, 3, 7, 11);   // cream face
+    ctx.fillStyle = '#cdbb8e'; ctx.fillRect(11, 4, 1, 10); ctx.fillRect(6, 13, 6, 1); // shade + thumb wear
+    ctx.fillStyle = '#c9a227';                              // gold dragon winding up the card
+    ctx.fillRect(6, 11, 2, 1); ctx.fillRect(7, 10, 2, 1); ctx.fillRect(8, 9, 2, 1);
+    ctx.fillRect(7, 8, 2, 1); ctx.fillRect(6, 7, 2, 1); ctx.fillRect(7, 6, 2, 1); ctx.fillRect(8, 5, 2, 1);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 4, 2, 1);    // the head catches the lamp
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(6, 4, 1, 1);    // red maker's seal
+  });
   atlas['i-badge'] = tile(ctx => {
     // hand-laminated "PATRON" pin badge, slightly crooked, a safety-pin glint.
     ctx.fillStyle = '#e8e0d0'; ctx.fillRect(3, 4, 10, 5); ctx.fillRect(4, 9, 10, 5);  // laminate card (leans 1px right)
