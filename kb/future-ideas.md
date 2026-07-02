@@ -7,6 +7,19 @@ one up — some may be partially done or superseded.
 (Both items built 2026-07-01: Messages inbox grouped by sender, RUMORS mix in
 `GOSSIP` NPC lines — see kb/games.md.)
 
+## Boss duel + poker (APPROVED 2026-07-02, next up)
+- **Boss duel = BLACKJACK, once/day** at the backroom `backroom-table` (replace the
+  plain `startBlackjack()` call): fixed high stake (~¥10k double-or-nothing, may
+  scale with `save.casinoWins`), one hand per day, then the table closes ("he
+  finishes his tea") until tomorrow.
+- **House rule of the day** (seeded per day, shown on a placard line): e.g.
+  blackjack pays 2:1 / dealer hits soft 17 / your hole card peeks, etc.
+- **He talks during the hand**: line on deal, on your hit, on the hole-card flip;
+  gracious loss line exactly once, quieter each later loss.
+- **Poker on the MAIN casino floor** as a 4th game (owner is lukewarm on poker —
+  keep it simple, e.g. solo 5-card-draw video-poker vs a pay table; NOT the boss game).
+- Later maybe: head-to-head ledger + milestone comps (see comp-tiers item below).
+
 ## Casino backlog (brainstormed, approved-ish, unbuilt)
 - Chinchirorin dice cup (3 dice in a bowl, triples/pairs) as a 4th game.
 - Daily high-roller table: one ¥10k double-or-nothing hand vs the boss, seeded/day.
