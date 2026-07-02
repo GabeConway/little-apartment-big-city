@@ -55,15 +55,15 @@ export const CHECKS = [
   },
   {
     name: 'casino-backroom-curtain',
-    note: 'with 15 lifetime casino wins the velvet curtain warps into the Kinryū backroom',
-    save: { scene: 'casino', px: 112, py: 32, gangPaid: true, casinoWins: 15, visited: ['casino'] },
+    note: 'with 30 lifetime casino wins the velvet curtain warps into the Kinryū backroom',
+    save: { scene: 'casino', px: 112, py: 32, gangPaid: true, casinoWins: 30, visited: ['casino'] },
     hold: ['ArrowUp:700'],
     wait: 1200,
     assert: "scene==='backroom'",
   },
   {
     name: 'casino-backroom-locked',
-    note: 'under 15 wins the curtain bounces you off the threshold (doorman gate)',
+    note: 'under 30 wins the doorman bodies you off the curtain approach',
     save: { scene: 'casino', px: 112, py: 32, gangPaid: true, casinoWins: 3, visited: ['casino'] },
     hold: ['ArrowUp:700'],
     wait: 800,

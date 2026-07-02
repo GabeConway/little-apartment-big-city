@@ -311,6 +311,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'bon-voyage', title: 'Bon Voyage', desc: 'Reached Paris.', hint: 'The yellow place is not the end of the line.' },
   { id: 'jackpot', title: 'Neon Rain', desc: 'Hit the progressive jackpot on the Kinryū slots.', hint: 'Three sevens. The pot has been growing for days.' },
   { id: 'inner-circle', title: 'The Inner Circle', desc: 'Got waved past the velvet curtain into the Kinryū backroom.', hint: 'The house counts its winners. Become a problem worth counting.' },
+  { id: 'boss-duel', title: 'Finish His Tea', desc: 'Beat the Kinryū Boss at his own table.', hint: 'Behind the curtain, the house has a face. Faces can lose.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------

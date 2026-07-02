@@ -957,6 +957,7 @@ const casino: SceneDef = {
     'r': T('t-roulette-felt', true),
     'D': T('t-door'),
     'C': T('t-casino-curtain'), // velvet curtain to the backroom (walkable warp, win-gated)
+    'V': T('t-videopoker', true), // video-poker cabinets (the floor's 4th game)
   },
   grid: [
     '#######CC#######',
@@ -967,7 +968,7 @@ const casino: SceneDef = {
     '#......Rr......#',
     '#SS.SS....SS.SS#',
     '#..............#',
-    '#..............#',
+    '#VV..........VV#',
     '#######DD#######',
   ],
   warps: [
@@ -986,8 +987,17 @@ const casino: SceneDef = {
     { id: 'casino-blackjack', x: 4, y: 3, w: 1, h: 1, label: 'Blackjack table' },
     { id: 'casino-blackjack', x: 10, y: 3, w: 1, h: 1, label: 'Blackjack table' },
     { id: 'casino-roulette', x: 7, y: 5, w: 2, h: 1, label: 'Roulette table' },
+    { id: 'casino-poker', x: 1, y: 8, w: 2, h: 1, label: 'Video poker' },
+    { id: 'casino-poker', x: 13, y: 8, w: 2, h: 1, label: 'Video poker' },
   ],
-  npcs: [{ id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' }],
+  npcs: [
+    { id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' },
+    // The doorman: plants himself in front of the curtain until the win count
+    // says otherwise, then stands aside holding the rope (two conditional
+    // placements, filtered on backroomOpen like the badtown yakuza on gangPaid).
+    { id: 'kinryu-doorman', x: 7, y: 1, sprite: 'npc-yakuza', dir: 'down' },
+    { id: 'kinryu-doorman-aside', x: 9, y: 1, sprite: 'npc-yakuza', dir: 'left' },
+  ],
 };
 
 // ---- The Kinryū backroom (the hidden VIP room behind the casino curtain) ---------------
@@ -998,13 +1008,19 @@ const backroom: SceneDef = {
   name: 'Kinryū Backroom',
   legend: {
     '#': T('t-casino-wall', true),
-    '.': T('t-casino-carpet'),
+    '.': T('t-vip-carpet'),        // richer crimson pile than the floor outside
     'B': T('t-blackjack', true),
     'C': T('t-casino-curtain'),
+    'L': T('t-vip-lantern', true), // wall lanterns flanking the mural
+    '1': T('t-dragon-0', true),    // the 金龍 itself — 4-tile gold-dragon mural
+    '2': T('t-dragon-1', true),
+    '3': T('t-dragon-2', true),
+    '4': T('t-dragon-3', true),
+    'b': T('t-vip-bonsai', true),
   },
   grid: [
-    '############',
-    '#..........#',
+    '##L#1234#L##',
+    '#b........b#',
     '#..........#',
     '#.....B....#',
     '#..........#',

@@ -1331,6 +1331,100 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#c9a227'; ctx.fillRect(1, 10, 5, 1); ctx.fillRect(10, 10, 5, 1); // tiebacks
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 10, 1, 1); ctx.fillRect(11, 10, 1, 1); // tieback glint
   });
+  // ---- Kinryū backroom VIP dressing --------------------------------------------
+  // Denser crimson carpet, wall lanterns, floor bonsai, and a 4-tile gold-dragon
+  // mural (the 金龍 itself) set into a black-lacquer band of the back wall. All
+  // four mural tiles share the casino wall's header/footer so they read as wall.
+  atlas['t-vip-carpet'] = tile(ctx => {                     // backroom: deep crimson pile, gold lattice
+    fill(ctx, '#5e1a26');
+    ctx.fillStyle = '#6e2230'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 8, 16, 1);
+    speckle(ctx, '#4e1520', 91, 8);
+    ctx.fillStyle = '#c9a227';                              // offset gold diamonds
+    ctx.fillRect(3, 3, 1, 1); ctx.fillRect(2, 4, 1, 1); ctx.fillRect(4, 4, 1, 1); ctx.fillRect(3, 5, 1, 1);
+    ctx.fillRect(11, 11, 1, 1); ctx.fillRect(10, 12, 1, 1); ctx.fillRect(12, 12, 1, 1); ctx.fillRect(11, 13, 1, 1);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 4, 1, 1); ctx.fillRect(11, 12, 1, 1);
+  });
+  atlas['t-vip-lantern'] = tile(ctx => {                    // wall-hung gold lantern, lit warm
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#3a2230'; ctx.fillRect(0, 0, 16, 3);   // wall header band
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 3, 16, 1);   // gold trim carries across
+    ctx.fillStyle = '#1d1018'; ctx.fillRect(0, 13, 16, 3);
+    ctx.fillStyle = '#7a5a1a'; ctx.fillRect(7, 4, 2, 1);    // hanger
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(5, 5, 6, 1);    // cap
+    ctx.fillStyle = '#e0843a'; ctx.fillRect(5, 6, 6, 5);    // warm paper body
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(6, 7, 4, 3);    // lit core
+    ctx.fillStyle = '#fff2c0'; ctx.fillRect(7, 8, 2, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(5, 11, 6, 1);   // base
+    ctx.fillStyle = '#8e2a1e'; ctx.fillRect(7, 12, 2, 2);   // tassel
+  });
+  atlas['t-vip-bonsai'] = tile(ctx => {                     // floor bonsai pine in a gold pot
+    fill(ctx, '#5e1a26');                                   // sits on the VIP carpet
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(4, 13, 9, 2); // floor shadow
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(5, 11, 6, 3);   // pot
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(5, 11, 6, 1);   // pot rim glint
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 8, 2, 3); ctx.fillRect(8, 6, 2, 2); // bent trunk
+    ctx.fillStyle = '#1f5233';                              // pine pads
+    ctx.fillRect(3, 4, 5, 3); ctx.fillRect(8, 2, 6, 3); ctx.fillRect(5, 6, 4, 2);
+    ctx.fillStyle = '#2c6e44'; ctx.fillRect(3, 4, 5, 1); ctx.fillRect(8, 2, 6, 1); // lit pad tops
+    ctx.fillStyle = '#368351'; ctx.fillRect(4, 4, 2, 1); ctx.fillRect(9, 2, 2, 1);
+  });
+  // The dragon: a gold ribbon body winding tail→head across four tiles, on a
+  // black-lacquer field framed by the wall bands. Drawn left-to-right 0..3.
+  const muralWall = (ctx: CanvasRenderingContext2D) => {
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#3a2230'; ctx.fillRect(0, 0, 16, 3);   // wall header band
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(0, 3, 16, 1);   // gold trim
+    ctx.fillStyle = '#16181d'; ctx.fillRect(0, 4, 16, 9);   // lacquer field
+    ctx.fillStyle = '#241a28'; ctx.fillRect(2, 11, 5, 1); ctx.fillRect(9, 5, 5, 1); // cloud wisps
+    ctx.fillStyle = '#1d1018'; ctx.fillRect(0, 13, 16, 3);
+  };
+  atlas['t-dragon-0'] = tile(ctx => {                       // tail: sweeps up from the low left
+    muralWall(ctx);
+    ctx.fillStyle = '#e0843a'; ctx.fillRect(0, 10, 2, 1);   // forked tail tip
+    ctx.fillStyle = '#c9a227';
+    ctx.fillRect(1, 10, 3, 2); ctx.fillRect(3, 9, 3, 2); ctx.fillRect(6, 8, 3, 2);
+    ctx.fillRect(9, 7, 3, 2); ctx.fillRect(12, 6, 4, 2);
+    ctx.fillStyle = '#ffd24a';                              // lit spine
+    ctx.fillRect(1, 10, 3, 1); ctx.fillRect(6, 8, 3, 1); ctx.fillRect(12, 6, 4, 1);
+  });
+  atlas['t-dragon-1'] = tile(ctx => {                       // body dips, one claw reaching down
+    muralWall(ctx);
+    ctx.fillStyle = '#c9a227';
+    ctx.fillRect(0, 6, 3, 2); ctx.fillRect(2, 7, 3, 2); ctx.fillRect(4, 8, 3, 2);
+    ctx.fillRect(6, 9, 4, 2); ctx.fillRect(10, 8, 3, 2); ctx.fillRect(13, 7, 3, 2);
+    ctx.fillStyle = '#ffd24a';
+    ctx.fillRect(0, 6, 3, 1); ctx.fillRect(6, 9, 4, 1); ctx.fillRect(13, 7, 3, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(7, 11, 1, 1);   // claw leg
+    ctx.fillStyle = '#e0843a'; ctx.fillRect(6, 12, 3, 1);   // talons
+  });
+  atlas['t-dragon-2'] = tile(ctx => {                       // body crests, dorsal fins up
+    muralWall(ctx);
+    ctx.fillStyle = '#c9a227';
+    ctx.fillRect(0, 7, 3, 2); ctx.fillRect(2, 6, 3, 2); ctx.fillRect(5, 5, 3, 2);
+    ctx.fillRect(8, 5, 3, 2); ctx.fillRect(10, 6, 3, 2); ctx.fillRect(13, 7, 3, 2);
+    ctx.fillStyle = '#ffd24a';
+    ctx.fillRect(2, 6, 3, 1); ctx.fillRect(5, 5, 3, 1); ctx.fillRect(8, 5, 3, 1);
+    ctx.fillStyle = '#e0843a';                              // dorsal fin ticks
+    ctx.fillRect(4, 4, 1, 1); ctx.fillRect(7, 4, 1, 1); ctx.fillRect(10, 4, 1, 1);
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(12, 10, 1, 1);  // rear claw
+    ctx.fillStyle = '#e0843a'; ctx.fillRect(11, 11, 3, 1);
+  });
+  atlas['t-dragon-3'] = tile(ctx => {                       // head, jaw open at the flaming pearl
+    muralWall(ctx);
+    ctx.fillStyle = '#c9a227';
+    ctx.fillRect(0, 7, 3, 2); ctx.fillRect(2, 6, 3, 2);     // neck
+    ctx.fillRect(5, 5, 5, 4);                               // head
+    ctx.fillRect(10, 6, 3, 1);                              // upper jaw
+    ctx.fillRect(10, 8, 2, 1);                              // lower jaw, open
+    ctx.fillStyle = '#ffd24a';
+    ctx.fillRect(5, 4, 1, 1); ctx.fillRect(8, 4, 1, 1);     // horns
+    ctx.fillRect(5, 5, 5, 1);                               // lit brow
+    ctx.fillStyle = '#d05050'; ctx.fillRect(8, 6, 1, 1);    // eye
+    ctx.fillStyle = '#e0843a';                              // whiskers trail off the snout
+    ctx.fillRect(13, 5, 2, 1); ctx.fillRect(13, 9, 1, 1); ctx.fillRect(14, 10, 1, 1);
+    ctx.fillStyle = '#e0843a'; ctx.fillRect(13, 7, 2, 2);   // the flaming pearl
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(13, 7, 1, 1);
+  });
   atlas['t-slot'] = tile(ctx => {
     fill(ctx, '#2a1822');
     ctx.fillStyle = '#c0392b'; ctx.fillRect(2, 1, 12, 14);  // red cabinet
@@ -1343,6 +1437,21 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#16181d'; ctx.fillRect(5, 10, 6, 1);
     ctx.fillStyle = '#8a96a0'; ctx.fillRect(14, 5, 1, 4);   // lever arm
     ctx.fillStyle = '#d05050'; ctx.fillRect(14, 4, 2, 2);   // lever knob
+  });
+  atlas['t-videopoker'] = tile(ctx => {                     // video-poker cabinet: blue shell, five-card screen
+    fill(ctx, '#2a1822');
+    ctx.fillStyle = '#2e5f8a'; ctx.fillRect(2, 1, 12, 14);  // blue cabinet
+    ctx.fillStyle = '#4a7fae'; ctx.fillRect(2, 1, 12, 1);   // lit top edge
+    ctx.fillStyle = '#1d3f5e'; ctx.fillRect(2, 14, 12, 1);  // base shade
+    ctx.fillStyle = '#16181d'; ctx.fillRect(3, 3, 10, 6);   // screen
+    ctx.fillStyle = '#e8e0d0';                              // five dealt cards across the glass
+    for (let i = 0; i < 5; i++) ctx.fillRect(4 + i * 2, 4, 1, 4);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(4, 5, 1, 1); ctx.fillRect(8, 5, 1, 1); // red pips
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(4, 8, 8, 1);    // HELD readout line
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(3, 10, 10, 3);  // button deck
+    ctx.fillStyle = '#16181d';                              // hold buttons
+    ctx.fillRect(4, 11, 1, 1); ctx.fillRect(6, 11, 1, 1); ctx.fillRect(8, 11, 1, 1); ctx.fillRect(10, 11, 1, 1);
+    ctx.fillStyle = '#d05050'; ctx.fillRect(11, 11, 1, 1);  // DRAW button
   });
   atlas['t-blackjack'] = tile(ctx => {                      // fake-3D card table: wood rail, felt, fanned cards + chip stacks
     fill(ctx, '#2a1822');                                   // casino carpet base

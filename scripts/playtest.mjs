@@ -61,7 +61,7 @@ const SCENE_EXTRA = {
   backrooms: { backroomsUnlocked: true, wand: true },
   mines: { backroomsUnlocked: true, wand: true },
   casino: { gangPaid: true },
-  backroom: { gangPaid: true, casinoWins: 15 },
+  backroom: { gangPaid: true, casinoWins: 30 },
   paris: { backroomsUnlocked: true, parisRevealed: true },
   island: { vehicles: ['boat'] },
   seacave: { vehicles: ['boat'] },

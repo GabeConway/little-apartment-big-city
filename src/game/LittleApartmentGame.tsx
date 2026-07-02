@@ -73,6 +73,8 @@ import {
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey, lootVault,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   jackpotFor, backroomOpen, BACKROOM_WINS,
+  bossStakeFor, houseRuleFor, type HouseRuleId,
+  pokerEval, POKER_PAYTABLE,
   restoreShrine, sponsorCharlie, buyHomeOnsen, homeSoak,
   grantKeepsake, hasKeepsake,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
@@ -447,7 +449,7 @@ const HACK_LINES = [
 // ---- overlay model ----------------------------------------------------------
 
 type ShopId = 'denden' | 'konbini' | 'pawn' | 'garage' | 'monster' | 'sketchy' | 'dj' | 'boat' | 'boat-island' | 'tiki' | 'vending' | 'yakuza' | 'genji'
-  | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'granny-fish' | 'errand' | 'bingus-fetch'
+  | 'casino' | 'blackjack' | 'slots' | 'roulette' | 'poker' | 'bossduel' | 'granny-fish' | 'errand' | 'bingus-fetch'
   | 'greenhouse-plot' | 'greenhouse-supply' | 'street';
 
 // Vending-machine sodas. You buy a can into your pocket and drink it from the
@@ -487,6 +489,12 @@ const handValue = (cards: Card[]): number => {
   return total;
 };
 const isBlackjack = (cards: Card[]) => cards.length === 2 && handValue(cards) === 21;
+// A hand is "soft" while an ace is still riding as 11 (the boss's hit-soft-17 rule).
+const isSoft = (cards: Card[]): boolean => {
+  let raw = 0, aces = 0;
+  for (const c of cards) { raw += cardValue(c); if (c.rank === 1) aces++; }
+  return aces > 0 && raw + 10 <= 21;
+};
 
 type BJPhase = 'bet' | 'player' | 'done';
 interface BlackjackState {
@@ -548,7 +556,43 @@ interface RouletteState {
 const freshRoulette = (): RouletteState =>
   ({ bet: 500, kind: 'red', pick: 7, display: 0, result: 0, phase: 'idle', win: 0, timer: null });
 
-interface CasinoState { bj: BlackjackState; slot: SlotState; roul: RouletteState }
+// Video poker (Jacks or Better): deal five, hold any, draw once. The evaluator
+// + pay table are pure and live in state.ts (pokerEval / POKER_PAYTABLE).
+type PokerPhase = 'bet' | 'held' | 'done';
+interface PokerState { bet: number; deck: Card[]; hand: Card[]; held: boolean[]; phase: PokerPhase; win: number; label: string }
+const freshPoker = (): PokerState =>
+  ({ bet: 500, deck: [], hand: [], held: [false, false, false, false, false], phase: 'bet', win: 0, label: '' });
+
+// The boss duel: one blackjack hand a night at the backroom's private table,
+// double-or-nothing at a high fixed stake, under the day's seeded house rule
+// (houseRuleFor in state.ts). `say` is whatever the boss just said.
+type DuelPhase = 'intro' | 'player' | 'done';
+interface DuelState { deck: Card[]; player: Card[]; dealer: Card[]; phase: DuelPhase; hideHole: boolean; result: '' | 'win' | 'lose' | 'push'; stake: number; say: string }
+const freshDuel = (stake: number): DuelState =>
+  ({ deck: [], player: [], dealer: [], phase: 'intro', hideHole: true, result: '', stake, say: '' });
+
+// He talks through the hand — a line on the deal, on your hits, and with the
+// result. When HE loses, the gracious line fires exactly once; every loss after
+// gets quieter (bossDuelLosses picks the tier).
+const BOSS_DEAL_LINES = [
+  '"The placard is the law of the table. The tea is mine. Begin."',
+  'He deals without looking at the cards, the way other men breathe.',
+  '"No music back here. Just the cards. I find it honest."',
+  '"The stake is on the felt. The night decides who keeps it."',
+];
+const BOSS_HIT_LINES = [
+  '"Again? Bold."',
+  'He watches the card land and says nothing, which is somehow worse.',
+  '"Careful. The deck has no loyalty. I bought it and even I don\'t trust it."',
+  '"Mm." He turns his teacup a quarter-rotation.',
+];
+const bossLossLine = (losses: number): string =>
+  losses === 1 ? 'A long silence. Then he inclines his head, exactly one degree. "...Well played. Take it — money returns. The hand, I will remember." He refills his tea, unhurried.'
+  : losses === 2 ? '"Hm." He pushes the envelope across and pours himself more tea.'
+  : losses === 3 ? 'He nods once at the envelope. The tea steams.'
+  : 'He says nothing at all. The envelope is already on the felt.';
+
+interface CasinoState { bj: BlackjackState; slot: SlotState; roul: RouletteState; poker: PokerState; duel: DuelState }
 
 interface DayRecap {
   day: number;            // the day that just ended
@@ -1178,7 +1222,11 @@ const strangerActive = (s: GameSave): boolean => s.timeMin >= 22 * 60;
 const npcHiddenNow = (s: GameSave, id: string): boolean =>
   (NIGHT_EVEN_IDS.has(id) && !davidActive(s)) || (MIDNIGHT_IDS.has(id) && !strangerActive(s))
   || (id === 'bigfoot-cave' && !bigfootInCaveToday(s))
-  || (id === 'bigfoot-club' && !s.storySeen.includes('bigfoot-met'));
+  || (id === 'bigfoot-club' && !s.storySeen.includes('bigfoot-met'))
+  // The Kinryū doorman is ONE man with two placements: square in front of the
+  // curtain until the win count says otherwise, then aside holding the rope.
+  || (id === 'kinryu-doorman' && backroomOpen(s))
+  || (id === 'kinryu-doorman-aside' && !backroomOpen(s));
 
 // ---- Bingus museum fetch-quest helpers --------------------------------------
 const bingusHasKind = (s: GameSave, kind: BingusFetch['kind']): boolean =>
@@ -1397,7 +1445,12 @@ const LittleApartmentGame: React.FC = () => {
   const typedRef = useRef(0);
   const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null, weather: null });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
-  const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette() }); // live casino game state
+  const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette(), poker: freshPoker(), duel: freshDuel(0) }); // live casino game state
+  // Esc at a card table mid-hand must settle (duel stands, poker draws) instead
+  // of eating the stake. The settle actions are plain consts defined below the
+  // update loop, so the loop calls through this ref; returns true if it handled
+  // the press (the overlay stays open showing the result).
+  const casinoEscRef = useRef<(shop: ShopId) => boolean>(() => false);
   // Stop the slot reels / roulette wheel spinning if the player leaves the overlay (Esc, etc.).
   useEffect(() => {
     const { slot, roul } = casinoRef.current;
@@ -2562,6 +2615,27 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth({ type: 'shop', shop: 'blackjack' });
     setShopTick(v => v + 1);
   }, [setOverlayBoth]);
+  const startPoker = useCallback(() => {
+    const prev = casinoRef.current.poker.bet;
+    casinoRef.current.poker = { ...freshPoker(), bet: prev };
+    setOverlayBoth({ type: 'shop', shop: 'poker' });
+    setShopTick(v => v + 1);
+  }, [setOverlayBoth]);
+  // The boss's private table: one hand a night. Already played → he's finishing
+  // his tea; otherwise open the duel at tonight's stake.
+  const startBossDuel = useCallback(() => {
+    const s = saveRef.current;
+    if (s.bossDuelDay === s.day) {
+      showDialog([
+        'The boss does not look up. He pours a fresh cup and watches the leaves settle.',
+        '"One hand a night. That is the arrangement." He finishes his tea. The table is closed until tomorrow.',
+      ], 'The Kinryū Boss');
+      return;
+    }
+    casinoRef.current.duel = freshDuel(bossStakeFor(s));
+    setOverlayBoth({ type: 'shop', shop: 'bossduel' });
+    setShopTick(v => v + 1);
+  }, [setOverlayBoth, showDialog]);
   const startSlots = useCallback(() => {
     const slot = casinoRef.current.slot;
     settleSlots(true); // a bailed-out spin still pays what the reels had fixed — never eat a bet
@@ -3001,6 +3075,21 @@ const LittleApartmentGame: React.FC = () => {
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
       if (npc.id === 'mechanic') { startDelivery(); return; } // Kojima hands out the delivery gig in person
       if (npc.id === 'casino-host') { setOverlayBoth({ type: 'shop', shop: 'casino' }); return; }
+      // The curtain doorman: a wall of a man planted in front of the members'
+      // entrance until your win count clears BACKROOM_WINS, then he holds the rope.
+      if (npc.id === 'kinryu-doorman') {
+        showDialog([
+          'A pinstriped mountain stands square in front of the velvet curtain, hands folded. He does not move. He may never have moved.',
+          `"Members only." He taps a small ledger without opening it. "The house counts its winners. Come back when it counts you." (${s.casinoWins}/${BACKROOM_WINS} wins)`,
+        ], 'Kinryū Doorman');
+        return;
+      }
+      if (npc.id === 'kinryu-doorman-aside') {
+        showDialog([
+          '"Evening." He draws the curtain back a hand-width as you pass. "The boss is expecting you."',
+        ], 'Kinryū Doorman');
+        return;
+      }
       // The Kinryū boss, at the back of the backroom. First audience comps you
       // for the trouble of winning; after that he mostly tolerates you.
       if (npc.id === 'kinryu-boss') {
@@ -3615,7 +3704,8 @@ const LittleApartmentGame: React.FC = () => {
       case 'casino-slots': startSlots(); break;
       case 'casino-blackjack': startBlackjack(); break;
       case 'casino-roulette': startRoulette(); break;
-      case 'backroom-table': startBlackjack(); break; // the boss's private table deals the same game
+      case 'casino-poker': startPoker(); break;
+      case 'backroom-table': startBossDuel(); break; // one high-stakes hand a night vs the boss
       case 'fish-tropical': startCast(faced, 'tropical'); break;
       case 'fish-spot': startCast(faced, 'shallow'); break;
       case 'museum-display': {
@@ -3691,7 +3781,7 @@ const LittleApartmentGame: React.FC = () => {
         break;
       }
     }
-  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, enterScene, refreshHud, runTransition, award, playMusicFor, reachFloor]);
+  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, startPoker, startBossDuel, enterScene, refreshHud, runTransition, award, playMusicFor, reachFloor]);
 
   // ---- update -----------------------------------------------------------------
 
@@ -3747,7 +3837,11 @@ const LittleApartmentGame: React.FC = () => {
         input.consumeInventory();
       } else if (ov.type === 'shop' || ov.type === 'cook' || ov.type === 'gift') {
         input.consumeInteract();
-        if (input.consumeCancel()) setOverlayBoth(null);
+        if (input.consumeCancel()) {
+          // Mid-hand at a card game, Esc settles (boss duel stands, video poker
+          // draws pat) rather than closing — bailing can't eat the stake.
+          if (!(ov.type === 'shop' && casinoEscRef.current(ov.shop))) setOverlayBoth(null);
+        }
         input.consumeInventory();
       } else if (ov.type === 'menu') {
         input.consumeInteract();
@@ -5719,11 +5813,13 @@ const LittleApartmentGame: React.FC = () => {
     // busier amber flicker over each slot machine — the windowless room is lit
     // like this at every hour (night-independent). Cached glow() sprites blitted
     // additively, same pattern as the club/lamps (never per-frame gradients).
-    if (scene.id === 'casino') {
+    if (scene.id === 'casino' || scene.id === 'backroom') {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const felt = glow('255,200,90');
       const reel = glow('255,150,70');
+      const lantern = glow('255,170,80');
+      const mural = glow('255,210,90');
       for (let ty = ty0; ty <= ty1; ty++) {
         const row = scene.grid[ty];
         for (let tx = tx0; tx <= tx1; tx++) {
@@ -5732,10 +5828,18 @@ const LittleApartmentGame: React.FC = () => {
             const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 8;
             ctx.globalAlpha = 0.20 + 0.04 * Math.sin(t * 1.4 + tx * 1.1);
             ctx.drawImage(felt, gx - 22, gy - 22, 44, 44);
-          } else if (ch === 'S') {                              // slots: faint jittery reel-light
+          } else if (ch === 'S' || ch === 'V') {                // slots/poker: faint jittery reel-light
             const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 10;
             ctx.globalAlpha = 0.09 + 0.05 * Math.sin(t * 5 + tx * 2.7 + ty * 1.9);
             ctx.drawImage(reel, gx - 14, gy - 14, 28, 28);
+          } else if (ch === 'L') {                              // backroom wall lanterns: warm breathing glow
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 8;
+            ctx.globalAlpha = 0.22 + 0.05 * Math.sin(t * 2.1 + tx);
+            ctx.drawImage(lantern, gx - 20, gy - 20, 40, 40);
+          } else if (ch >= '1' && ch <= '4') {                  // the gold dragon shimmers, slow wave along its body
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 7;
+            ctx.globalAlpha = 0.07 + 0.05 * Math.sin(t * 1.8 - tx * 0.9);
+            ctx.drawImage(mural, gx - 16, gy - 16, 32, 32);
           }
         }
       }
@@ -6908,8 +7012,10 @@ const LittleApartmentGame: React.FC = () => {
   const countCasinoWin = () => {
     const s = saveRef.current;
     s.casinoWins += 1;
-    if (s.casinoWins === BACKROOM_WINS)
-      showToast('🎴 The house notices', 'The host glances at the velvet curtain in the back. "The boss will see you now."');
+    if (s.casinoWins === BACKROOM_WINS) {
+      showToast('🎴 The house notices', 'The doorman at the velvet curtain steps aside. "The boss will see you now."');
+      computeSolids(); // the doorman moves off the curtain approach right now
+    }
   };
 
   const setBjBet = (bet: number) => {
@@ -7085,6 +7191,135 @@ const LittleApartmentGame: React.FC = () => {
       }
     }, 70);
   };
+
+  // ---- video poker (Jacks or Better) ----------------------------------------
+  const setPokerBet = (bet: number) => {
+    const poker = casinoRef.current.poker;
+    if (poker.phase !== 'bet') return;
+    poker.bet = bet;
+    setShopTick(v => v + 1);
+  };
+  const dealPoker = () => {
+    const s = saveRef.current;
+    const poker = casinoRef.current.poker;
+    if (poker.phase !== 'bet' || poker.bet <= 0 || s.money < poker.bet) return;
+    s.money -= poker.bet; sfxBuy();
+    poker.deck = makeDeck();
+    poker.hand = [poker.deck.pop()!, poker.deck.pop()!, poker.deck.pop()!, poker.deck.pop()!, poker.deck.pop()!];
+    poker.held = [false, false, false, false, false];
+    poker.win = 0; poker.label = '';
+    poker.phase = 'held';
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+  const togglePokerHold = (i: number) => {
+    const poker = casinoRef.current.poker;
+    if (poker.phase !== 'held') return;
+    poker.held[i] = !poker.held[i];
+    setShopTick(v => v + 1);
+  };
+  const drawPoker = () => {
+    const s = saveRef.current;
+    const poker = casinoRef.current.poker;
+    if (poker.phase !== 'held') return;
+    poker.hand = poker.hand.map((c, i) => (poker.held[i] ? c : poker.deck.pop()!));
+    const res = pokerEval(poker.hand);
+    poker.label = res.label;
+    poker.win = poker.bet * res.mult;
+    poker.phase = 'done';
+    if (poker.win > 0) {
+      s.money += poker.win;
+      // Jacks or Better just returns the stake — a wash, not a win.
+      if (res.mult >= 2) { sfxCasinoWin(); award('high-roller'); countCasinoWin(); }
+    } else sfxCasinoLose();
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+
+  // ---- the boss duel (the backroom's private table) --------------------------
+  // One hand a night, double-or-nothing at duel.stake, under the day's placard
+  // rule. The night's hand is spent the moment he deals (bossDuelDay), win or lose.
+  const dealDuel = () => {
+    const s = saveRef.current;
+    const duel = casinoRef.current.duel;
+    if (duel.phase !== 'intro' || s.money < duel.stake) return;
+    s.money -= duel.stake;
+    s.bossDuelDay = s.day;
+    duel.deck = makeDeck();
+    duel.player = [duel.deck.pop()!, duel.deck.pop()!];
+    duel.dealer = [duel.deck.pop()!, duel.deck.pop()!];
+    duel.hideHole = houseRuleFor(s.day).id !== 'peek'; // face-up night: no hole card
+    duel.phase = 'player';
+    duel.say = BOSS_DEAL_LINES[Math.floor(Math.random() * BOSS_DEAL_LINES.length)];
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+    if (isBlackjack(duel.player) || isBlackjack(duel.dealer)) resolveDuel(); // naturals resolve at once
+  };
+  const dealerPlayDuel = (duel: DuelState, rule: HouseRuleId) => {
+    while (handValue(duel.dealer) < 17
+      || (rule === 'hitSoft17' && handValue(duel.dealer) === 17 && isSoft(duel.dealer)))
+      duel.dealer.push(duel.deck.pop()!);
+  };
+  const resolveDuel = () => {
+    const s = saveRef.current;
+    const duel = casinoRef.current.duel;
+    const rule = houseRuleFor(s.day).id;
+    const pv = handValue(duel.player), dv = handValue(duel.dealer);
+    const pBJ = isBlackjack(duel.player), dBJ = isBlackjack(duel.dealer);
+    const charlie = rule === 'fiveCard' && duel.player.length >= 5 && pv <= 21;
+    duel.hideHole = false;
+    if (pBJ && !dBJ) duel.result = 'win';
+    else if (charlie) duel.result = 'win'; // five-card charlie beats the house outright
+    else if (pv > 21) duel.result = 'lose';
+    else if (dv > 21) duel.result = 'win';
+    else if (pv > dv) duel.result = 'win';
+    else if (pv < dv) duel.result = 'lose';
+    else duel.result = rule === 'pushHouse' ? 'lose' : 'push';
+    duel.phase = 'done';
+    if (duel.result === 'win') {
+      s.money += duel.stake * (pBJ && !dBJ && rule === 'pays2to1' ? 3 : 2);
+      s.bossDuelLosses += 1;
+      duel.say = bossLossLine(s.bossDuelLosses);
+      sfxCasinoWin(); award('boss-duel'); countCasinoWin();
+    } else if (duel.result === 'lose') {
+      duel.say =
+        pv > 21 ? '"Greed. It gets everyone eventually." He stacks your chips without counting them.' :
+        pv === dv ? 'He turns the hole card with two fingers. "A tie. Read the placard." He does not smile. He was never going to.' :
+        '"The house thanks you." He returns to his tea, the matter already settled.';
+      sfxCasinoLose();
+    } else {
+      s.money += duel.stake; // push — the stake comes back
+      duel.say = '"A push. How unsatisfying, for both of us." He waves the stake back across the felt.';
+    }
+    persistSave(s); refreshHud(); setShopTick(v => v + 1);
+  };
+  const hitDuel = () => {
+    const s = saveRef.current;
+    const duel = casinoRef.current.duel;
+    if (duel.phase !== 'player') return;
+    const rule = houseRuleFor(s.day).id;
+    duel.player.push(duel.deck.pop()!);
+    const pv = handValue(duel.player);
+    if (rule === 'fiveCard' && duel.player.length >= 5 && pv <= 21) { resolveDuel(); return; }
+    if (pv > 21) { resolveDuel(); return; }             // bust — the house needn't play
+    if (pv === 21) { dealerPlayDuel(duel, rule); resolveDuel(); return; }
+    duel.say = BOSS_HIT_LINES[Math.floor(Math.random() * BOSS_HIT_LINES.length)];
+    setShopTick(v => v + 1);
+  };
+  const standDuel = () => {
+    const s = saveRef.current;
+    const duel = casinoRef.current.duel;
+    if (duel.phase !== 'player') return;
+    dealerPlayDuel(duel, houseRuleFor(s.day).id);
+    resolveDuel();
+  };
+
+  // Wire the update loop's Esc handling (the actions above are plain per-render
+  // consts, so the loop reaches them through this stable ref).
+  useEffect(() => {
+    casinoEscRef.current = (shop: ShopId) => {
+      if (shop === 'bossduel' && casinoRef.current.duel.phase === 'player') { standDuel(); return true; }
+      if (shop === 'poker' && casinoRef.current.poker.phase === 'held') { drawPoker(); return true; }
+      return false;
+    };
+  });
 
   // ---- shop actions ---------------------------------------------------------
 
@@ -9197,6 +9432,24 @@ const LittleApartmentGame: React.FC = () => {
       );
     }
 
+    // Shared playing-card face (blackjack, the boss duel, and video poker all
+    // deal off the same renderer).
+    const cardRed = (c: Card) => c.suit === 1 || c.suit === 2;
+    const cardPip = (c: Card) => (
+      <span className="leading-[0.85] text-center">{CARD_RANKS[c.rank]}<br />{CARD_SUITS[c.suit]}</span>
+    );
+    const cardChip = (c: Card, hidden: boolean, key: number) => (
+      <span key={key} className={`card-deal relative inline-block w-[46px] h-16 rounded-md mr-1.5 align-top ${hidden ? 'bg-gradient-to-br from-[#7a2f5e] to-[#3a1530] border-2 border-[#c9a227]' : 'bg-[#f6f2ea] border border-[#b8b0a0] shadow-[1px_2px_0_rgba(0,0,0,0.45)]'}`}>
+        {hidden ? (
+          <span className="absolute inset-1 rounded-sm border border-[#c9a227]/50 flex items-center justify-center text-[#c9a227] text-lg">❖</span>
+        ) : (<>
+          <span className={`absolute top-0.5 left-1 text-[11px] font-bold ${cardRed(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{cardPip(c)}</span>
+          <span className={`absolute inset-0 flex items-center justify-center text-2xl ${cardRed(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{CARD_SUITS[c.suit]}</span>
+          <span className={`absolute bottom-0.5 right-1 text-[11px] font-bold rotate-180 ${cardRed(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{cardPip(c)}</span>
+        </>)}
+      </span>
+    );
+
     if (ov.shop === 'casino') {
       return (
         <ShopFrame title="KINRYŪ LOUNGE" subtitle={'"The house likes company. And the house always wins."'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
@@ -9207,6 +9460,7 @@ const LittleApartmentGame: React.FC = () => {
             <button className={`${btnCls} w-full`} onClick={startBlackjack}>🃏 BLACKJACK — beat the dealer to 21</button>
             <button className={`${btnCls} w-full`} onClick={startSlots}>🎰 SLOT MACHINES — jackpot at ¥{jackpotFor(s).toLocaleString()}</button>
             <button className={`${btnCls} w-full`} onClick={startRoulette}>🔴 ROULETTE — pick a color, a number, your fate</button>
+            <button className={`${btnCls} w-full`} onClick={startPoker}>🎴 VIDEO POKER — five cards, one draw</button>
           </div>
           {backroomOpen(s) && <p className="text-xs text-[#ffd24a]/70 mt-3">✦ The velvet curtain at the back of the hall hangs open for you.</p>}
           <p className="text-xs opacity-40 mt-3">Bet responsibly. The maneki-neko is watching.</p>
@@ -9243,28 +9497,10 @@ const LittleApartmentGame: React.FC = () => {
       const bj = casinoRef.current.bj;
       const chips = [500, 1000, 2500, 5000];
       const pv = handValue(bj.player), dv = handValue(bj.dealer);
-      const red = (c: Card) => c.suit === 1 || c.suit === 2;
-      const pip = (c: Card) => (
-        <span className="leading-[0.85] text-center">{CARD_RANKS[c.rank]}<br />{CARD_SUITS[c.suit]}</span>
-      );
-      const cardChip = (c: Card, hidden: boolean, key: number) => (
-        <span key={key} className={`card-deal relative inline-block w-[46px] h-16 rounded-md mr-1.5 align-top ${hidden ? 'bg-gradient-to-br from-[#7a2f5e] to-[#3a1530] border-2 border-[#c9a227]' : 'bg-[#f6f2ea] border border-[#b8b0a0] shadow-[1px_2px_0_rgba(0,0,0,0.45)]'}`}>
-          {hidden ? (
-            <span className="absolute inset-1 rounded-sm border border-[#c9a227]/50 flex items-center justify-center text-[#c9a227] text-lg">❖</span>
-          ) : (<>
-            <span className={`absolute top-0.5 left-1 text-[11px] font-bold ${red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{pip(c)}</span>
-            <span className={`absolute inset-0 flex items-center justify-center text-2xl ${red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{CARD_SUITS[c.suit]}</span>
-            <span className={`absolute bottom-0.5 right-1 text-[11px] font-bold rotate-180 ${red(c) ? 'text-[#c0392b]' : 'text-[#16181d]'}`}>{pip(c)}</span>
-          </>)}
-        </span>
-      );
       const profit = bj.payout - bj.bet;
       const won = bj.result === 'win' || bj.result === 'blackjack';
-      // At the boss's private table there IS no lobby — the back button just
-      // leaves the table instead of teleporting the Lounge UI into the backroom.
-      const inBackroom = sceneRef.current.id === 'backroom';
-      const toLobby = () => inBackroom ? close() : setOverlayBoth({ type: 'shop', shop: 'casino' });
-      const lobbyLabel = inBackroom ? 'LEAVE THE TABLE' : '← BACK TO LOBBY';
+      const toLobby = () => setOverlayBoth({ type: 'shop', shop: 'casino' });
+      const lobbyLabel = '← BACK TO LOBBY';
       const resultText =
         bj.result === 'blackjack' ? `BLACKJACK! +¥${profit.toLocaleString()}` :
         bj.result === 'win' ? `YOU WIN  +¥${profit.toLocaleString()}` :
@@ -9299,8 +9535,126 @@ const LittleApartmentGame: React.FC = () => {
                   <p className={`text-xl mb-2 text-center ${bj.result === 'lose' ? 'text-[#d05050]' : bj.result === 'push' ? 'text-[#e8e0d0]' : 'text-[#7ce8a0]'}`}>{resultText}</p>
                   <div className="flex gap-2">
                     <button className={`${btnCls} flex-grow`} disabled={s.money < bj.bet} onClick={() => { casinoRef.current.bj = { ...freshBlackjack(), bet: bj.bet }; setShopTick(v => v + 1); }}>NEW HAND</button>
-                    <button className={btnCls} onClick={toLobby}>{inBackroom ? 'LEAVE' : 'LOBBY'}</button>
+                    <button className={btnCls} onClick={toLobby}>LOBBY</button>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'poker') {
+      const poker = casinoRef.current.poker;
+      const chips = [100, 500, 1000, 2500];
+      const won = poker.phase === 'done' && poker.win > poker.bet;
+      const resultText =
+        poker.phase !== 'done' ? '' :
+        poker.win > poker.bet ? `${poker.label.toUpperCase()}!  +¥${poker.win.toLocaleString()}` :
+        poker.win === poker.bet ? `${poker.label} — stake returned` :
+        'No hand. The machine chirps, unmoved.';
+      return (
+        <ShopFrame title="VIDEO POKER" subtitle="Jacks or Better · deal five, hold what you like, draw once" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          {poker.phase === 'bet' ? (
+            <div className="py-2">
+              <p className="text-base opacity-70 mb-2">Feed the machine, then deal.</p>
+              <div className="flex flex-wrap gap-2 mb-3 justify-center">
+                {chips.map(c => chipBtn(c, poker.bet === c, s.money < c, () => setPokerBet(c)))}
+              </div>
+              <button className={`${btnCls} w-full`} disabled={s.money < poker.bet} onClick={dealPoker}>DEAL · bet ¥{poker.bet.toLocaleString()}</button>
+              <button className={`${btnCls} w-full mt-2 text-sm`} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
+              <p className="text-xs opacity-40 mt-3 text-center leading-relaxed">
+                Royal 250× · Str. Flush 50× · Quads 25× · Full House 9× · Flush 6×<br />
+                Straight 4× · Trips 3× · Two Pair 2× · a pair of Jacks+ = stake back
+              </p>
+            </div>
+          ) : (
+            <div className="py-2">
+              <div className={`relative mx-auto w-fit rounded-xl border-4 border-[#c9a227] bg-gradient-to-b from-[#1d3f5e] to-[#0e1620] px-3 pt-3 pb-1 mb-2 ${won ? 'casino-win' : ''}`}>
+                <div className="flex justify-center">
+                  {poker.hand.map((c, i) => (
+                    <button
+                      key={i}
+                      className="relative disabled:pointer-events-none"
+                      disabled={poker.phase !== 'held'}
+                      onClick={() => togglePokerHold(i)}
+                    >
+                      {cardChip(c, false, i)}
+                      {poker.held[i] && (
+                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1 rounded-sm bg-[#ffd24a] text-black text-[10px] font-bold tracking-wider">HELD</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-center text-[11px] text-white/50 h-5 pt-1">{poker.phase === 'held' ? 'tap cards to HOLD them' : ' '}</p>
+              </div>
+              {poker.phase === 'held' ? (
+                <button className={`${btnCls} w-full text-xl`} onClick={drawPoker}>DRAW</button>
+              ) : (
+                <div>
+                  <p className={`text-xl mb-2 text-center ${poker.win > poker.bet ? 'text-[#7ce8a0]' : poker.win === poker.bet ? 'text-[#e8e0d0]' : 'text-[#d05050]'}`}>{resultText}</p>
+                  <div className="flex gap-2">
+                    <button className={`${btnCls} flex-grow`} disabled={s.money < poker.bet} onClick={() => { casinoRef.current.poker = { ...freshPoker(), bet: poker.bet }; dealPoker(); }}>DEAL AGAIN</button>
+                    <button className={btnCls} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>LOBBY</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </ShopFrame>
+      );
+    }
+
+    if (ov.shop === 'bossduel') {
+      const duel = casinoRef.current.duel;
+      const rule = houseRuleFor(s.day);
+      const pv = handValue(duel.player), dv = handValue(duel.dealer);
+      const won = duel.result === 'win';
+      // X / Esc mid-hand stands the hand out rather than folding a ¥10k stake.
+      const closeDuel = () => { if (duel.phase === 'player') standDuel(); else close(); };
+      const resultText =
+        duel.result === 'win' ? `YOU WIN  +¥${(duel.stake * (isBlackjack(duel.player) && rule.id === 'pays2to1' ? 2 : 1)).toLocaleString()}` :
+        duel.result === 'lose' ? `THE HOUSE WINS  −¥${duel.stake.toLocaleString()}` :
+        duel.result === 'push' ? 'PUSH — the stake comes back' : '';
+      return (
+        <ShopFrame title="THE BOSS'S TABLE" subtitle="One hand a night · double or nothing" money={s.money} onClose={closeDuel} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-sm text-center tracking-wide text-[#ffd24a] bg-[#c9a227]/10 border border-[#c9a227]/40 rounded px-2 py-1 mb-2">
+            🀄 HOUSE RULE TONIGHT — {rule.placard}
+          </p>
+          {duel.phase === 'intro' ? (
+            <div className="py-1">
+              <p className="text-lg opacity-85 py-1 leading-snug">
+                The boss sets his teacup down without a sound and squares a single deck against the felt. "One hand. My table, my rule — it's on the placard. ¥{duel.stake.toLocaleString()}, double or nothing."
+              </p>
+              {s.money < duel.stake && (
+                <p className="text-base opacity-60 py-1 leading-snug">"Come back when you can cover the felt." He picks the teacup back up.</p>
+              )}
+              <div className="flex items-center gap-3 mt-3">
+                <button className={`${btnCls} flex-grow`} disabled={s.money < duel.stake} onClick={dealDuel}>
+                  {s.money < duel.stake ? `CAN'T COVER IT · ¥${duel.stake.toLocaleString()}` : `PLAY · ¥${duel.stake.toLocaleString()} DOUBLE OR NOTHING`}
+                </button>
+                <button className={btnCls} onClick={close}>WALK AWAY</button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-1">
+              <div className={`${feltCls} px-3 py-3 mb-2 ${won ? 'casino-win' : ''}`}>
+                <p className="text-xs text-white/70 mb-1">THE BOSS{duel.hideHole ? '' : ` · ${dv}${dv > 21 ? ' BUST' : ''}`}</p>
+                <div className="mb-3 min-h-[64px]">{duel.dealer.map((c, i) => cardChip(c, duel.hideHole && i === 1, i))}</div>
+                <p className="text-xs text-white/70 mb-1">YOU · {pv}{pv > 21 ? ' BUST' : ''}</p>
+                <div className="min-h-[64px]">{duel.player.map((c, i) => cardChip(c, false, i))}</div>
+              </div>
+              {duel.say && <p className="text-sm italic opacity-75 leading-snug mb-2">{duel.say}</p>}
+              {duel.phase === 'player' ? (
+                <div className="flex gap-2">
+                  <button className={`${btnCls} flex-grow`} onClick={hitDuel}>HIT</button>
+                  <button className={`${btnCls} flex-grow`} onClick={standDuel}>STAND</button>
+                </div>
+              ) : (
+                <div>
+                  <p className={`text-xl mb-2 text-center ${duel.result === 'lose' ? 'text-[#d05050]' : duel.result === 'push' ? 'text-[#e8e0d0]' : 'text-[#7ce8a0]'}`}>{resultText}</p>
+                  <button className={`${btnCls} w-full`} onClick={close}>LEAVE THE TABLE</button>
                 </div>
               )}
             </div>

@@ -134,6 +134,8 @@ export interface GameSave {
   skills: { fish: number; mine: number; farm: number }; // gathering XP per skill (level derived)
   casinoWins: number;               // lifetime winning casino bets (any game); opens the Kinryū backroom
   jackpotDay: number;               // day the progressive slots jackpot was last hit (0 = never; pot grows since)
+  bossDuelDay: number;              // day of the last boss-duel hand (0 = never; one hand a night)
+  bossDuelLosses: number;           // times the BOSS has lost the duel — his gracious line quiets down
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -331,6 +333,8 @@ export const newSave = (): GameSave => ({
   skills: { fish: 0, mine: 0, farm: 0 },
   casinoWins: 0,
   jackpotDay: 0,
+  bossDuelDay: 0,
+  bossDuelLosses: 0,
 });
 
 // Merge a parsed (possibly older / partial) save blob over fresh defaults and run
@@ -880,8 +884,74 @@ export const jackpotFor = (s: Pick<GameSave, 'day' | 'jackpotDay'>): number => {
   return pot;
 };
 // Lifetime winning bets that part the velvet curtain at the back of the hall.
-export const BACKROOM_WINS = 15;
+// Raised 15 → 30 (2026-07-02, owner call): the backroom is a real grind to earn.
+export const BACKROOM_WINS = 30;
 export const backroomOpen = (s: GameSave): boolean => s.casinoWins >= BACKROOM_WINS;
+
+// ---- The boss duel (behind the curtain) ----------------------------------------
+// One blackjack hand a night at the boss's private table, double-or-nothing at a
+// fixed high stake that creeps up with your lifetime win count. A seeded daily
+// house rule — the placard by the table — bends that night's blackjack.
+export const BOSS_STAKE_BASE = 10000;
+export const BOSS_STAKE_CAP = 25000;
+export const bossStakeFor = (s: Pick<GameSave, 'casinoWins'>): number =>
+  Math.min(BOSS_STAKE_CAP, BOSS_STAKE_BASE + Math.max(0, s.casinoWins - BACKROOM_WINS) * 250);
+
+export type HouseRuleId = 'pays2to1' | 'hitSoft17' | 'peek' | 'fiveCard' | 'pushHouse';
+export interface HouseRule { id: HouseRuleId; placard: string }
+export const HOUSE_RULES: HouseRule[] = [
+  { id: 'pays2to1',  placard: 'A natural 21 pays 2 to 1.' },
+  { id: 'hitSoft17', placard: 'The house hits soft 17.' },
+  { id: 'peek',      placard: "The house's cards are dealt face up." },
+  { id: 'fiveCard',  placard: 'Five cards under 22 win outright.' },
+  { id: 'pushHouse', placard: 'A tie goes to the house.' },
+];
+// Seed multiplier 48271 — unique among the mulberry32 sites (checked 2026-07-02).
+export const houseRuleFor = (day: number): HouseRule =>
+  HOUSE_RULES[Math.floor(mulberry32(day * 48271 + 7)() * HOUSE_RULES.length)];
+
+// ---- Video poker (Jacks or Better, main casino floor) --------------------------
+// Pure 5-card evaluator vs a fixed pay table — the machine UI lives in the
+// monolith, but the hand maths are here so they're unit-testable. `mult` is the
+// TOTAL credit multiplier on the bet (1 = your stake back, 0 = the house eats it).
+export interface PokerHandCard { rank: number; suit: number } // rank 1..13 (1=A)
+export interface PokerRank { id: string; label: string; mult: number }
+export const POKER_PAYTABLE: PokerRank[] = [
+  { id: 'royal',    label: 'Royal Flush',     mult: 250 },
+  { id: 'sflush',   label: 'Straight Flush',  mult: 50 },
+  { id: 'quads',    label: 'Four of a Kind',  mult: 25 },
+  { id: 'full',     label: 'Full House',      mult: 9 },
+  { id: 'flush',    label: 'Flush',           mult: 6 },
+  { id: 'straight', label: 'Straight',        mult: 4 },
+  { id: 'trips',    label: 'Three of a Kind', mult: 3 },
+  { id: 'twopair',  label: 'Two Pair',        mult: 2 },
+  { id: 'jacks',    label: 'Jacks or Better', mult: 1 },
+];
+export const POKER_NOTHING: PokerRank = { id: 'nothing', label: 'No hand', mult: 0 };
+export const pokerEval = (hand: PokerHandCard[]): PokerRank => {
+  const n: Record<number, number> = {};
+  for (const c of hand) n[c.rank] = (n[c.rank] ?? 0) + 1;
+  const counts = Object.values(n).sort((a, b) => b - a);
+  const ranks = Object.keys(n).map(Number).sort((a, b) => a - b);
+  const flush = hand.every(c => c.suit === hand[0].suit);
+  // Aces play high (10-J-Q-K-A, the "broadway") or low (A-2-3-4-5, the "wheel").
+  const broadway = ranks.length === 5 && ranks[0] === 1 && ranks[1] === 10;
+  const straight = ranks.length === 5 && (ranks[4] - ranks[0] === 4 || broadway);
+  const row = (id: string) => POKER_PAYTABLE.find(r => r.id === id)!;
+  if (flush && broadway) return row('royal');
+  if (flush && straight) return row('sflush');
+  if (counts[0] === 4) return row('quads');
+  if (counts[0] === 3 && counts[1] === 2) return row('full');
+  if (flush) return row('flush');
+  if (straight) return row('straight');
+  if (counts[0] === 3) return row('trips');
+  if (counts[0] === 2 && counts[1] === 2) return row('twopair');
+  if (counts[0] === 2) {
+    const pair = Number(Object.keys(n).find(r => n[Number(r)] === 2));
+    if (pair === 1 || pair >= 11) return row('jacks'); // J/Q/K/A
+  }
+  return POKER_NOTHING;
+};
 
 // Shrine luck: tier 1 at ¥5,000 donated, tier 2 at ¥20,000. Each tier makes
 // the rarer (valuable) fish noticeably more willing to bite. Funding the shrine's
