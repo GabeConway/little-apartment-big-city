@@ -354,6 +354,7 @@ const sfxGameStart = () => playSfx('/sfx/game-start.mp3');
 const sfxPhone = () => playSfx('/sfx/phone-notification.mp3');
 const sfxLevelUp = () => playSfx('/sfx/level-up.mp3');
 const sfxCasinoWin = () => playSfx('/sfx/casino-win.mp3');
+const sfxCasinoLose = () => playSfx('/sfx/gamble-lose.mp3', 0.5); // losing a casino bet (blackjack/slots/roulette)
 const sfxHeartUp = () => playSfx('/sfx/heart-up.mp3');
 const sfxCarStart = () => playSfx('/sfx/car-start.mp3');
 
@@ -6863,6 +6864,7 @@ const LittleApartmentGame: React.FC = () => {
     bj.payout = payout;
     bj.phase = 'done';
     if (payout > 0) { s.money += payout; sfxCasinoWin(); }
+    else if (bj.result === 'lose') sfxCasinoLose();
     if (bj.result === 'win' || bj.result === 'blackjack') award('high-roller'); // a push isn't a win
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
   };
@@ -6927,6 +6929,7 @@ const LittleApartmentGame: React.FC = () => {
         const win = slotPayout(slot.final, slot.bet);
         slot.win = win;
         if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCasinoWin(); award('high-roller'); persistSave(s2); refreshHud(); }
+        else sfxCasinoLose();
         setShopTick(v => v + 1);
       }
     }, 80);
@@ -6972,6 +6975,7 @@ const LittleApartmentGame: React.FC = () => {
         const win = roulettePayout(roul.kind, roul.pick, roul.result, roul.bet);
         roul.win = win;
         if (win > 0) { const s2 = saveRef.current; s2.money += win; sfxCasinoWin(); award('high-roller'); persistSave(s2); refreshHud(); }
+        else sfxCasinoLose();
         setShopTick(v => v + 1);
       } else {
         roul.display = Math.floor(Math.random() * 37); // flicker while it spins
