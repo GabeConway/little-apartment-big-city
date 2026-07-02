@@ -1,0 +1,13 @@
+"InstallScript"
+{
+	"Run Process"
+	{
+		"WebView2 Runtime"
+		{
+			"process 1"		"%INSTALLDIR%\\MicrosoftEdgeWebview2Setup.exe"
+			"command 1"		"/silent /install"
+			"HasRunKey"		"HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+			"NoCleanUp"		"1"
+		}
+	}
+}

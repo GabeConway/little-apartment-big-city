@@ -2,9 +2,16 @@
 
 #[cfg(desktop)]
 mod gamepad;
+#[cfg(windows)]
+mod webview2;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebView2 runtime guard (Steam ships the raw exe; see webview2.rs).
+    // Early-returns immediately when the runtime is already installed.
+    #[cfg(windows)]
+    webview2::ensure_runtime();
+
     tauri::Builder::default()
         .setup(|_app| {
             // Native gamepad bridge → polyfills navigator.getGamepads() in the
