@@ -1593,6 +1593,7 @@ const LittleApartmentGame: React.FC = () => {
   const movingRef = useRef(false);
   const animRef = useRef(0);
   const parisGlitchRef = useRef(0); // seconds left of the "hacked into the map" materialize on Paris arrival
+  const parisHazeRef = useRef<HTMLCanvasElement | null>(null); // cached 1×128 horizon-haze gradient (built once)
   // David the cat, once adopted: roams the apartment, sits, naps. Lives only in the
   // apartment scene; (re)spawned lazily in the update loop. px coords, not tiles.
   // napTarget = the rug/kotatsu he's ambling to before curling up (null = none).
@@ -4988,10 +4989,41 @@ const LittleApartmentGame: React.FC = () => {
       ctx.restore();
     }
 
-    // Paris: the Eiffel Tower, one big sprite rising over the sky behind the plaza.
+    // Paris: aerial perspective, back to front — drifting clouds high in the
+    // flat sky; the Eiffel Tower with its base AT the horizon; a cached haze
+    // gradient washed over the distance (pushes the tower back); then the
+    // seeded far-bank skyline strip, crisp, over the tower's feet. The shops
+    // (cols 0-3 / 22-25) sit outside the haze rect so the foreground stays sharp.
     if (scene.id === 'paris') {
+      // drifting cumulus (two sizes, three speeds — wraps around the scene width)
+      const ca = atlas['cloud-a'], cb = atlas['cloud-b'];
+      const SCENE_W = 26 * TILE + 60;
+      const CLOUDS: [number, number, number, boolean][] = [
+        [30, 14, 2.2, true], [150, 34, 1.4, false], [255, 8, 1.8, true],
+        [340, 44, 1.1, false], [90, 58, 1.6, false], [400, 24, 2.0, true],
+      ];
+      for (const [bx, cy, spd, big] of CLOUDS) {
+        const cx2 = ((bx + t * spd) % SCENE_W) - 30;
+        ctx.drawImage(big ? ca : cb, Math.round(cx2) - cam.x, cy - cam.y);
+      }
       const e = atlas['eiffel-big'];
-      ctx.drawImage(e, Math.round(13 * TILE - e.width / 2) - cam.x, 134 - e.height - cam.y);
+      ctx.drawImage(e, Math.round(13 * TILE - e.width / 2) - cam.x, 128 - e.height - cam.y);
+      // horizon haze (built once): transparent at the zenith → soft sky-blue at
+      // the roofline, drawn only over the open middle so shopfronts stay crisp.
+      if (!parisHazeRef.current) {
+        const hc = document.createElement('canvas');
+        hc.width = 1; hc.height = 128;
+        const hctx = hc.getContext('2d')!;
+        const g = hctx.createLinearGradient(0, 0, 0, 128);
+        g.addColorStop(0, 'rgba(188,214,236,0)');
+        g.addColorStop(0.55, 'rgba(178,206,232,0.18)');
+        g.addColorStop(1, 'rgba(169,200,228,0.5)');
+        hctx.fillStyle = g; hctx.fillRect(0, 0, 1, 128);
+        parisHazeRef.current = hc;
+      }
+      ctx.drawImage(parisHazeRef.current, 4 * TILE - cam.x, -cam.y, 18 * TILE, 128);
+      // far bank: one seeded irregular strip — no tile rhythm to spot
+      ctx.drawImage(atlas['paris-skyline'], 4 * TILE - cam.x, 7 * TILE - cam.y);
     }
 
     // The Moon: the Earth hangs small and blue in the star void over the
@@ -5875,6 +5907,28 @@ const LittleApartmentGame: React.FC = () => {
       }
       ctx.globalAlpha = 1;
       ctx.restore();
+    }
+
+    // Paris: the wrought-iron quay lamps light up as evening falls (cached glow,
+    // same system as the Downtown lamps / city toro — never per-frame gradients).
+    if (scene.id === 'paris') {
+      const parisNight = nightT(saveRef.current);
+      if (parisNight > 0.05) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const lamp = glow('255,233,160');
+        for (let ty = ty0; ty <= ty1; ty++) {
+          const row = scene.grid[ty];
+          for (let tx = tx0; tx <= tx1; tx++) {
+            if (row[tx] !== 'L') continue;
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 4; // lantern head, upper third
+            ctx.globalAlpha = parisNight * (0.24 + 0.04 * Math.sin(t * 1.8 + tx * 1.1));
+            ctx.drawImage(lamp, gx - 22, gy - 22, 44, 44);
+          }
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
     }
 
     // Downtown street lamps cast a soft warm glow from each lamp head.

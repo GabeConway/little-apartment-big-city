@@ -37,3 +37,24 @@ See kb/games.md Casino section + the four 07-02 "Recent changes" batches. Left:
 
 ## Audit leftovers (accepted, watch)
 - Max-luck seacave sift: 37% daily Astral Stone at caveLuck 5.
+
+## The Hacker (fourth-wall character) — owner idea 2026-07-02
+A character who can "hack" the actual game and is aware of the USER playing it
+(not just the player-character). Cozy-creepy, not hostile.
+- **Fiction hooks already shipped**: the ZamaZonk VOID-KERNEL terminal + "LOADING
+  PARIS.EXE" hack transition and the `parisGlitchRef` datamosh materialize
+  already establish the game-as-software; the Hacker walks in through that door.
+- **Beats**: an unknown-sender phone thread that knows things only the SYSTEM
+  could (the real day of week, that you used `motherlode`, session count); HUD
+  text he briefly "edits" mid-conversation; a scanline-flickering NPC glimpsed
+  in the backrooms/paris; a one-time fake "SAVE CORRUPTED" scare (cosmetic,
+  resolves as his prank).
+- **Guardrails**: NEVER touches the real save, no real crashes, no strobe;
+  addresses `{name}` and, rarely, "the one holding the controller".
+- **Endgame arc (owner spec 2026-07-02)**: the Hacker only texts you at true
+  completion — everything done (all achievements / museum / keepsakes /
+  friends, exact gate TBD). He asks to meet at the GACHA hall. On the meeting
+  he "hacks" the gacha hall and it becomes a PERMANENT new store with NO NAME —
+  a distortion in spacetime the Hacker runs. It still sells gacha, but stocks
+  all kinds of crazy reality-bending stuff for the game on top. (Doc only —
+  not building yet.)

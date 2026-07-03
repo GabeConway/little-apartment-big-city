@@ -281,10 +281,11 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: '↓ HOME / SHORE', x: 5, y: 10, color: '#9fc4e8', bg: 'rgba(0,0,0,0.5)' },
   ],
   paris: [
-    { text: 'CAFÉ DE LA LUNE', x: 1, y: 5, color: '#ffe9a0', bg: '#7a1f18', border: '#c0392b', font: 7 },
-    { text: 'BOULANGERIE', x: 16, y: 5, color: '#ffd24a', bg: '#16304a', border: '#2e5e8e', font: 7 },
-    { text: '↩ RETOUR', x: 2, y: 6, color: '#e8e0d0', bg: 'rgba(0,0,0,0.5)' },
-    { text: 'PARIS, FRANCE', x: 9, y: 12, color: '#e8e0d0', bg: 'rgba(0,0,0,0.4)' },
+    // Fascia plates mounted directly over each shopfront (they hug the awning row).
+    { text: 'CAFÉ DE LA LUNE', x: 1, y: 5, color: '#ffe9a0', bg: '#7a1f18', border: '#c9a227', font: 7 },
+    { text: 'BOULANGERIE', x: 21, y: 5, color: '#ffe9a0', bg: '#0f2a14', border: '#c9a227', font: 7 },
+    // The way home — a municipal guide plate beside the café doors.
+    { text: '← RETOUR', x: 4, y: 8, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
 };
 
@@ -1082,7 +1083,14 @@ const paris: SceneDef = {
     'k': T('t-paris-sky', true),
     'c': T('t-cobble'),
     'a': T('t-cafe-awning', true),
-    'b': T('t-boulangerie', true),
+    'A': T('t-boul-awning', true),   // boulangerie awning (green/cream stripes)
+    'v': T('t-boul-win', true),      // bakery window — the baguette rack
+    'd': T('t-boul-door', true),     // bakery door
+    'r': T('t-boul-rack', true),     // patisserie window
+    'f': T('t-cafe-win', true),      // café front window under the awning
+    't': T('t-bistro', true),        // bistro table + chairs on the cobbles
+    'L': T('t-paris-lamp', true),    // wrought-iron lamppost (night glow in the draw block)
+    'B': T('t-bouquiniste', true),   // Seine bookseller's box
     'D': T('t-paris-door'),
     'T': T('t-paris-tree', true),
     'q': T('t-quay'),
@@ -1100,10 +1108,10 @@ const paris: SceneDef = {
     'PPkkkkkkkkkkkkkkkkkkkkkkPP',
     'PPkkkkkkkkkkkkkkkkkkkkkkPP',
     'PPkkkkkkkkkkkkkkkkkkkkkkPP',
-    'PaaakkkkkkkkkkkkkkkkkkbbbP',
-    'PaDDkkkkkkkkkkkkkkkkkkbbbP',
+    'PaaakkkkkkkkkkkkkkkkkkAAAP',
+    'PfDDkkkkkkkkkkkkkkkkkkvdrP',
     'cccccccccccccccccccccccccc',
-    'cccTccccTccccccccTccccTccc',
+    'ctcTctccTcBBLcBBcTcccTccLc',
     'qqqqqqqqqqqqqqqqqqqqqqqqqq',
     'wwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwwwwwwwwwwwww',
@@ -1117,7 +1125,7 @@ const paris: SceneDef = {
     { id: 'seine', x: 0, y: 10, w: 26, h: 2, label: 'The Seine' },
   ],
   npcs: [
-    { id: 'baguette', x: 16, y: 8, sprite: 'npc-tourist', dir: 'down' },
+    { id: 'baguette', x: 22, y: 8, sprite: 'npc-tourist', dir: 'down' },
   ],
 };
 

@@ -1350,4 +1350,6 @@ export const GOSSIP: Gossip[] = [
   { who: 'a karaoke regular', text: 'Midnight Neon is the only song that matters. Hit the beats and the whole bar sings along.' },
   { who: 'an old fisherman', text: 'Every derby, somebody swears they saw a golden flash under the pier. Every derby.' },
   { who: 'a city pigeon feeder', text: 'This town hides its best corners behind its worst ones. Keep walking past where the map seems to end.' },
+  // The shadow figure — suggests the WHO and roughly the WHEN, never the how.
+  { who: 'a shivering dog-walker', text: "Sumikawa Shore is haunted, I'm telling you. Deep in the dead hours there's a man-shaped piece of night standing at the far end of the sand. Blink and it's gone. Nobody walks the beach that late. Almost nobody." },
 ];
