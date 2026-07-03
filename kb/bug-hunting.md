@@ -8,7 +8,7 @@ harness mechanics; this file is the **strategy** on top.
 
 ```bash
 npx tsc --noEmit && npm test          # types + 200-ish unit tests
-npm run playtest -- smoke --wait 450  # all 20 scenes render without errors
+npm run playtest -- smoke --wait 450  # all 22 scenes render without errors
 npm run playtest -- checkup           # end-to-end mechanics battery (scripts/checkups.mjs)
 ```
 

@@ -386,6 +386,7 @@ const SCENE_MUSIC: Record<string, string> = {
   backrooms: '/music/backrooms.mp3',
   mines: '/music/mines.mp3',
   seacave: '/music/mines.mp3',   // reuse the cave theme for the island's hidden sea cave
+  moon: '/music/moon.mp3',       // the moon, outside time (user-supplied "on da mooon")
   gacha: '/music/gacha.mp3',
   island: '/music/island.mp3',
   deepsea: '/music/deep-sea.mp3',
@@ -1198,6 +1199,10 @@ const DialogPortrait: React.FC<{ speaker: string }> = ({ speaker }) => {
 
 const PLAYER_SPEED = 72; // px/s
 
+// What the clock reads. On the moon, time has stopped — every clock in the
+// game (HUD chip, phone status bar, clock widget, settings) just says ???.
+const clockText = (s: GameSave): string => s.scene === 'moon' ? '???' : clockLabel(s);
+
 // Club patrons that dance/bob in place and bust the occasional move across the
 // floor. Treated as wanderers (live positions), plus a draw-time bob.
 const DANCER_IDS = new Set(['dancer', 'dancer2', 'dancer3', 'dancer4']);
@@ -1217,11 +1222,16 @@ const davidActive = (s: GameSave): boolean => s.day % 2 === 0 && nightT(s) > 0.4
 // The midnight stranger haunts the city only in the small hours (10 PM → the 2 AM collapse).
 const MIDNIGHT_IDS = new Set(['stranger']);
 const strangerActive = (s: GameSave): boolean => s.timeMin >= 22 * 60;
+// The shadow figure stands on the shore only in the deepest hour (1:30 AM → the
+// 2 AM collapse — an ~8-real-second window; the moon itself is outside time).
+const SHADOW_IDS = new Set(['shadow-shore']);
+const shadowActive = (s: GameSave): boolean => s.timeMin >= 25.5 * 60;
 // True if a time-gated NPC is currently hidden (not drawn, not solid, not interactive).
 // Bigfoot is doubly gated: he only resolves in the island cave on a rare luck-blessed
 // day (and only until met), and only shows at Club Kaiju once you HAVE met him.
 const npcHiddenNow = (s: GameSave, id: string): boolean =>
   (NIGHT_EVEN_IDS.has(id) && !davidActive(s)) || (MIDNIGHT_IDS.has(id) && !strangerActive(s))
+  || (SHADOW_IDS.has(id) && !shadowActive(s))
   || (id === 'bigfoot-cave' && !bigfootInCaveToday(s))
   || (id === 'bigfoot-club' && !s.storySeen.includes('bigfoot-met'))
   // The Kinryū doorman is ONE man with two placements: square in front of the
@@ -1424,7 +1434,7 @@ const LittleApartmentGame: React.FC = () => {
   // Windowed + forced scale: CSS width to size the layout box to the canvas
   // (so a forced scale isn't clipped at the 1000px cap). null = AUTO/filled.
   const [boxW, setBoxW] = useState<number | null>(null);
-  const [transition, setTransition] = useState<null | 'start' | 'freezer' | 'fade' | 'hack'>(null);
+  const [transition, setTransition] = useState<null | 'start' | 'freezer' | 'fade' | 'hack' | 'shadow'>(null);
   const transTimers = useRef<number[]>([]);
   // Element fullscreen API exists on Android/desktop but NOT iOS Safari, which
   // only goes fullscreen via "Add to Home Screen". Used to pick the right CTA.
@@ -1637,7 +1647,7 @@ const LittleApartmentGame: React.FC = () => {
     then?: () => void;
     hideNpc?: string;
   } | null>(null);
-  const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap; rescuer?: 'jean' | 'yoshi' } | null>(null);
+  const pendingWakeRef = useRef<{ collapsed: boolean; nursed: boolean; recap: DayRecap; rescuer?: 'jean' | 'yoshi'; moon?: boolean } | null>(null);
   const sparkleRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Floating "+N Mineral" pickup text that rises and fades over a mined node.
   const mineTextRef = useRef<{ x: number; y: number; text: string; color: string; t: number } | null>(null);
@@ -1739,7 +1749,7 @@ const LittleApartmentGame: React.FC = () => {
 
   // Cover the screen with a transition overlay, swap underneath while it's
   // opaque (coverMs), then uncover (totalMs). Timers cleared on unmount.
-  const runTransition = useCallback((kind: 'start' | 'freezer' | 'fade' | 'hack', action: () => void, coverMs: number, totalMs: number) => {
+  const runTransition = useCallback((kind: 'start' | 'freezer' | 'fade' | 'hack' | 'shadow', action: () => void, coverMs: number, totalMs: number) => {
     transTimers.current.forEach(id => window.clearTimeout(id));
     transTimers.current = [];
     setTransition(kind);
@@ -1791,7 +1801,7 @@ const LittleApartmentGame: React.FC = () => {
     if (s.money >= 50000) award('rich');
     if (s.money < 100) award('broke');
     setHud({
-      money: s.money, day: s.day, time: clockLabel(s), energy: s.energy, max: maxEnergy(s),
+      money: s.money, day: s.day, time: clockText(s), energy: s.energy, max: maxEnergy(s),
       sceneName: sceneRef.current.name, fish: s.fishInv.length, ownedCount: s.owned.length,
       late: s.timeMin >= 24 * 60, // midnight or later
       unread: unreadCount(s),
@@ -2015,14 +2025,15 @@ const LittleApartmentGame: React.FC = () => {
     if (sleepTimerRef.current) { window.clearTimeout(sleepTimerRef.current); sleepTimerRef.current = null; }
     settleDerby(s); // a derby run open at bedtime (slept/collapsed on the shore) pays out BEFORE the day ticks over
     passNight(s); // day+1, restore energy, reset today's tally
-    if (pending.collapsed || pending.nursed) {
-      // You wake up next to the bed, however you got there.
+    if (pending.collapsed || pending.nursed || pending.moon) {
+      // You wake up next to the bed, however you got there (carried, nursed —
+      // or set down from the moon like the whole night never happened).
       sceneRef.current = SCENES.apartment;
       posRef.current = { x: 2 * TILE, y: 2 * TILE - 4 };
       dirRef.current = 'down';
       s.scene = 'apartment';
       computeSolids();
-      if (!pending.nursed) award('night-owl');
+      if (!pending.nursed && !pending.moon) award('night-owl');
     }
     fulfillDeliveries(s); // ZamaZonk orders land in the boxes this morning
     growGreenhouse(s);    // greenhouse crops advance on watered mornings + a fresh request is posted
@@ -2170,7 +2181,10 @@ const LittleApartmentGame: React.FC = () => {
     }
   }, [setOverlayBoth, playMusicFor, showDialog, refreshHud, award]);
 
-  const doSleep = useCallback((collapsed = false, nursed = false, rescuer?: 'jean' | 'yoshi') => {
+  // moonReturn: the shadow figure carried you home from the moon — an ordinary
+  // fade to morning (no collapse framing), but you wake in the apartment as if
+  // the whole trip never happened.
+  const doSleep = useCallback((collapsed = false, nursed = false, rescuer?: 'jean' | 'yoshi', moonReturn = false) => {
     const s = saveRef.current;
     fishModeRef.current = null;
     projectilesRef.current = [];
@@ -2196,7 +2210,7 @@ const LittleApartmentGame: React.FC = () => {
       furniture: [...s.today.newFurniture],
       collapsed: collapsed || nursed,
     };
-    pendingWakeRef.current = { collapsed, nursed, recap, rescuer: rescuer ?? (nursed ? 'jean' : undefined) };
+    pendingWakeRef.current = { collapsed, nursed, recap, rescuer: rescuer ?? (nursed ? 'jean' : undefined), moon: moonReturn };
     if (collapsed || nursed) {
       // Passed out — hold on the "out cold" screen until the player clicks.
       setOverlayBoth({ type: 'sleep', day: s.day + 1, collapsed: true, awaitClick: true });
@@ -3029,6 +3043,51 @@ const LittleApartmentGame: React.FC = () => {
         return;
       }
       // The midnight stranger — a one-time gift, then just eerie company on later nights.
+      // The shadow figure — shore, deepest hour only (see shadowActive). Taking
+      // the offered hand lets its darkness swallow the screen, then sets you
+      // down on the moon: a scene outside time (the clock freezes, HUD reads ???).
+      if (npc.id === 'shadow-shore') {
+        const firstMeet = !s.storySeen.includes('shadow-met');
+        const goMoon = () => {
+          const s2 = saveRef.current;
+          if (!s2.storySeen.includes('shadow-met')) s2.storySeen.push('shadow-met');
+          persistSave(s2);
+          setOverlayBoth(null);
+          runTransition('shadow', () => {
+            enterScene('moon', 9, 6, 'up');
+            if (!s2.storySeen.includes('moon-arrive')) {
+              s2.storySeen.push('moon-arrive');
+              persistSave(s2);
+              showDialog([
+                'The darkness sets you down like something breakable. Grey dust to every horizon — and above it, hanging in the black, the Earth, small enough to cover with your thumb.',
+                'It is the moon. Literally the moon. Nothing moves. Nothing ticks. Your phone says ??? and does not seem worried about it.',
+                'Somewhere in the stillness, the shadow is waiting — whenever you are ready to go home.',
+              ]);
+            }
+          }, 1100, 2600);
+        };
+        showDialog(firstMeet ? [
+          'At the far end of the sand, where the tide gives up, something is standing where nothing was. A shape cut out of the night, holding very still, watching you with two pale, patient lights.',
+          '"You are awake at the hour the world forgets to watch. Good. I only cross when no one is counting."',
+          '"There is a place the clocks do not follow. I am going there now." A long arm unfolds toward you, palm open, darker than the sea behind it. "You may hold on. If you can bear to let go of the ground."',
+        ] : [
+          '"Again. The quiet suits you." The shadow is already holding out its hand, two pale lights fixed on you, the moon fat and waiting over the water.',
+        ], 'The Shadow', [{ label: '🌑 Take the outstretched hand', onPick: goMoon }]);
+        return;
+      }
+      // The same shadow, on the moon — the only way home. Taking its hand ends
+      // the night: you wake in your bed like the whole trip never happened.
+      if (npc.id === 'shadow-moon') {
+        const goHome = () => {
+          setOverlayBoth(null);
+          runTransition('shadow', () => doSleep(false, false, undefined, true), 1100, 2600);
+        };
+        showDialog([
+          'The shadow stands at the rim of a crater, exactly as far away as it was when you last looked, however far you walk.',
+          '"Take all the time you like. There is none here." The pale lights tilt toward the little blue Earth. "When you are ready — my hand. You will wake where you are supposed to be, and the night will file itself under dreams."',
+        ], 'The Shadow', [{ label: '🌍 Take its hand — go home', onPick: goHome }]);
+        return;
+      }
       if (npc.id === 'stranger') {
         if (!s.storySeen.includes('midnight-stranger')) {
           s.storySeen.push('midnight-stranger');
@@ -3652,6 +3711,21 @@ const LittleApartmentGame: React.FC = () => {
         ]);
         break;
       }
+      // The moon's one secret — a pocket watch half-buried in the regolith,
+      // stopped at the minute the shadow crosses. One-time, like island-bottle.
+      case 'moon-watch': {
+        if (s.storySeen.includes('moon-watch')) { showDialog(['A neat dimple in the dust where the watch lay. You check your pocket — still there. Still stopped. Still, impossibly, warm.']); break; }
+        s.storySeen.push('moon-watch');
+        s.money += 1111;
+        sfxCoin();
+        persistSave(s); refreshHud();
+        showDialog([
+          'Half-buried in the regolith: a pocket watch, gold case worn soft, its chain trailing down into the dust like a root.',
+          'It is stopped at 1:31 exactly. And — up here, in all this cold — the case is warm, as if somebody wound it a minute ago.',
+          'Folded behind the case-back, banknotes, crisp as the day they were hidden. Who banks on the moon? (+¥1,111, and a watch that will never tell you the time.)',
+        ]);
+        break;
+      }
       // ---- Hidden discoverables (each fires once, then a short flavor line) ----
       // 1) Island sea cave — a crack in the volcanic rock you can actually squeeze
       //    into: enters the real `seacave` scene (the nest egg lives in its niche).
@@ -3947,7 +4021,9 @@ const LittleApartmentGame: React.FC = () => {
     // during the ref-mode performances (karaoke / shift QTE / delivery race): they
     // run on their own timers, and letting the 2 AM collapse fire mid-song left the
     // minigame ref alive through doSleep (frozen lane + orphaned audio at home).
-    if (!karaokeRef.current && !shiftRef.current && !driveRef.current) {
+    // The moon is outside time: the clock (and the 2 AM collapse) hold still
+    // while you're up there — the HUD reads ??? until the shadow brings you back.
+    if (!karaokeRef.current && !shiftRef.current && !driveRef.current && sceneRef.current.id !== 'moon') {
       const s2 = saveRef.current;
       const beforeChunk = Math.floor(s2.timeMin / 10);
       s2.timeMin += dt * TIME_RATE;
@@ -4946,6 +5022,13 @@ const LittleApartmentGame: React.FC = () => {
     if (scene.id === 'paris') {
       const e = atlas['eiffel-big'];
       ctx.drawImage(e, Math.round(13 * TILE - e.width / 2) - cam.x, 134 - e.height - cam.y);
+    }
+
+    // The Moon: the Earth hangs small and blue in the star void over the
+    // regolith field. One static blit — nothing up here moves, not even time.
+    if (scene.id === 'moon') {
+      const e = atlas['moon-earth'];
+      ctx.drawImage(e, 4 * TILE - cam.x, 3 - cam.y);
     }
 
     // Hidden museum curios glint on the ground until pocketed.
@@ -8592,7 +8675,7 @@ const LittleApartmentGame: React.FC = () => {
           <p className="text-xl text-[#ffd24a]">¥{s.money.toLocaleString()}</p>
         </div>
         <div className="bg-white/5 rounded-lg px-3 py-2">
-          <p className="text-sm opacity-60">Day {s.day} · {clockLabel(s)}</p>
+          <p className="text-sm opacity-60">Day {s.day} · {clockText(s)}</p>
           <p className="text-base">Battery (energy): {s.energy}/{maxEnergy(s)}</p>
         </div>
         <button
@@ -8995,7 +9078,7 @@ const LittleApartmentGame: React.FC = () => {
       const recipeIds = new Set(RECIPES.map(r => r.id));
       const recipesFound = s.recipes.filter(id => recipeIds.has(id)).length;
       // The discovery secrets (each a one-time storySeen flag); count only, never named.
-      const SECRETS = ['island-cave', 'midnight-stranger', 'stargaze', 'island-bottle'];
+      const SECRETS = ['island-cave', 'midnight-stranger', 'stargaze', 'island-bottle', 'shadow-met', 'moon-watch'];
       const secretsFound = SECRETS.filter(id => s.storySeen.includes(id)).length;
       const cats = [
         { icon: '🐟', name: 'Fish', found: fishFound, total: fishIds.size, note: 'species landed (see the Fishopedia)' },
@@ -9103,7 +9186,7 @@ const LittleApartmentGame: React.FC = () => {
       >
         {/* status bar */}
         <div className="relative z-10 flex items-center gap-2 px-5 pt-2 pb-1 text-sm shrink-0 bg-black/30">
-          <span className="tabular-nums">{clockLabel(s)}</span>
+          <span className="tabular-nums">{clockText(s)}</span>
           <span className="opacity-50">Day {s.day}</span>
           <span className="ml-auto flex items-center gap-1.5">
             <span className="opacity-60 text-xs">{s.energy}%</span>
@@ -9122,7 +9205,7 @@ const LittleApartmentGame: React.FC = () => {
           // home screen: wallpaper + clock widget + app grid
           <div className="relative flex-1 min-h-0 overflow-y-auto" style={{ background: 'linear-gradient(160deg,#1b2350 0%,#3a2350 45%,#7a2f5e 100%)' }}>
             <div className="px-5 pt-5 pb-2 text-center">
-              <p className="font-retro text-[#ffe9a0] text-3xl drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)] tabular-nums">{clockLabel(s).replace(/ (AM|PM)$/, '')}</p>
+              <p className="font-retro text-[#ffe9a0] text-3xl drop-shadow-[2px_2px_0_rgba(0,0,0,0.5)] tabular-nums">{clockText(s).replace(/ (AM|PM)$/, '')}</p>
               <p className="text-sm text-white/80 drop-shadow">Day {s.day} in the big city</p>
             </div>
             <div className="grid grid-cols-3 gap-y-5 gap-x-2 px-4 pt-3 pb-6 justify-items-center">
@@ -11124,6 +11207,10 @@ const LittleApartmentGame: React.FC = () => {
               .lab-transition-freezer .lab-trans-inner{animation:labShake 220ms steps(2) infinite}
               .lab-blink{animation:labBlink 700ms steps(2,end) infinite}
               .lab-glitch{animation:labGlitch 280ms steps(2,end) infinite}
+              @keyframes labShadowFade { 0%{opacity:0} 34%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+              @keyframes labShadowEyes { 0%,28%{opacity:0} 42%{opacity:1} 54%{opacity:.12} 62%{opacity:1} 88%{opacity:0} 100%{opacity:0} }
+              .lab-transition-shadow{background:#000;animation:labShadowFade 2600ms ease-in forwards}
+              .lab-shadow-eyes{animation:labShadowEyes 2600ms ease-in-out forwards}
               @keyframes labHackFade { 0%{opacity:0} 3%{opacity:1} 92%{opacity:1} 100%{opacity:0} }
               @keyframes labHackScroll { 0%{transform:translateY(40%)} 100%{transform:translateY(-62%)} }
               @keyframes labHackBar { 0%{width:0%} 20%{width:18%} 45%{width:42%} 70%{width:75%} 90%{width:96%} 100%{width:100%} }
@@ -11162,6 +11249,15 @@ const LittleApartmentGame: React.FC = () => {
                 <div className="lab-trans-inner text-center px-4">
                   <p className="font-pixel lab-glitch text-3xl sm:text-5xl text-black/80">░ ▒ ▓</p>
                   <p className="font-pixel text-black/70 text-sm sm:text-base mt-2 tracking-[0.3em] text-center">WARPING INTO THE UNKNOWN</p>
+                </div>
+              ) : transition === 'shadow' ? (
+                // The shadow figure's darkness swallows the screen whole; for a
+                // breath, two pale patient lights are the only thing left in it.
+                <div className="lab-trans-inner text-center">
+                  <div className="flex gap-7 justify-center lab-shadow-eyes">
+                    <span className="block w-3 h-5 rounded-full bg-[#e8f0f4]" style={{ boxShadow: '0 0 14px 5px rgba(232,240,244,0.3)' }} />
+                    <span className="block w-3 h-5 rounded-full bg-[#e8f0f4]" style={{ boxShadow: '0 0 14px 5px rgba(232,240,244,0.3)' }} />
+                  </div>
                 </div>
               ) : null}
             </div>

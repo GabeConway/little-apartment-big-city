@@ -377,6 +377,10 @@ const NPC_DEFS: Record<string, { pal: CharPalette; acc: Accessory[] }> = {
     pal: { h: '#241a33', k: '#160f22', s: '#d6d2e2', e: '#aef4ee', t: '#2a2140', u: '#1a1430', p: '#15101f', b: '#0d0a14' },
     acc: [ACC.hood('#2e2350', '#1c1638')],
   },
+  'npc-shadow': { // the shadow figure — a human-shaped void in a ragged hood; only its eyes hold any light.
+    pal: { h: '#1d1826', k: '#16181d', s: '#222831', e: '#e8f0f4', t: '#1d1826', u: '#16181d', p: '#1d1826', b: '#16181d' },
+    acc: [ACC.hood('#1d1826', '#16181d')],
+  },
   // ---- Daily street-event actors (only spawned by streetEventFor) ----
   'npc-magician': { // street magician — black tailcoat, top hat, crimson bowtie
     pal: { h: '#15151a', k: '#0a0a0d', s: '#e8c098', e: '#222', t: '#16161c', u: '#0b0b0f', p: '#26262e', b: '#0d0d10' },
@@ -1726,6 +1730,55 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#5e5468'; ctx.fillRect(3, 4, 1, 1); ctx.fillRect(10, 9, 1, 1);                            // pebble highlight
     ctx.fillStyle = '#332c3e'; ctx.fillRect(3, 6, 3, 1); ctx.fillRect(10, 11, 3, 1); ctx.fillRect(6, 14, 2, 1); // pebble shadow
   });
+  // Moon scene — star void, pale regolith, and its half-buried secret.
+  atlas['t-space'] = tile(ctx => {                             // near-black star void
+    fill(ctx, '#16181d');
+    ctx.fillStyle = '#1d1826'; ctx.fillRect(2, 3, 5, 4); ctx.fillRect(9, 10, 6, 4); ctx.fillRect(11, 1, 4, 3); // faint nebula patches
+    speckle(ctx, '#1d1826', 73, 5);
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(3, 2, 1, 1); ctx.fillRect(12, 6, 1, 1); ctx.fillRect(6, 12, 1, 1); // bright stars
+    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(9, 4, 1, 1); ctx.fillRect(1, 9, 1, 1); ctx.fillRect(14, 13, 1, 1); // cold stars
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(13, 9, 1, 1); ctx.fillRect(4, 14, 1, 1);                           // two warm stars
+  });
+  atlas['t-moon-floor'] = tile(ctx => {                        // pale regolith, tiles seamlessly
+    fill(ctx, '#8a96a0');
+    speckle(ctx, '#9aa0a6', 83, 9);                                                                            // light dust grit
+    speckle(ctx, '#6e7682', 89, 7);                                                                            // dark grit
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 5, 2, 2); ctx.fillRect(10, 10, 2, 1);                           // pebbles (lit)
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 5, 1, 1); ctx.fillRect(10, 10, 1, 1);                           // pebble highlight
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(5, 7, 2, 1); ctx.fillRect(11, 11, 2, 1);                           // pebble shadow
+  });
+  atlas['t-moon-crater'] = tile(ctx => {                       // walkable crater dimple on the regolith
+    fill(ctx, '#8a96a0');
+    speckle(ctx, '#9aa0a6', 83, 9);
+    speckle(ctx, '#6e7682', 89, 7);
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(4, 5, 8, 6); ctx.fillRect(5, 4, 6, 8);                             // elliptical bowl
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(7, 8, 4, 3); ctx.fillRect(6, 9, 6, 1);                             // deepest lower-right
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(5, 4, 4, 1); ctx.fillRect(4, 5, 1, 3);                             // rim highlight upper-left
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(11, 11, 2, 1); ctx.fillRect(12, 10, 1, 1);                         // kicked-up rim dust
+  });
+  atlas['t-moon-rock'] = tile(ctx => {                         // SOLID boulder, regolith baked underneath
+    fill(ctx, '#8a96a0');
+    speckle(ctx, '#9aa0a6', 83, 9);
+    speckle(ctx, '#6e7682', 89, 7);
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(2, 3, 12, 11); ctx.fillRect(3, 2, 10, 13);                         // colored outline blob
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(3, 4, 10, 9); ctx.fillRect(4, 3, 8, 11);                           // mid boulder
+    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 3, 6, 5); ctx.fillRect(3, 4, 5, 4);                             // lit upper-left
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(9, 9, 4, 4); ctx.fillRect(6, 11, 7, 2);                            // shadow lower-right
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 4, 2, 1); ctx.fillRect(4, 5, 1, 1);                             // glint
+    ctx.fillStyle = '#222831'; ctx.fillRect(3, 13, 10, 2);                                                     // front face — sits solid
+  });
+  atlas['t-moon-watch'] = tile(ctx => {                        // half-buried antique pocket watch — the secret
+    fill(ctx, '#8a96a0');
+    speckle(ctx, '#9aa0a6', 83, 9);
+    speckle(ctx, '#6e7682', 89, 7);
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(4, 6, 9, 6); ctx.fillRect(5, 5, 7, 8);                             // disturbed-dust ring
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(5, 6, 7, 5); ctx.fillRect(6, 5, 5, 7);                             // ring interior
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(6, 7, 5, 4); ctx.fillRect(7, 6, 3, 6);                             // gold case, tilted
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(7, 6, 2, 1); ctx.fillRect(6, 7, 1, 2);                             // lit case rim upper-left
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(8, 8, 1, 1);                                                       // glass glint
+    ctx.fillStyle = '#8a96a0'; ctx.fillRect(6, 10, 5, 2);                                                      // dust swallowing the lower half
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(11, 9, 1, 1); ctx.fillRect(12, 11, 1, 1); ctx.fillRect(13, 13, 1, 1); // chain links trailing into the soil
+  });
   atlas['t-hole'] = tile(ctx => {
     fill(ctx, '#8a7e46'); // backrooms carpet around it
     ctx.fillStyle = '#16121d'; ctx.fillRect(2, 3, 12, 11);
@@ -2704,6 +2757,39 @@ const buildTiles = (atlas: Atlas) => {
     cg.fillStyle = eL; cg.fillRect(cx - 2, 4, 1, 4);
     cg.fillStyle = '#e0564e'; cg.fillRect(cx - 1, 0, 2, 2);
     atlas['eiffel-big'] = cc;
+  }
+
+  // Earthrise — ONE standalone 28×28 disc, the Earth seen from the moon,
+  // blitted over the t-space sky. Hard-pixel rows (no anti-aliasing), lit
+  // from the upper-left with the night terminator eating the lower-right third.
+  {
+    const r = 12.5, ecy = 13.5;
+    const [ec, eg] = canvas(28, 28);
+    const hw = (y: number) => Math.floor(Math.sqrt(Math.max(0, r * r - (y + 0.5 - ecy) * (y + 0.5 - ecy))));
+    for (let y = 1; y < 26; y++) {
+      const w = hw(y), x0 = 13 - w, x1 = 14 + w;                                   // disc row span
+      eg.fillStyle = '#3d6e9e'; eg.fillRect(x0, y, x1 - x0 + 1, 1);                // mid ocean
+      if (y < 14) { eg.fillStyle = '#50a0d0'; eg.fillRect(x0, y, Math.max(1, Math.floor((x1 - x0) * 0.6)), 1); } // sunlit ocean upper-left
+      const night = Math.max(0, Math.floor((y - 9) * 0.55));                        // terminator creeps in lower-right
+      if (night > 0) {
+        eg.fillStyle = '#27517c'; eg.fillRect(x1 - night, y, night + 1, 1);
+        const deep = Math.max(0, Math.floor((y - 16) * 0.6));
+        if (deep > 0) { eg.fillStyle = '#1d1826'; eg.fillRect(x1 - deep, y, deep + 1, 1); }
+      }
+      if (y < 18) { eg.fillStyle = '#9fc4e8'; eg.fillRect(x0, y, 1, 1); }           // atmosphere rim hugs the lit edge
+    }
+    eg.fillStyle = '#9fc4e8'; eg.fillRect(10, 1, 6, 1);                             // rim across the lit top arc
+    // landmass blobs on the day side
+    eg.fillStyle = '#6f9e5e';
+    eg.fillRect(6, 6, 5, 3); eg.fillRect(8, 9, 3, 2);                               // northern continent
+    eg.fillRect(14, 12, 4, 3); eg.fillRect(15, 15, 3, 2);                           // equatorial blob
+    eg.fillRect(5, 15, 3, 3);                                                       // southern islet
+    eg.fillStyle = '#5e8a4f';
+    eg.fillRect(9, 8, 2, 1); eg.fillRect(16, 14, 2, 1); eg.fillRect(6, 17, 2, 1);   // land shade lower-right
+    // cloud streaks
+    eg.fillStyle = '#e8f0f4';
+    eg.fillRect(7, 4, 6, 1); eg.fillRect(12, 8, 5, 1); eg.fillRect(4, 12, 4, 1); eg.fillRect(9, 18, 5, 1);
+    atlas['moon-earth'] = ec;
   }
 
   // ---- Community greenhouse ------------------------------------------------

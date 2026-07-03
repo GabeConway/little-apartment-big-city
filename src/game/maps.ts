@@ -440,6 +440,8 @@ const shore: SceneDef = {
     // David + his campfire only appear on even-numbered nights (gated in code).
     { id: 'campfire', x: 13, y: 6, sprite: 'prop-campfire', dir: 'down' },
     { id: 'david', x: 14, y: 6, sprite: 'npc-vampire', dir: 'left' },
+    // The shadow figure — only out in the deepest hour (1:30 AM → collapse); see shadowActive.
+    { id: 'shadow-shore', x: 22, y: 7, sprite: 'npc-shadow', dir: 'down' },
   ],
 };
 
@@ -1036,6 +1038,38 @@ const backroom: SceneDef = {
   npcs: [{ id: 'kinryu-boss', x: 6, y: 2, sprite: 'npc-yakuza', dir: 'down' }],
 };
 
+// The Moon — reached only through the shadow figure on the shore at 1:30 AM.
+// Outside time: no warps out; the shadow figure (shadow-moon) is the only way home.
+const moon: SceneDef = {
+  id: 'moon',
+  name: 'The Moon',
+  legend: {
+    'S': T('t-space', true),      // star void — the edge of everything
+    '.': T('t-moon-floor'),       // pale regolith
+    'c': T('t-moon-crater'),      // walkable crater dimple
+    'R': T('t-moon-rock', true),  // solid boulder
+    'W': T('t-moon-watch'),       // the half-buried pocket watch (secret)
+  },
+  grid: [
+    'SSSSSSSSSSSSSSSSSSSS',
+    'SSSSSSSSSSSSSSSSSSSS',
+    'SS.....R......c..SSS',
+    'S...c.....R.......SS',
+    'S......c......R....S',
+    'S..R.......c......SS',
+    'S....c..R......c..SS',
+    'SS..........R.....SS',
+    'SS...R...c......WSSS',
+    'SSS..............SSS',
+    'SSSSSSSSSSSSSSSSSSSS',
+  ],
+  warps: [],
+  interactables: [
+    { id: 'moon-watch', x: 16, y: 8, label: 'Something half-buried' },
+  ],
+  npcs: [{ id: 'shadow-moon', x: 9, y: 3, sprite: 'npc-shadow', dir: 'down' }],
+};
+
 // ---- Paris (the secret entrance behind the backrooms) ---------------------------------
 // Reached only via the hacker transition from the backrooms seam (parisRevealed).
 // Eiffel Tower against the sky, café + boulangerie awnings, cobble plaza, the Seine.
@@ -1129,5 +1163,5 @@ const museum: SceneDef = {
 };
 
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, deepsea, casino, backroom, paris, museum,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, deepsea, casino, backroom, paris, moon, museum,
 };

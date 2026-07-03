@@ -136,4 +136,27 @@ export const CHECKS = [
     click: 'PHONE,Settings',
     assert: "overlay==='menu' && overlayData && overlayData.tab==='settings'",
   },
+  {
+    name: 'shadow-shore-appears',
+    note: 'the shadow figure is interactive on the shore at 1:30 AM (talking opens The Shadow dialog)',
+    save: { scene: 'shore', px: 336, py: 108, timeMin: 1532, day: 3, wishDay: 3, storySeen: ['arrive'], visited: ['shore'] },
+    hold: ['ArrowRight:300'],
+    keys: 'e',
+    assert: "overlay==='dialog' && overlayData && overlayData.speaker==='The Shadow'",
+  },
+  {
+    name: 'shadow-shore-hidden-by-day',
+    note: 'before 1:30 AM the shadow figure is not there (E on his tile does nothing)',
+    save: { scene: 'shore', px: 336, py: 108, timeMin: 1200, day: 3, wishDay: 3, storySeen: ['arrive'], visited: ['shore'] },
+    hold: ['ArrowRight:300'],
+    keys: 'e',
+    assert: "overlay===null",
+  },
+  {
+    name: 'moon-outside-time',
+    note: 'on the moon the clock is frozen (timeMin does not advance; no 2 AM collapse)',
+    save: { scene: 'moon', px: 144, py: 92, timeMin: 1556, visited: ['moon'] },
+    wait: 4500,
+    assert: "scene==='moon' && save.timeMin===1556 && overlay===null",
+  },
 ];
