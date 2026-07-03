@@ -40,7 +40,7 @@ All three are exit-code checkable. If any fails after your change, the change di
   Seed the exact `day` to reproduce any daily roll.
 - **Clock**: seed `timeMin` (minutes since 0:00; wake 420, night ramp from 1020,
   collapse at 1560). `timeMin:1556` + a few real seconds = collapse test.
-  `TIME_RATE` is 3.5 game-min per real second.
+  `TIME_RATE` is 4.0 game-min per real second.
 - Money/energy edge cases: seed `money:0`, `energy:1` and try to spend.
 
 ## Known blind spots (can't be driven by the harness)

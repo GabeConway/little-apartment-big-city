@@ -649,7 +649,7 @@ const homeDecorReaction = (s: GameSave): string => {
   return 'They turn a slow circle, taking it all in. "It\'s a good little place. Warm. It\'s got you all over it."';
 };
 
-const TIME_RATE = 3.5; // in-game minutes per real second (~5.5 real min per day)
+const TIME_RATE = 4.0; // in-game minutes per real second (~4.75 real min per day; was 3.5, owner wanted days a touch shorter 2026-07-02)
 
 type FishTable = 'shallow' | 'deep' | 'tropical';
 type FishMode =
