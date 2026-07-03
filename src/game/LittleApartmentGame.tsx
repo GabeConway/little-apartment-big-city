@@ -1631,7 +1631,6 @@ const LittleApartmentGame: React.FC = () => {
   const mineChestRef = useRef<{ x: number; y: number } | null>(null); // the vault's chest tile
   const mineChestOpenRef = useRef(false);// has the vault chest been looted (this visit / today)?
   const gunCooldownRef = useRef(0);      // AK-67 full-auto fire timer
-  const autoFireRef = useRef(0);         // auto-defend cadence: weapon locks the nearest crawler on its own
   const nursedRef = useRef(false);
   // Jean-Pierre rescue cutscene (after a mines KO): he's stood in your apartment
   // while he talks, then walks to the door and leaves before you can get up.
@@ -4729,38 +4728,9 @@ const LittleApartmentGame: React.FC = () => {
       depthToastRef.current.t -= dt;
       if (depthToastRef.current.t <= 0) depthToastRef.current = null;
     }
-    // Auto-defend: in the mines your weapon locks onto the nearest crawler in
-    // range and fires on its own — no aiming, no trigger. This decouples combat
-    // from mining so the action button stays free for swinging the pickaxe and
-    // you can focus on moving + mining instead of juggling both at once.
-    if (sceneRef.current.id === 'mines' && (s.wand || s.gun)
-        && crawlersRef.current.length > 0 && !overlayRef.current && !fishModeRef.current) {
-      autoFireRef.current -= dt;
-      if (autoFireRef.current <= 0) {
-        const p = posRef.current;
-        const AUTO_RANGE = 5 * TILE;
-        let best: Crawler | null = null, bestD = Infinity;
-        for (const c of crawlersRef.current) {
-          const d = Math.abs(c.x - p.x) + Math.abs(c.y - p.y);
-          if (d < AUTO_RANGE && d < bestD) { bestD = d; best = c; }
-        }
-        if (best) {
-          // aim the bolt straight at the locked target (normalized direction)
-          const tx = best.x + 8 - (p.x + 4), ty = best.y + 8 - (p.y + 4);
-          const len = Math.hypot(tx, ty) || 1;
-          const SPD = s.gun ? 340 : 190;
-          autoFireRef.current = s.gun ? 0.12 : 0.5; // the gun rattles; the wand paces itself
-          projectilesRef.current.push({
-            x: p.x + 4, y: p.y + 4,
-            dx: (tx / len) * SPD, dy: (ty / len) * SPD,
-            t: s.gun ? 0.55 : 0.8, pierce: s.gun ? true : s.wand2, dmg: s.gun ? 3 : 1, gun: s.gun,
-          });
-          if (s.gun) sfxGun(); else sfxBite();
-        } else {
-          autoFireRef.current = 0; // nothing in range — ready to fire the instant one appears
-        }
-      }
-    }
+    // Combat is manual (auto-defend was tried 2026-06-30 and pulled 2026-07-02
+    // — the owner wants firing to be the player's act): the wand fires on E via
+    // handleInteract when nothing else is targeted; the AK-67 is full-auto below.
     // AK-67: full-auto while you hold the action button down in the mines.
     if (sceneRef.current.id === 'mines' && s.gun && input.actionHeld
         && !overlayRef.current && !fishModeRef.current) {
