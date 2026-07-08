@@ -50,15 +50,25 @@ const ROSTER = {
 };
 
 const NO_WATERMARK =
-  'Do NOT add any watermark, sparkle, star emblem, logo, signature, or text ' +
-  'other than the nameplate. If the input image contains a small star or ' +
-  'sparkle mark near a corner, omit it entirely.';
+  'IMPORTANT: the source image contains a small four-pointed diamond sparkle ' +
+  'in the bottom-right corner, on the frame border. That sparkle is a ' +
+  'WATERMARK, not part of the artwork. The output must NOT contain it — ' +
+  'render that corner of the frame as plain frame material, identical to the ' +
+  'bottom-left corner. Do not add any other watermark, logo, signature, or ' +
+  'text besides the nameplate.';
 
 const REGEN_PROMPT =
   'Recreate this exact image as faithfully as possible: same character, same ' +
   'pose, same facial expression, same composition, same background, same ' +
   'color palette, same crisp pixel-art style, same wooden frame and nameplate ' +
   'with the same name text. Output a clean 1024x1024 image. ' + NO_WATERMARK;
+
+// For non-portrait images (regen by path, e.g. the title background): no
+// frame/nameplate language, keep the source aspect ratio.
+const REGEN_GENERIC_PROMPT =
+  'Recreate this exact image as faithfully as possible: same subjects, same ' +
+  'composition, same color palette, same crisp pixel-art style, same aspect ' +
+  'ratio as the source. ' + NO_WATERMARK;
 
 const newPrompt = (name, desc) =>
   'Using the attached image ONLY as a style reference (pixel-art rendering, ' +
@@ -76,6 +86,9 @@ const opt = (flag, dflt) => {
 };
 const model = opt('--model', 'gemini-2.5-flash-image');
 const outDir = resolve(root, opt('--out', 'art-staging/portraits'));
+// Extra prompt text appended to the built-in prompt — for retry passes
+// ("crisper pixels", "fix the sign text", etc.) without editing this file.
+const note = opt('--note', '');
 const [mode, ...rest] = args;
 
 const key = process.env.GEMINI_API_KEY;
@@ -140,10 +153,12 @@ if (mode === 'regen') {
       : ROSTER[target]
         ? [[target, ROSTER[target]]]
         : [[basename(target, extname(target)), resolve(root, target)]];
+  const isRosterJob = target === 'all' || !!ROSTER[target];
   for (const [name, file] of jobs) {
     if (!existsSync(file)) throw new Error(`missing source image: ${file}`);
     console.log(`regen ${name} <- ${file}`);
-    save(name, await generate([imagePart(file), { text: REGEN_PROMPT }], name));
+    const prompt = (isRosterJob ? REGEN_PROMPT : REGEN_GENERIC_PROMPT) + (note ? ` ${note}` : '');
+    save(name, await generate([imagePart(file), { text: prompt }], name));
   }
 } else if (mode === 'new') {
   const [name, desc] = rest;
@@ -159,8 +174,21 @@ if (mode === 'regen') {
   }
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   console.log(`new ${name} (ref: ${basename(ref)})`);
-  save(slug, await generate([imagePart(ref), { text: newPrompt(name, desc) }], name));
+  const prompt = newPrompt(name, desc) + (note ? ` ${note}` : '');
+  save(slug, await generate([imagePart(ref), { text: prompt }], name));
+} else if (mode === 'gen') {
+  // Free-form generation (logos, capsules, splash art): gen <slug> "<prompt>" [--ref <image-path>]
+  const [slug, promptText] = rest;
+  if (!slug || !promptText) {
+    console.error('gen needs: <output-slug> "<prompt>" [--ref <image-path>]');
+    process.exit(1);
+  }
+  const refPath = opt('--ref', '');
+  const parts = refPath ? [imagePart(resolve(root, refPath))] : [];
+  parts.push({ text: promptText + (note ? ` ${note}` : '') });
+  console.log(`gen ${slug}${refPath ? ` (ref: ${basename(refPath)})` : ''}`);
+  save(slug, await generate(parts, slug));
 } else {
-  console.error('mode must be "regen" or "new" — see header comment for usage.');
+  console.error('mode must be "regen", "new", or "gen" — see header comment for usage.');
   process.exit(1);
 }

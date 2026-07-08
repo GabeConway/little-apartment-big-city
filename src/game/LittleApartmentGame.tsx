@@ -1148,7 +1148,7 @@ const PORTRAITS: Record<string, PortraitDraw> = {
 // These already include their own frame + name label, so the dialog box skips
 // its panel frame and speaker caption when one is shown.
 const PORTRAIT_IMAGES: Record<string, string> = {
-  'Granny Sato': '/images/portraits/granny-soto.png',
+  'Granny Sato': '/images/portraits/granny-sato.jpeg',
   'Genji': '/images/portraits/genji.jpeg',
   'The Manager': '/images/portraits/the-manager.jpeg',
   'Jean-Pierre': '/images/portraits/jean-pierre.jpeg',
@@ -1158,6 +1158,20 @@ const PORTRAIT_IMAGES: Record<string, string> = {
   // The wise talking cat is named David (the shore vampire was renamed Max so the
   // cat can own the name). His dialogs use speaker 'David' → this portrait.
   'David': '/images/portraits/david.jpeg',
+  'Tex': '/images/portraits/tex.jpeg',
+  'Max': '/images/portraits/max.jpeg',
+  'Bingus Doofelsmurt': '/images/portraits/bingus-doofelsmurt.jpeg',
+  'Yuki (night shift)': '/images/portraits/yuki.jpeg',
+  'The Big Guy': '/images/portraits/the-big-guy.jpeg',
+  'Saito': '/images/portraits/saito.jpeg',
+  'Riko': '/images/portraits/riko.jpeg',
+  'Mr. Maeda': '/images/portraits/mr-maeda.jpeg',
+  'Mr. Ibu': '/images/portraits/mr-ibu.jpeg',
+  'Mimi (Doki Doki Discount)': '/images/portraits/mimi.jpeg',
+  'Mei': '/images/portraits/mei.jpeg',
+  'Kojima': '/images/portraits/kojima.jpeg',
+  'DJ Tanuki': '/images/portraits/dj-tanuki.jpeg',
+  'Enforcer': '/images/portraits/enforcer.jpeg',
 };
 
 // David the cat is ancient and wise. He dispenses unsettlingly calm aphorisms.
@@ -10494,9 +10508,14 @@ const LittleApartmentGame: React.FC = () => {
 
             <div className="relative flex flex-col items-center gap-4 w-full max-w-sm">
               <div className="relative leading-none">
-                <p className="font-pixel text-[#9fc4e8] text-lg sm:text-2xl mb-1.5 drop-shadow-[2px_2px_0_#000]">a tiny life sim</p>
-                <h2 className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">LITTLE APARTMENT,</h2>
-                <h2 className="font-retro text-[#ffd24a] text-xl sm:text-3xl leading-relaxed drop-shadow-[2px_2px_0_#000]">BIG CITY</h2>
+                {/* painted wordmark (tagline + title baked in); splash stays live text */}
+                <img
+                  src="/images/game-logo-title.png"
+                  alt="a tiny life sim — LITTLE APARTMENT, BIG CITY"
+                  draggable={false}
+                  className="w-72 sm:w-96 drop-shadow-[2px_2px_0_#000]"
+                  style={{ imageRendering: 'pixelated' }}
+                />
                 {/* Minecraft-style splash, tucked at the logo's lower-right corner */}
                 <div className="absolute -bottom-3 -right-2 sm:-bottom-4 sm:-right-6 pointer-events-none z-10">
                   <p className="origin-center font-pixel text-[#ffd24a] text-xs sm:text-sm animate-splash drop-shadow-[1px_1px_0_#000] whitespace-nowrap">
