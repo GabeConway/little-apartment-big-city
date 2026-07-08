@@ -6,6 +6,9 @@ dist/
 # playtest harness screenshots (scripts/playtest.mjs default output)
 playtest/
 
+# gemini portrait staging (scripts/gemini-portraits.mjs output; installed art is committed in public/)
+art-staging/
+
 # visual-baseline transient output (baselines themselves ARE committed)
 tests/visual/current/
 tests/visual/diff/
