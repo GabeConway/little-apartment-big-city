@@ -13,6 +13,13 @@ to Steam achievements**.
    description, tags, trailer recommended. Valve page review ~3–5 business days.
 4. Page must sit public as **"Coming Soon" ≥2 weeks before launch** (wishlist window).
 5. Build review is a separate quick pass.
+6. **AI-content disclosure (required)**: the content survey must declare pre-generated AI
+   art — dialog portraits, title wordmark, title background were made with the paid Gemini
+   API (2026-07-07, see art-direction.md "Gemini API pipeline"; commercial terms, invisible
+   SynthID watermark). Disclosure text shows on the store page; keep it factual ("some 2D
+   artwork (character portraits, title art) was created with generative AI, curated and
+   edited by the developer"). Capsule art will likely also be Gemini-made — same disclosure
+   covers it.
 
 ## Depots (what we ship)
 Steam wants **loose files** per platform, uploaded via `steamcmd` (SteamPipe) —

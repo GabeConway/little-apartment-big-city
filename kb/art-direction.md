@@ -159,6 +159,30 @@ resolution and authoring art larger, rather than shrinking characters into a 16p
 - Keep `src/game/` dependency-free (React-only). PNGs live in `public/`, loaded via normal
   `<img>`/canvas draw — no new npm deps, no bundler asset imports inside `src/game/`.
 
+## Gemini API pipeline — portraits, logos, splash art (`scripts/gemini-portraits.mjs`)
+
+The second AI-art tool beside sprite-ai (2026-07-07). **Division of labor: sprite-ai = tiles/sprites/animations on the 16px grid; the Gemini tool = big painterly one-offs** — dialog portraits, the title wordmark, the title background, and future Steam capsules / Bingus-gallery paintings / scene splash art. All shipped dialog portraits + the title logo/bg were made with it (paid-tier Gemini API: no visible watermark, commercial terms; invisible SynthID remains — Steam AI disclosure still required, see steam.md).
+
+**Setup**: `export GEMINI_API_KEY=...` (paid-tier key from AI Studio; keep it in `~/.zshrc`, never commit). Model default `gemini-2.5-flash-image` (~$0.04/image).
+
+**Three modes** (outputs → `art-staging/` (gitignored) as PNG; review, then install):
+- `node scripts/gemini-portraits.mjs regen <roster-name|all|path>` — image-to-image faithful recreation (used to strip the consumer-app ✦ watermark from the original set). Roster names in the script's `ROSTER`. A `path` target gets a generic prompt (no frame/nameplate language) — that's how `title-bg.png` was redone.
+- `node scripts/gemini-portraits.mjs new "<NAME>" "<description>" [--ref <roster-name>]` — new character portrait in the house style: style-ref image (default `genji`) + description; frame + all-caps gold nameplate come from the built-in prompt.
+- `node scripts/gemini-portraits.mjs gen <slug> "<full prompt>" [--ref <image-path>]` — free-form (logo, splash, capsule). You write the whole prompt; `--ref` may point at ANY image file.
+- All modes take `--note "<extra prompt>"` (appended — retry corrections without editing the script), `--model`, `--out`.
+
+**Portrait style law**: bust-height, wooden frame, **all-caps gold pixel nameplate directly on the dark bar — no plaque/box, uniform letter height**; character shown **in their in-game setting** (Granny at her greenhouse, Saito behind the bar). QA every output for: stray ✦ sparkle (esp. bottom-right), nameplate spelling/case, garbled signs, style drift.
+
+**Hard-won lessons (don't relearn):**
+- **i2i will NOT edit text.** Asking `regen`/`gen`-with-ref to change nameplate case/spelling fails ~100% (it faithfully copies, or blanks the plate). **Fresh generations render requested text fine.** To fix text on otherwise-good art, repaint deterministically: erase the bar + redraw in **Press Start 2P** (the game's `font-retro`) via a Playwright canvas script — see `scripts/fix-nameplates.mjs` (sample bar color → fillRect → 8-way-offset outline + gold fill).
+- **Style refs bleed identity.** `new` with a ref can clone the ref's face (the Tex-looks-like-Genji bug). Counter with an explicit "completely different person from the reference — only copy style/frame/nameplate" note.
+- **Transparent assets**: the model can't output alpha. Prompt for "one perfectly flat solid pure magenta (RGB 255 0 255) background, no gradient/glow/shapes", then chroma-key + auto-crop with a Playwright canvas script (see `scripts/chroma-key-logo.mjs`; de-fringe magenta-ish edge pixels toward the outline color). Also demand "dark BROWN outlines/shadows, never magenta-tinted" or the drop shadow keys badly.
+- Exact text needs letter-by-letter spelling in the prompt ("B-I-N-G-U-S…"), commas called out explicitly, and "ALL CAPITAL LETTERS" or you get title-case.
+- Background signage: pin it ("must say exactly CLUB KAIJU or be unreadable glyphs") or the model invents misspelled signs.
+- The watermark ✦ from old consumer-app sources gets **copied by i2i** — tell the model the bottom-right sparkle "is a WATERMARK, not part of the artwork".
+
+**Install pipeline (after explicit user approval of staged art)**: `sips -s format jpeg -s formatOptions 88 --resampleWidth 1024 art-staging/portraits/<n>.png --out public/images/portraits/<n>.jpeg` → add the exact speaker string to `PORTRAIT_IMAGES` (LittleApartmentGame.tsx) → `tsc`/`test`/`build` → playtest screenshots (title + a dialog, day + night) → user "ship" → commit.
+
 ## Checklist for any new asset
 
 1. Reads clearly at its native size (tiles 64px, characters/NPCs 128px per the resolution target).

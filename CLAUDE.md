@@ -17,6 +17,7 @@ router, no site chrome. Input: keyboard, touch, or game controller.
 - `public/` — `images/`, `music/`, `sfx/` (assets are absolute paths: `/images/...`).
 - `src-tauri/` — Tauri v2 project (Rust). See [kb/build-targets.md](kb/build-targets.md).
 - `scripts/make-dmg.mjs` — builds the macOS dmg via `hdiutil` (see build-targets).
+- `scripts/gemini-portraits.mjs` — Gemini API art generator (portraits/logos/splash; needs `GEMINI_API_KEY`), plus canvas helpers `chroma-key-logo.mjs` / `fix-nameplates.mjs`. Usage + prompt lessons: [kb/art-direction.md](kb/art-direction.md) "Gemini API pipeline".
 
 ## Knowledge base (`kb/`)
 Read before editing the matching area:
