@@ -1,5 +1,9 @@
 # Little Apartment, Big City
 
+[![CI](https://github.com/GabeConway/little-apartment-big-city/actions/workflows/ci.yml/badge.svg)](https://github.com/GabeConway/little-apartment-big-city/actions/workflows/ci.yml)
+[![Release](https://github.com/GabeConway/little-apartment-big-city/actions/workflows/release.yml/badge.svg)](https://github.com/GabeConway/little-apartment-big-city/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/GabeConway/little-apartment-big-city?include_prereleases&label=download)](https://github.com/GabeConway/little-apartment-big-city/releases)
+
 > A cozy pixel life-sim with no finish line. Fish the shore, work odd jobs, furnish a tiny apartment, befriend the neighbourhood, and turn up the city's hidden secrets at your own pace — one codebase running native on **Windows, macOS, Linux, iOS, and Android**.
 
 <p align="center">
@@ -55,6 +59,7 @@ Open the phone (**P** / 📱) → **Codes** app, type a code, APPLY:
 | `nightfall` | Set time to 10:00 PM (night) |
 | `midnight` | Set time to 1:30 AM |
 | `come again another day` | Force rain for the current day |
+| `im god` | Toggle god mode (mine crawlers can't hurt you) |
 | `now you see me` | Toggle the in-game code list (visible by default in dev builds) |
 
 ## Quick start (dev)
@@ -114,3 +119,8 @@ See [kb/build-targets.md](kb/build-targets.md).
 ## Docs
 Architecture and house rules live in [CLAUDE.md](CLAUDE.md) and [kb/](kb/). The game
 itself — every system, scene, and hard rule — is documented in [kb/games.md](kb/games.md).
+
+## License
+**All rights reserved.** The source is published so you can read it, learn from it,
+and build the game for your own personal use. Please don't redistribute the game,
+its music, or its art, or ship derivative builds. Bug reports and PRs are welcome.

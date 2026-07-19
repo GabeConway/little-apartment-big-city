@@ -4,7 +4,7 @@
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const root = '/Users/gabe/Documents/GitHub/lilaptbigcty';
+const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const FONT = `${root}/node_modules/@fontsource/press-start-2p/files/press-start-2p-latin-400-normal.woff2`;
 const JOBS = [
   { file: 'charlie.png', text: 'CHARLIE' },

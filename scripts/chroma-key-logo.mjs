@@ -2,7 +2,7 @@
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const root = '/Users/gabe/Documents/GitHub/lilaptbigcty';
+const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const logoB64 = readFileSync(`${root}/art-staging/logo/game-logo-wordmark.png`).toString('base64');
 const bgB64 = readFileSync(`${root}/art-staging/portraits/title-bg.png`).toString('base64');
 
