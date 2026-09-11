@@ -3848,6 +3848,21 @@ const buildDecorFood = (atlas: Atlas) => {
     ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 8, 5, 1); ctx.fillRect(8, 7, 1, 5); ctx.fillRect(7, 10, 3, 1); // gold kanji
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 11, 1, 1);
   });
+  atlas['i-kinryu-chip'] = tile(ctx => {
+    // The Kinryū house chip — lacquer-black, gold dragon on the face, no
+    // denomination anywhere. Towzawa's opening courtesy: not worth money.
+    ctx.fillStyle = '#0e0f14'; ctx.fillRect(4, 3, 8, 1); ctx.fillRect(3, 4, 10, 8); ctx.fillRect(4, 12, 8, 1); // round lacquer body
+    ctx.fillStyle = '#2a2a34'; ctx.fillRect(4, 3, 8, 1); ctx.fillRect(3, 4, 1, 4);   // lit top-left rim
+    ctx.fillStyle = '#000000'; ctx.fillRect(4, 12, 8, 1); ctx.fillRect(12, 8, 1, 4); // shaded lower rim
+    ctx.fillStyle = '#c9a227';                                                        // gold inlay ring, dashed
+    ctx.fillRect(5, 4, 2, 1); ctx.fillRect(9, 4, 2, 1); ctx.fillRect(4, 6, 1, 2); ctx.fillRect(11, 6, 1, 2);
+    ctx.fillRect(5, 11, 2, 1); ctx.fillRect(9, 11, 2, 1);
+    ctx.fillStyle = '#c9a227';                                                        // dragon coiled in the centre
+    ctx.fillRect(6, 9, 2, 1); ctx.fillRect(7, 8, 2, 1); ctx.fillRect(6, 7, 2, 1); ctx.fillRect(7, 6, 2, 1);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(9, 5, 2, 1);                              // the head takes the lamp
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(6, 5, 1, 1);                              // red house seal
+    ctx.fillStyle = '#3a3a46'; ctx.fillRect(5, 4, 3, 1);                              // lacquer gloss streak
+  });
   atlas['i-hanafuda'] = tile(ctx => {
     // Towzawa's hanafuda — a single dragon card off a lacquer-black deck,
     // corners worn soft from thirty years of his thumb.

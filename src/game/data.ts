@@ -160,6 +160,11 @@ export const vehicleById = (id: string): Vehicle => VEHICLES.find(v => v.id === 
 
 // One-time prestige purchases (paid from the late-game pile). Defined here so the
 // price + the matching state.ts helper share a single source of truth.
+// The two big luxury sinks are RELATIONSHIP payoffs, not storefronts: the friend
+// has to raise it with you first (a one-time storySeen beat at PRESTIGE_ASK_HEARTS
+// ♥), and only then does the buy button take up permanent residence. Before that
+// a near-stranger is not asking you for ¥80,000.
+export const PRESTIGE_ASK_HEARTS = 4;       // hearts before Yoshi / Charlie bring it up
 export const SHRINE_RESTORE_PRICE = 80000;  // fund the shrine's restoration → a permanent extra luck tier
 export const CHARLIE_PATRON_PRICE = 40000;  // become Charlie's patron
 export const HOME_ONSEN_PRICE = 70000;      // install a private hot spring at the apartment
@@ -312,6 +317,7 @@ export const GAME_ACHIEVEMENTS: GameAchievement[] = [
   { id: 'jackpot', title: 'Neon Rain', desc: 'Hit the progressive jackpot on the Kinryū slots.', hint: 'Three sevens. The pot has been growing for days.' },
   { id: 'inner-circle', title: 'The Inner Circle', desc: 'Got waved past the velvet curtain into the Kinryū backroom.', hint: 'The house counts its winners. Become a problem worth counting.' },
   { id: 'boss-duel', title: 'Finish His Tea', desc: 'Beat Shinzo Towzawa at his own table.', hint: 'Behind the curtain, the house has a face. Faces can lose.' },
+  { id: 'read-the-placard', title: 'Read the Placard', desc: 'Beat the boss duel under all five house rules.', hint: 'The rule changes nightly. Beat him on his worst nights too.' },
 ];
 
 // ---- The mines (below the backrooms) ------------------------------------------
@@ -1008,6 +1014,11 @@ export const KEEPSAKES: Keepsake[] = [
     flavor: "Real silver conchos from a cowboy who don't do weepy. Worth more than the hat." },
   // Not a friendship capstone — the RIVAL capstone. Granted by the tea ceremony
   // after taking five duel hands off Towzawa (see the kinryu-boss talk branch).
+  // Not a capstone either — the RIVAL's opening courtesy, handed over at your
+  // first audience. Towzawa comps a problem he respects; he does not hand out
+  // cash to someone who just walked out of his casino with it.
+  { id: 'kinryu-chip', name: 'Kinryū House Chip', sprite: 'i-kinryu-chip', effect: 'display',
+    flavor: 'Lacquer-black, a gold dragon on the face, no denomination anywhere. It is not worth money. It is worth being known.' },
   { id: 'hanafuda', name: "Towzawa's Hanafuda", sprite: 'i-hanafuda', effect: 'display',
     flavor: 'A single dragon card, worn soft at the corners. He carried it thirty years. Now it keeps an eye on you.' },
 ];

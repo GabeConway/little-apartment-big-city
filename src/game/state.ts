@@ -14,7 +14,7 @@ import {
   FRIENDS, FRIEND_HEART_LINES, HANGOUTS, HOME_VISITS,
   SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
   MISSIONS,
-  fishingTournamentDay, tournamentTierFor,
+  fishingTournamentDay, tournamentTierFor, festivalFor, TOURNAMENT_SCENE,
 } from './data';
 import type { TournamentTier } from './data';
 import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind, Fish, FishSky, Mission } from './data';
@@ -137,6 +137,7 @@ export interface GameSave {
   bossDuelDay: number;              // day of the last boss-duel hand (0 = never; one hand a night)
   bossDuelLosses: number;           // times TOWZAWA has lost the duel — his gracious line quiets down
   bossDuelPlayed: number;           // total duel hands dealt — Towzawa keeps the ledger, and quotes it
+  duelRulesWon: string[];           // HouseRuleId's you've beaten the boss duel under (drives 'read-the-placard')
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -337,6 +338,7 @@ export const newSave = (): GameSave => ({
   bossDuelDay: 0,
   bossDuelLosses: 0,
   bossDuelPlayed: 0,
+  duelRulesWon: [],
 });
 
 // Merge a parsed (possibly older / partial) save blob over fresh defaults and run
@@ -862,6 +864,24 @@ export const donateToMuseum = (s: GameSave, slotId: string): boolean => {
 
 export const museumComplete = (s: GameSave): boolean =>
   MUSEUM_SLOTS.every(sl => s.museum.donated.includes(sl.id));
+
+// The Collection app's view of the gallery. `s.collectibles` had no UI anywhere,
+// so a curio in your pocket was invisible and there was no way to tell which
+// display it belonged to. Three states per slot, in MUSEUM_SLOTS order:
+//   'donated' — on display; show its label + blurb
+//   'held'    — in your bag right now; go find its plinth
+//   'unfound' — you have never seen it; stays a '???' (no spoilers)
+export type MuseumSlotStatus = 'donated' | 'held' | 'unfound';
+export const museumSlotStatus = (s: GameSave, slotId: string): MuseumSlotStatus =>
+  s.museum.donated.includes(slotId) ? 'donated'
+  : s.collectibles.includes(slotId) ? 'held'
+  : 'unfound';
+export const museumProgress = (s: GameSave): { slotId: string; status: MuseumSlotStatus }[] =>
+  MUSEUM_SLOTS.map(sl => ({ slotId: sl.id, status: museumSlotStatus(s, sl.id) }));
+// How many curios are in your bag waiting to be donated (drives the HUD chip).
+export const heldCollectibleCount = (s: GameSave): number =>
+  s.collectibles.filter(id =>
+    MUSEUM_SLOTS.some(sl => sl.id === id) && !s.museum.donated.includes(id)).length;
 
 // ---- Kinryū Lounge: progressive jackpot + the backroom -------------------------------
 // The slots' progressive jackpot grows a seeded ¥400–899 every day since it was
@@ -1571,6 +1591,62 @@ export const syncMissions = (s: GameSave): Mission[] => {
 export const pushMessage = (s: GameSave, m: Omit<PhoneMessage, 'day' | 'read'>): void => {
   if (s.messages.some(x => x.id === m.id)) return;
   s.messages.push({ ...m, day: s.day, read: false });
+};
+
+// ---- Town events: who leaves their post ---------------------------------------
+// On a derby day the shore fills with townsfolk, and on a festival day the
+// festival scene does — but the same people were also still ambling their usual
+// venues, so you could stand next to Granny in the city and watch a second Granny
+// fish at the beach. These helpers are the single source of truth for "this NPC
+// is AT the event right now, so they are not at their post": the monolith uses
+// them to hide the routine wanderer, and to stage the real character (talkable,
+// quests intact) at the event instead.
+//
+// Only folk with somewhere else to be are listed — Tex and Genji already live on
+// the shore, and the shopkeepers mind their counters.
+//
+// Keyed by event AND by the scene the event takes over, because an attendee must
+// only be pulled from their post when the event is somewhere that actually STAGES
+// them. The festival calendar rotates between two venues: a city matsuri stages
+// Charlie, a shrine tanabata/hatsumode stages Yoshi. A flat per-event list meant
+// that on a city festival day Yoshi was hidden from the shrine and staged nowhere
+// — gone from the game for the whole day, ungiftable, her shrine looking abandoned.
+export const TOWN_EVENT_ATTENDEES: Record<string, Record<string, string[]>> = {
+  derby: { [TOURNAMENT_SCENE]: ['granny', 'charlie', 'collector', 'mechanic'] },
+  festival: { city: ['charlie'], shrine: ['miko'] },
+};
+// When each crowd breaks up. These MUST match how long the world stays dressed
+// for the event, or the duplicate-NPC bug comes straight back at the seam: the
+// staging keeps drawing a goer after the real one has walked home. The derby is
+// a daytime affair that packs up at 8 PM; a festival is an evening one and runs
+// until the 2 AM collapse, which is exactly how long its staging is drawn.
+export const TOWN_EVENT_END_MIN: Record<'derby' | 'festival', number> = {
+  derby: 20 * 60,
+  festival: COLLAPSE_MIN,
+};
+
+// Which event (if any) is pulling people out of their routines right now.
+// Derby and festival calendars never collide by construction (TOURNAMENT_PHASE is
+// chosen to keep them clear, asserted in tests/calendar.test.ts), so checking the
+// derby first loses nothing.
+export type TownEvent = 'derby' | 'festival' | null;
+export const townEventNow = (s: Pick<GameSave, 'day' | 'timeMin'>): TownEvent => {
+  if (fishingTournamentDay(s.day)) return s.timeMin < TOWN_EVENT_END_MIN.derby ? 'derby' : null;
+  if (festivalFor(s.day)) return s.timeMin < TOWN_EVENT_END_MIN.festival ? 'festival' : null;
+  return null;
+};
+// Which scene today's event takes over (null when nothing is on).
+export const townEventSceneNow = (s: Pick<GameSave, 'day' | 'timeMin'>): string | null => {
+  const ev = townEventNow(s);
+  if (ev === 'derby') return TOURNAMENT_SCENE;
+  if (ev === 'festival') return festivalFor(s.day)?.scene ?? null;
+  return null;
+};
+export const atTownEventNow = (s: Pick<GameSave, 'day' | 'timeMin'>, npcId: string): boolean => {
+  const ev = townEventNow(s);
+  const scene = townEventSceneNow(s);
+  if (ev === null || scene === null) return false;
+  return (TOWN_EVENT_ATTENDEES[ev][scene] ?? []).includes(npcId);
 };
 
 // ---- Fishing-derby payout (pure core) ---------------------------------------

@@ -159,4 +159,73 @@ export const CHECKS = [
     wait: 4500,
     assert: "scene==='moon' && save.timeMin===1556 && overlay===null",
   },
+  // --- Town-event attendance (derby / festival) -------------------------------
+  // The bug these guard: the event crowd was drawn from the same sprites as live
+  // routine NPCs, so a townsperson appeared at the event AND at their usual post.
+  {
+    name: 'derby-empties-the-town',
+    note: 'on a derby day the attendees are gone from the city (no duplicate Granny/Charlie)',
+    save: { scene: 'city', px: 96, py: 224, day: 15, timeMin: 780, visited: ['city'] },
+    wait: 600,
+    assert: "!wanderers.some(w => w.id==='granny' || w.id==='charlie')",
+  },
+  {
+    name: 'derby-crowd-goes-home',
+    note: 'after 8 PM on a derby day the attendees are back on their city routines',
+    save: { scene: 'city', px: 96, py: 224, day: 15, timeMin: 1290, visited: ['city'] },
+    wait: 600,
+    assert: "wanderers.some(w => w.id==='granny') && wanderers.some(w => w.id==='charlie')",
+  },
+  {
+    name: 'festival-empties-its-own-venue',
+    note: 'day 28 is a SHRINE festival — Yoshi is at it, not on her shrine routine',
+    save: { scene: 'shrine', px: 112, py: 76, day: 28, timeMin: 780, visited: ['shrine'] },
+    wait: 600,
+    assert: "!wanderers.some(w => w.id==='miko')",
+  },
+  {
+    name: 'festival-leaves-other-venues-alone',
+    note: 'day 14 is a CITY festival — Yoshi stays at her shrine (she is staged nowhere else)',
+    save: { scene: 'shrine', px: 112, py: 76, day: 14, timeMin: 780, visited: ['shrine'] },
+    wait: 600,
+    assert: "wanderers.some(w => w.id==='miko')",
+  },
+  {
+    name: 'derby-attendee-is-talkable',
+    note: 'a townsperson staged at the derby is a real NPC you can talk to (quests intact)',
+    save: { scene: 'shore', px: 32, py: 124, dir: 'right', day: 15, timeMin: 780, canFish: true, greenhouseUnlocked: true, visited: ['shore'] },
+    keys: 'e',
+    assert: "overlay==='dialog' && overlayData && overlayData.speaker==='Granny Sato'",
+  },
+  // --- Prestige purchases are gated behind the friend asking first -------------
+  {
+    name: 'shrine-restore-hidden-before-ask',
+    note: "the ¥80k restoration reply doesn't exist until Yoshi has raised it",
+    save: { scene: 'shrine', px: 144, py: 44, dir: 'down', day: 20, timeMin: 720, money: 200000, visited: ['shrine'] },
+    keys: 'e',
+    assert: "overlay==='dialog' && !save.shrineRestored && !save.storySeen.includes('shrine-restore-ask')",
+  },
+  {
+    name: 'yoshi-raises-the-restoration',
+    note: 'at 4 hearts (hangout already seen) Yoshi asks about the restoration, once',
+    save: { scene: 'shrine', px: 112, py: 76, dir: 'down', day: 20, timeMin: 720, storySeen: ['hang-miko-4'], friends: { miko: { pts: 400, giftDay: -1 } }, visited: ['shrine'] },
+    keys: 'e',
+    assert: "save.storySeen.includes('shrine-restore-ask')",
+  },
+  // --- Towzawa comps a keepsake, not a second payday --------------------------
+  {
+    name: 'towzawa-comps-a-chip',
+    note: 'the first audience grants the Kinryu house chip and leaves your money alone',
+    save: { scene: 'backroom', px: 96, py: 44, dir: 'up', day: 20, timeMin: 1200, casinoWins: 30, money: 50000, visited: ['backroom'] },
+    keys: 'e',
+    assert: "money===50000 && save.keepsakes.includes('kinryu-chip') && save.storySeen.includes('backroom-met')",
+  },
+  // --- The museum tracker -----------------------------------------------------
+  {
+    name: 'collection-app-opens',
+    note: 'the Collection app lists the museum slots once the museum is part of your life',
+    save: { scene: 'city', px: 96, py: 224, visited: ['city', 'museum'], collectibles: ['arti-rock'] },
+    click: 'PHONE,Collection',
+    assert: "overlay==='menu' && overlayData && overlayData.tab==='collection'",
+  },
 ];

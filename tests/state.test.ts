@@ -26,6 +26,7 @@ import {
   skillLevel, addSkillXp, skillProgress, SKILL_XP, ROOM_PRICE,
 } from '../src/game/state';
 import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS, HANGOUTS, HOME_VISITS, KEEPSAKES, keepsakeById } from '../src/game/data';
+import { museumProgress, museumSlotStatus, heldCollectibleCount } from '../src/game/state';
 import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
@@ -1506,5 +1507,48 @@ describe('settleDerbyPrize (pays once, from any exit path)', () => {
     expect(settleDerbyPrize(s, 100)).toBeNull();      // not a derby day
     expect(s.money).toBe(m0);
     expect(s.storySeen).toHaveLength(0);
+  });
+});
+
+// ---- The museum tracker (Collection app) -------------------------------------
+// `s.collectibles` had no UI at all before this, so a found curio sat invisible
+// in the save with nothing to say which display it belonged to.
+describe('museumProgress / museumSlotStatus', () => {
+  it('starts with every slot unfound', () => {
+    const s = newSave();
+    const rows = museumProgress(s);
+    expect(rows).toHaveLength(MUSEUM_SLOTS.length);
+    expect(rows.every(r => r.status === 'unfound')).toBe(true);
+    expect(heldCollectibleCount(s)).toBe(0);
+  });
+
+  it('reports a carried piece as held, and a donated one as donated', () => {
+    const s = newSave();
+    const [a, b] = MUSEUM_SLOTS;
+    s.collectibles.push(a.id);
+    expect(museumSlotStatus(s, a.id)).toBe('held');
+    expect(heldCollectibleCount(s)).toBe(1);
+    s.museum.donated.push(b.id);
+    expect(museumSlotStatus(s, b.id)).toBe('donated');
+    expect(museumSlotStatus(s, MUSEUM_SLOTS[2].id)).toBe('unfound');
+  });
+
+  it('prefers donated over held if a piece somehow shows up in both', () => {
+    const s = newSave();
+    const id = MUSEUM_SLOTS[0].id;
+    s.collectibles.push(id);
+    s.museum.donated.push(id);
+    expect(museumSlotStatus(s, id)).toBe('donated');
+  });
+
+  it('ignores junk ids in the bag when counting curios', () => {
+    const s = newSave();
+    s.collectibles.push('not-a-museum-slot');
+    expect(heldCollectibleCount(s)).toBe(0);
+  });
+
+  it('keeps rows in MUSEUM_SLOTS order so the app reads like the gallery', () => {
+    const s = newSave();
+    expect(museumProgress(s).map(r => r.slotId)).toEqual(MUSEUM_SLOTS.map(sl => sl.id));
   });
 });

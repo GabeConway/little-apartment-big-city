@@ -50,3 +50,37 @@ describe('the duel gate fields', () => {
     expect(keepsakeById('hanafuda')!.effect).toBe('display');
   });
 });
+
+// ---- "Read the Placard" ------------------------------------------------------
+// The achievement exists to reward sitting down on his BAD nights. The placard is
+// visible before the bet with a free walk-away, so a player can otherwise skip to
+// only the two rules that favour them.
+describe('duelRulesWon', () => {
+  it('is empty and default-safe on a fresh save', () => {
+    expect(newSave().duelRulesWon).toEqual([]);
+  });
+
+  it('needs every house rule, not just a pile of wins under one', () => {
+    const s = newSave();
+    const beat = (rule: string) => { if (!s.duelRulesWon.includes(rule)) s.duelRulesWon.push(rule); };
+    const complete = () => HOUSE_RULES.every(hr => s.duelRulesWon.includes(hr.id));
+    for (let i = 0; i < 20; i++) beat('pays2to1');       // twenty wins, one placard
+    expect(s.duelRulesWon).toEqual(['pays2to1']);
+    expect(complete()).toBe(false);
+    for (const hr of HOUSE_RULES) beat(hr.id);
+    expect(complete()).toBe(true);
+    expect(s.duelRulesWon).toHaveLength(HOUSE_RULES.length); // deduped
+  });
+});
+
+// The first audience used to hand over ¥10,000 seconds after the duel table had
+// already paid out. It comps a keepsake now — worth nothing, means everything.
+describe('the Kinryu house chip', () => {
+  it('is a real keepsake with a sprite, and carries no cash value', () => {
+    const chip = keepsakeById('kinryu-chip');
+    expect(chip).toBeDefined();
+    expect(chip!.sprite).toBe('i-kinryu-chip');
+    expect(chip!.effect).toBe('display');
+    expect(chip!.value).toBeUndefined();
+  });
+});

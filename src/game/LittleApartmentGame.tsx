@@ -56,7 +56,7 @@ import {
   RECIPES, recipeById, INSTITUTE_RECIPES, GROCERIES, groceryById, BUFFS, FRIENDS, friendById, DECOR, decorById, MAX_HEARTS,
   FORTUNES,
   keepsakeById,
-  SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
+  SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE, PRESTIGE_ASK_HEARTS,
   festivalFor, FESTIVAL_REWARD_YEN,
   fishingTournamentDay, tournamentScore, tournamentTierFor, TOURNAMENT_NAME, TOURNAMENT_BLURB, TOURNAMENT_SCENE, TOURNAMENT_TIERS,
   MISSIONS,
@@ -73,7 +73,7 @@ import {
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey, lootVault,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   jackpotFor, backroomOpen, BACKROOM_WINS,
-  bossStakeFor, houseRuleFor, type HouseRuleId,
+  bossStakeFor, houseRuleFor, HOUSE_RULES, type HouseRuleId,
   pokerEval, POKER_PAYTABLE,
   restoreShrine, sponsorCharlie, buyHomeOnsen, homeSoak,
   grantKeepsake, hasKeepsake,
@@ -95,9 +95,11 @@ import {
   petCat, catPetToday, catGiftMorning, catGiftFor,
   syncMissions, biteTableFor,
   settleDerbyPrize,
+  townEventNow, atTownEventNow, TOWN_EVENT_ATTENDEES,
+  museumProgress, museumSlotStatus, heldCollectibleCount,
   exportSaveCode, importSaveCode,
 } from './state';
-import type { OreNode, CrawlerKind } from './state';
+import type { OreNode, CrawlerKind, TownEvent } from './state';
 import type { GameSave, Vibe, SkillId } from './state';
 import { startFishing, updateFishing, ZONE_H } from './fishing';
 import type { FishingState } from './fishing';
@@ -607,7 +609,11 @@ interface DayRecap {
 }
 
 // A trailing button on the FINAL line of a dialog (e.g. "🎁 Give a gift").
-type DialogAction = { label: string; onPick: () => void };
+// A trailing reply on the last line of a conversation. `disabled` renders the
+// button greyed and inert, with `why` as its tooltip — used so an action the
+// player COULD take (gifting) still shows up when it isn't available right now,
+// instead of silently vanishing and looking like it never existed.
+type DialogAction = { label: string; onPick: () => void; disabled?: boolean; why?: string };
 
 type Overlay =
   | { type: 'dialog'; lines: string[]; idx: number; speaker?: string; actions?: DialogAction[] }
@@ -620,7 +626,7 @@ type Overlay =
   | { type: 'cook' }                          // home kitchen — cook known recipes
   | { type: 'gift'; npcId: string };          // pick a held item to gift an NPC
 
-type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'music' | 'skills' | 'fishopedia' | 'almanac' | 'recipes';
+type PhoneApp = 'home' | 'inventory' | 'messages' | 'achievements' | 'settings' | 'cheats' | 'zamazonk' | 'journal' | 'friends' | 'collection' | 'music' | 'skills' | 'fishopedia' | 'almanac' | 'recipes';
 
 // Friendly label for each cooking ingredient kind (shown in the recipe list).
 const INGREDIENT_LABEL: Record<IngredientKind, string> = {
@@ -944,6 +950,7 @@ interface Hud {
   event: DayEvent; // today's special day ('market' / 'lucky' / null) — HUD chip
   buff: { emoji: string; name: string; tag: string } | null; // active food buff today — HUD chip
   weather: { emoji: string; label: string; title: string } | null; // today's weather / sky event — HUD chip
+  curios: number; // museum pieces in your bag awaiting a plinth — HUD chip
 }
 
 // Every named character has a voice: several line-sets, picked at random per
@@ -1244,7 +1251,10 @@ const shadowActive = (s: GameSave): boolean => s.timeMin >= 25.5 * 60;
 // Bigfoot is doubly gated: he only resolves in the island cave on a rare luck-blessed
 // day (and only until met), and only shows at Club Kaiju once you HAVE met him.
 const npcHiddenNow = (s: GameSave, id: string): boolean =>
-  (NIGHT_EVEN_IDS.has(id) && !davidActive(s)) || (MIDNIGHT_IDS.has(id) && !strangerActive(s))
+  // Off at the derby / the festival until 8 PM — they're staged at the event
+  // instead, so their usual venue has to stop drawing (and colliding with) them.
+  atTownEventNow(s, id)
+  || (NIGHT_EVEN_IDS.has(id) && !davidActive(s)) || (MIDNIGHT_IDS.has(id) && !strangerActive(s))
   || (SHADOW_IDS.has(id) && !shadowActive(s))
   || (id === 'bigfoot-cave' && !bigfootInCaveToday(s))
   || (id === 'bigfoot-club' && !s.storySeen.includes('bigfoot-met'))
@@ -1317,8 +1327,11 @@ const streetEventDoneLines = (id: string): string[] => {
 // bob independent of a shared clock); stuck = consecutive fully-blocked attempts,
 // so a wanderer walled off from its target gives up and idles instead of grinding.
 type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: number; homeY: number; dir: Dir; moving: boolean; stepT: number; walkPhase: number; stuck: number };
-const makeWanderers = (scene: SceneDef): Wanderer[] =>
-  scene.npcs.filter(n => WANDER_IDS.has(n.id)).map(n => ({
+// Attendees are filtered out here as well as in npcHiddenNow: wanderers keep
+// their own live positions in a ref, so they never pass through the static-npc
+// hidden check. Rebuilt whenever the town-event window opens or closes.
+const makeWanderers = (scene: SceneDef, s: GameSave): Wanderer[] =>
+  scene.npcs.filter(n => WANDER_IDS.has(n.id) && !atTownEventNow(s, n.id)).map(n => ({
     id: n.id, sprite: n.sprite, x: n.x * TILE, y: n.y * TILE, homeX: n.x * TILE, homeY: n.y * TILE, dir: n.dir, moving: false, stepT: Math.random() * 1.5, walkPhase: 0, stuck: 0,
   }));
 
@@ -1336,18 +1349,21 @@ const makeWanderers = (scene: SceneDef): Wanderer[] =>
 // `groundPx` = where the bunting's bamboo end-poles are planted (world px, the
 // visual base of the poles) — the string has to be HELD UP by something or the
 // lantern chain reads as floating in mid-air.
-interface FestivalLayout { stall: Vec; banner: Vec; prop: Vec; goers: { x: number; y: number; sprite: string; dir: Dir }[]; bunting: { fromX: number; toX: number; yPx: number; groundPx: number } }
+// A goer with an `id` is a REAL townsperson who left their post for the day (see
+// TOWN_EVENT_ATTENDEES in state.ts) — they're hidden from their usual venue and
+// talkable here instead, quests and all. Goers without an id are anonymous crowd.
+interface FestivalLayout { stall: Vec; banner: Vec; prop: Vec; goers: { x: number; y: number; sprite: string; dir: Dir; id?: string }[]; bunting: { fromX: number; toX: number; yPx: number; groundPx: number } }
 const FESTIVAL_LAYOUT: Record<string, FestivalLayout> = {
   city: {
     // West of the torii garden, clear of granny's anchor (12,16) and the midnight
     // stranger's spot (19,16) so the festival never squats on an NPC tile.
     stall: { x: 10, y: 15 }, banner: { x: 8, y: 15 }, prop: { x: 13, y: 15 },
-    goers: [{ x: 9, y: 16, sprite: 'npc-tourist', dir: 'down' }, { x: 14, y: 16, sprite: 'npc-charlie', dir: 'left' }],
+    goers: [{ x: 9, y: 16, sprite: 'npc-tourist', dir: 'down' }, { x: 14, y: 16, sprite: 'npc-charlie', dir: 'left', id: 'charlie' }],
     bunting: { fromX: 7, toX: 16, yPx: 14 * TILE - 10, groundPx: 16 * TILE + 10 },
   },
   shrine: {
     stall: { x: 4, y: 6 }, banner: { x: 15, y: 6 }, prop: { x: 12, y: 6 },
-    goers: [{ x: 6, y: 8, sprite: 'npc-tourist', dir: 'right' }, { x: 14, y: 8, sprite: 'npc-miko', dir: 'left' }],
+    goers: [{ x: 6, y: 8, sprite: 'npc-tourist', dir: 'right' }, { x: 14, y: 8, sprite: 'npc-miko', dir: 'left', id: 'miko' }],
     bunting: { fromX: 3, toX: 16, yPx: 5 * TILE - 8, groundPx: 8 * TILE + 8 },
   },
 };
@@ -1362,15 +1378,80 @@ const festivalPropSprite = (f: Festival): string => f.minigame === 'goldfish' ? 
 // existing npc-* atlas keys like the festival's gathered goers. All tiles are on
 // open sand so nothing overlaps a solid. A chalkboard-style derby sign is drawn
 // in world space near Genji's skiff to set the scene.
-const DERBY_FISHERS: { x: number; y: number; sprite: string }[] = [
-  { x: 3,  y: 8, sprite: 'npc-granny' },
-  { x: 7,  y: 7, sprite: 'npc-charlie' },
+// An entry with an `id` is the REAL townsperson, who is hidden from their usual
+// venue for the day (TOWN_EVENT_ATTENDEES in state.ts) and is fully talkable here
+// — so Granny's greenhouse quest and Charlie's film never go dark for a derby.
+// The id-less two are anonymous beachgoers. `npc-stranger` is deliberately NOT
+// used: that sprite belongs to the midnight stranger.
+const DERBY_FISHERS: { x: number; y: number; sprite: string; id?: string; dir?: Dir }[] = [
+  { x: 3,  y: 8, sprite: 'npc-granny', id: 'granny' },
+  { x: 7,  y: 7, sprite: 'npc-charlie', id: 'charlie' },
   { x: 11, y: 8, sprite: 'npc-tourist' },
   { x: 16, y: 7, sprite: 'npc-kid' },
-  { x: 20, y: 8, sprite: 'npc-collector' },
-  { x: 9,  y: 9, sprite: 'npc-stranger' },
+  { x: 20, y: 8, sprite: 'npc-collector', id: 'collector' },
+  { x: 13, y: 9, sprite: 'npc-mechanic', id: 'mechanic' }, // open wet sand (col 9 of row 9 is a solid rock)
 ];
 const DERBY_SIGN: Vec = { x: 6, y: 5 }; // chalkboard by the waterline, near Genji
+
+// ---- Staged attendees (the shared derby / festival crowd) --------------------
+// Both events stage a crowd from their own layout table, and in both the entries
+// carrying an `id` are real townsfolk who left their post (TOWN_EVENT_ATTENDEES
+// in state.ts hides them from their venue). This resolves the crowd for whatever
+// event is running in THIS scene right now, so the draw pass, the interact path
+// and the prompt label all read one list instead of three copies of the rule.
+type StagedFolk = { x: number; y: number; sprite: string; id?: string; dir?: Dir };
+const stagedCrowdFor = (s: GameSave, sceneId: string): StagedFolk[] => {
+  const ev = townEventNow(s);
+  if (ev === 'derby') return sceneId === TOURNAMENT_SCENE ? DERBY_FISHERS : [];
+  if (ev === 'festival') {
+    const fest = festivalFor(s.day);
+    return fest && fest.scene === sceneId ? (FESTIVAL_LAYOUT[sceneId]?.goers ?? []) : [];
+  }
+  return [];
+};
+// The real townsperson standing on `t`, if any. Anonymous crowd resolves to null
+// so walking into a nameless beachgoer stays scenery.
+const stagedAttendeeAt = (s: GameSave, sceneId: string, t: Vec): StagedFolk | null =>
+  stagedCrowdFor(s, sceneId).find(g => g.id && g.x === t.x && g.y === t.y) ?? null;
+
+// What an attendee says before their normal conversation. At the derby it reads
+// your LIVE tally, so the crowd reacts to how you're actually doing; at a
+// festival it's a fixed in-voice line. Returns null for anyone with nothing to
+// say (so their talk is untouched).
+const townEventIntro = (npcId: string, ev: TownEvent, pts: number): string | null => {
+  if (ev === 'festival') return ({
+    charlie: '"Shop\'s shut, everybody\'s out here, lanterns up — this is the shot. This is ALWAYS the shot." He is filming the lanterns, not the people.',
+    miko: 'Yoshi has traded her broom for a festival fan and looks faintly scandalized to be caught enjoying herself. "The kami do not mind. I asked."',
+  } as Record<string, string>)[npcId] ?? null;
+  if (ev !== 'derby') return null;
+  const lead = pts >= TOURNAMENT_TIERS[2].minScore;
+  const onBoard = pts > 0;
+  const lines: Record<string, [string, string, string]> = {
+    // [no fish yet, on the board, leading]
+    granny: [
+      'Granny Sato has a rod in one hand and a thermos in the other. "Nothing yet, dear? Nor me. That is rather the point of a derby."',
+      `"${pts} points already!" She beams at your bucket like it is a grandchild. "Do not tell the Kojima boy. He gets competitive."`,
+      '"You are TOP of that chalkboard." She lowers her voice, delighted. "Do you know how badly Genji wanted this one? Do not let it go."',
+    ],
+    charlie: [
+      'Charlie is filming the water instead of the fishing. "Everyone\'s looking at the buckets, man. The story\'s in the waiting."',
+      `"${pts} points — I got the whole cast on tape." He pans the camera onto you without warning. "Say something for the derby doc."`,
+      '"You\'re the lead now, whether you like it or not." He is walking backwards to keep you in frame. "This is the third act. Don\'t blow it."',
+    ],
+    collector: [
+      'The collector has brought a folding stool, a flask, and a laminated tide chart. "I do not fish. I OBSERVE fishing. It is a discipline."',
+      `"${pts}. I am keeping a spreadsheet." He shows you. He really is. "You are currently the interesting column."`,
+      '"You have ruined my spreadsheet," he says, thrilled. "I shall have to add a category. I shall call it YOU."',
+    ],
+    mechanic: [
+      'Kojima has shut the garage for the day and is holding his rod like a torque wrench. "Same principle. Tension, patience, and a bit of feel."',
+      `"${pts} on the board." He nods at the water, approving. "Bay\'s running well today. You\'re reading it right."`,
+      '"You\'re beating me on my own day off." He laughs, entirely unbothered. "Go on then. Finish it."',
+    ],
+  };
+  const set = lines[npcId];
+  return set ? (lead ? set[2] : onBoard ? set[1] : set[0]) : null;
+};
 
 // ---- Casino patrons (transient — never baked into maps.ts) ------------------
 // The Kinryū Lounge seats 2-3 gamblers a day: decorative townsfolk parked at the
@@ -1468,7 +1549,7 @@ const LittleApartmentGame: React.FC = () => {
   // Mirrored into a ref so the keyboard/click advance path can read it synchronously.
   const [typed, setTyped] = useState(0);
   const typedRef = useRef(0);
-  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null, weather: null });
+  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null, weather: null, curios: 0 });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette(), poker: freshPoker(), duel: freshDuel(0) }); // live casino game state
   // Esc at a card table mid-hand must settle (duel stands, poker draws) instead
@@ -1630,6 +1711,10 @@ const LittleApartmentGame: React.FC = () => {
   // cleanly on a new day / fresh derby.
   const derbyScoreRef = useRef(0);
   const derbyDayRef = useRef(0);
+  // Which town event (if any) the world is currently staged for. Watched in the
+  // update loop so the 8 PM "everyone goes home" flip re-spawns the wanderers
+  // without needing a scene change.
+  const townEventRef = useRef<TownEvent>(null);
   const shiftRef = useRef<ShiftGame | null>(null);
   const driveRef = useRef<DriveGame | null>(null);
   const karaokeRef = useRef<KaraokeGame | null>(null);
@@ -1810,6 +1895,22 @@ const LittleApartmentGame: React.FC = () => {
     if (lvl) { sfxLevelUp(); showToast(`📈 ${SKILL_NAME[k]} Lv.${lvl}!`, 'Your skill is growing — the rolls tilt your way.'); }
   };
 
+  // Pocketing a museum curio. Every source used to signal differently — the shore
+  // find opened a dialog, the mine node flashed a 1.6s floating word, the geode a
+  // popup — so a piece could end up in an invisible save array with nothing said
+  // about where it goes. One helper, one consistent toast, everywhere.
+  // Returns false (and does nothing) if the piece is already held or donated.
+  // `announce: false` for callers that already tell you in their own dialog — a
+  // toast there would either double up (the shore find's 'A Curious Find' box) or
+  // be instantly overwritten by a skill/derby toast fired in the same frame.
+  const pocketCurio = useCallback((s: GameSave, slotId: string, announce = true): boolean => {
+    if (s.collectibles.includes(slotId) || s.museum.donated.includes(slotId)) return false;
+    s.collectibles.push(slotId);
+    const sl = MUSEUM_SLOTS.find(m => m.id === slotId);
+    if (announce) showToast('🖼️ A museum curio', `${sl?.label ?? 'A curio'} — it belongs on a display at the Kawamachi Museum.`);
+    return true;
+  }, [showToast]);
+
   const refreshHud = useCallback(() => {
     const s = saveRef.current;
     if (s.money >= 50000) award('rich');
@@ -1827,6 +1928,7 @@ const LittleApartmentGame: React.FC = () => {
         : foggyDay(s) ? { emoji: '🌫', label: 'Foggy Day', title: 'Foggy day — a soft grey mist hangs over town' }
         : meteorNight(s) ? { emoji: '☄️', label: 'Meteor Night', title: 'Meteor shower tonight — step outside after dark to watch & make a wish' }
         : null,
+      curios: heldCollectibleCount(s),
     });
   }, [award]);
 
@@ -1997,7 +2099,7 @@ const LittleApartmentGame: React.FC = () => {
     }
     // Today's one-off street event lives only in the city — re-resolve on entry.
     streetEventRef.current = id === 'city' ? streetEventFor(s) : null;
-    wanderersRef.current = makeWanderers(SCENES[id]);
+    wanderersRef.current = makeWanderers(SCENES[id], s);
     posRef.current = { x: tx * TILE, y: ty * TILE - 4 };
     dirRef.current = dir;
     warpCooldownRef.current = 0.6; // don't re-trigger a nearby warp for a beat after arriving
@@ -2378,8 +2480,22 @@ const LittleApartmentGame: React.FC = () => {
     ], 'Landlord');
   };
 
+  // ---- The two big luxury sinks are relationship payoffs ---------------------
+  // Both used to render their buy button from the first second you met the place,
+  // which read as a vending machine: a stranger asking you for ¥80,000. Now each
+  // is two-stage — the friend has to RAISE it with you once (a one-time storySeen
+  // beat at PRESTIGE_ASK_HEARTS ♥), and only then does the button stick around.
+  //
+  // `askFlag` is the storySeen stamp; `offered` is true once they've asked, which
+  // is what the trailing action keys off. Old saves need no migration: storySeen
+  // is already a string[], so a veteran simply gets the ask on their next talk.
+  const prestigeOffered = (s: GameSave, askFlag: string): boolean => s.storySeen.includes(askFlag);
+  const prestigeAskReady = (s: GameSave, friendId: string, askFlag: string, bought: boolean): boolean =>
+    !bought && !s.storySeen.includes(askFlag) && friendHearts(s, friendId) >= PRESTIGE_ASK_HEARTS;
+
   // Fund the shrine's full restoration → a permanent extra luck tier (one-time).
-  // Offered as a trailing action on the shrine's offering dialog while unrestored.
+  // Offered as a trailing action on the shrine's offering dialog, but only once
+  // Yoshi has actually asked you (see prestigeAskReady / 'shrine-restore-ask').
   const fundShrineRestoration = () => {
     const s = saveRef.current;
     if (!restoreShrine(s)) {
@@ -2476,7 +2592,14 @@ const LittleApartmentGame: React.FC = () => {
   const giftActionFor = (friendId?: string): DialogAction[] | undefined => {
     if (!friendId) return undefined;
     const s = saveRef.current;
-    if (!canGiftToday(s, friendId) || giftableItems(s).length === 0) return undefined;
+    // The button used to disappear entirely when you had nothing to give or had
+    // already gifted today, so gifting looked like it didn't exist at all. Show
+    // it either way; say WHY it's unavailable when it is.
+    const f = friendById(friendId);
+    if (!canGiftToday(s, friendId))
+      return [{ label: '🎁 Gift given today', onPick: () => {}, disabled: true, why: `You've already given ${f?.name ?? 'them'} something today. One gift each per day.` }];
+    if (giftableItems(s).length === 0)
+      return [{ label: '🎁 Nothing to give', onPick: () => {}, disabled: true, why: 'Your bag has nothing giftable. Catch a fish, grow a crop, cook a dish, grab a soda…' }];
     return [{ label: '🎁 Give a gift', onPick: () => setOverlayBoth({ type: 'gift', npcId: friendId }) }];
   };
 
@@ -2584,8 +2707,8 @@ const LittleApartmentGame: React.FC = () => {
     s.today.fishCaught += 1;
     gainSkill('fish', fish.value >= 500 ? 35 : 18); // bigger fish, more XP
     // Rare snag: Genji's Lost Lure, a museum curio.
-    const gotLure = !s.collectibles.includes('arti-lure') && !s.museum.donated.includes('arti-lure') && Math.random() < 0.05;
-    if (gotLure) s.collectibles.push('arti-lure');
+    const gotLure = !s.collectibles.includes('arti-lure') && !s.museum.donated.includes('arti-lure') && Math.random() < 0.05
+      && pocketCurio(s, 'arti-lure', false);
     persistSave(s); refreshHud();
     sfxCatch();
     award('first-fish');
@@ -2629,8 +2752,7 @@ const LittleApartmentGame: React.FC = () => {
       award('gacha-set');
     }
     // One-in-a-hundred: an old, EMPTY capsule rattles out — a museum curio.
-    if (!s.collectibles.includes('arti-capsule') && !s.museum.donated.includes('arti-capsule') && Math.random() < 0.01) {
-      s.collectibles.push('arti-capsule');
+    if (Math.random() < 0.01 && pocketCurio(s, 'arti-capsule', false)) {
       lines.push('Wait — a second capsule jams out behind it, scuffed and ancient. Empty, but for a faded label. The museum has a pedestal for exactly this.');
     }
     persistSave(s); refreshHud();
@@ -2787,7 +2909,7 @@ const LittleApartmentGame: React.FC = () => {
         && ((f.x === faced.x && f.y === faced.y) || (f.x === feet.x && f.y === feet.y)));
       if (find) {
         const slot = MUSEUM_SLOTS.find(sl => sl.id === find.slot)!;
-        s.collectibles.push(find.slot);
+        pocketCurio(s, find.slot, false);
         sfxCatch();
         persistSave(s); refreshHud();
         showDialog([
@@ -2845,8 +2967,14 @@ const LittleApartmentGame: React.FC = () => {
     // Shore: grab a daily beach find for instant cash (ungated early money).
     if (scene.id === 'shore') {
       const spots = shoreForageFor(s);
+      // A derby attendee can be standing on today's find. The forage check runs
+      // before the NPC one, so without this the shell wins and the townsperson is
+      // unreachable for the whole derby. Skip the occupied spot instead — the
+      // scatter reseeds tomorrow, and `foragedSpots` indexes stay stable because
+      // the array itself is untouched.
       const idx = spots.findIndex((sp, i) =>
         !s.foragedSpots.includes(i) &&
+        !stagedAttendeeAt(s, scene.id, { x: sp.x, y: sp.y }) &&
         ((sp.x === faced.x && sp.y === faced.y) || (sp.x === feet.x && sp.y === feet.y)));
       if (idx >= 0) {
         const spot = spots[idx];
@@ -2953,8 +3081,7 @@ const LittleApartmentGame: React.FC = () => {
         // Rare deep-mine museum curios: a humming shard (floor 6+), a meteorite (floor 10+).
         const floor = mineFloorRef.current;
         const tryMineCurio = (slot: string, chance: number, label: string) => {
-          if (s.collectibles.includes(slot) || s.museum.donated.includes(slot) || Math.random() >= chance) return;
-          s.collectibles.push(slot);
+          if (Math.random() >= chance || !pocketCurio(s, slot)) return;
           mineTextRef.current = { x: node.x * TILE, y: node.y * TILE - 8, text: label, color: '#ffe9a0', t: 1.6 };
         };
         if (floor >= 10) tryMineCurio('arti-meteor', 0.07, 'A meteorite?!');
@@ -3004,11 +3131,17 @@ const LittleApartmentGame: React.FC = () => {
     }
 
     // Prefer a wanderer at the faced tile (they move; their static tile is stale).
+    // Then a staged town-event attendee — a real townsperson standing at the derby
+    // or the festival, who resolves to their ordinary id so the whole talk
+    // pipeline below (quests, gifts, hangouts) works exactly as it does at home.
     const wanderHit = wanderersRef.current.find(w => Math.round(w.x / TILE) === faced.x && Math.round(w.y / TILE) === faced.y);
+    const attendeeHit = wanderHit ? null : stagedAttendeeAt(s, scene.id, faced);
     const npc = wanderHit
       ? { id: wanderHit.id, x: faced.x, y: faced.y, sprite: wanderHit.sprite, dir: wanderHit.dir }
-      : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
-          && !npcHiddenNow(s, n.id));
+      : attendeeHit
+        ? { id: attendeeHit.id!, x: faced.x, y: faced.y, sprite: attendeeHit.sprite, dir: (attendeeHit.dir ?? 'down') as Dir }
+        : scene.npcs.find(n => n.x === faced.x && n.y === faced.y && !WANDER_IDS.has(n.id)
+            && !npcHiddenNow(s, n.id));
     if (npc) {
       // Talk is always the default (no chooser). Befriendable NPCs you actually
       // converse with get a trailing "🎁 Give a gift" button on their last line
@@ -3021,7 +3154,13 @@ const LittleApartmentGame: React.FC = () => {
       // the first threshold (or for non-keyed friends) it's null → conversation
       // unchanged. `warm()` appends it to whatever a branch was going to say.
       const flavor = friendId ? friendFlavorLine(s, friendId) : null;
-      const warm = (lines: string[]): string[] => (flavor ? [...lines, flavor] : lines);
+      // An attendee opens with the event on their mind (the derby line reads your
+      // live tally) before dropping into whatever they were going to say anyway.
+      const eventIntro = attendeeHit
+        ? townEventIntro(npc.id, townEventNow(s), derbyDayRef.current === s.day ? derbyScoreRef.current : 0)
+        : null;
+      const warm = (lines: string[]): string[] =>
+        [...(eventIntro ? [eventIntro] : []), ...lines, ...(flavor ? [flavor] : [])];
       // A crossed-a-heart-threshold hangout plays once, ahead of normal chat. The
       // flag is set inside playHangout, so the very next talk is ordinary again.
       const hangout = friendId ? pendingHangout(s, friendId) : undefined;
@@ -3147,7 +3286,11 @@ const LittleApartmentGame: React.FC = () => {
         return;
       }
       if (npc.id === 'sketchy') { setOverlayBoth({ type: 'shop', shop: 'sketchy' }); return; }
-      if (npc.id === 'mechanic') { startDelivery(); return; } // Kojima hands out the delivery gig in person
+      // Kojima hands out the delivery gig in person — but only at the garage. On a
+      // derby day he's staged on the sand, and the kei-truck run must not launch
+      // from the beach (the gig's own copy says "the truck out back"). Off-site he
+      // falls through to his ordinary voice + the derby intro.
+      if (npc.id === 'mechanic' && scene.id === 'garage') { startDelivery(); return; }
       if (npc.id === 'casino-host') { setOverlayBoth({ type: 'shop', shop: 'casino' }); return; }
       // The curtain doorman: a wall of a man planted in front of the members'
       // entrance until your win count clears BACKROOM_WINS, then he holds the rope.
@@ -3172,14 +3315,20 @@ const LittleApartmentGame: React.FC = () => {
         // repeat talk reads the duel ledger (bossDuelPlayed / bossDuelLosses) and
         // he rebuffs whatever you're carrying — the only language he speaks is stakes.
         if (!s.storySeen.includes('backroom-met')) {
+          // He comps you with RECOGNITION, not cash. The envelope of ¥10,000 that
+          // used to sit here paid out seconds after the duel table had already
+          // paid you, which read as two paydays for one visit — and a casino boss
+          // handing money to the man who keeps taking his was the wrong note. The
+          // house chip is worth nothing and means everything.
           s.storySeen.push('backroom-met');
-          s.money += 10000;
-          sfxCoin(); persistSave(s); refreshHud();
+          grantKeepsake(s, 'kinryu-chip');
+          sfxCatch(); persistSave(s); refreshHud();
           showDialog([
             'The back of the room holds one table, one lamp, and one enormous man in a suit that fits like architecture. He does not look up from his tea.',
             '"Shinzo Towzawa." He says the name the way other men state the weather — a fact, already settled. "The Lounge is mine. The district answers to it. The tea is also mine."',
             `"${BACKROOM_WINS} wins. We keep count, {name}. Most people leave their money here. You keep walking out with ours."`,
-            '"I respect a problem I can name." He slides an envelope across the felt without touching your hand. "A courtesy, from the Kinryū. Spend it on the floor, where I can win it back." (+¥10,000)',
+            '"I respect a problem I can name." He sets something on the felt and slides it across without touching your hand: a lacquer-black chip, a gold dragon on the face, no number anywhere on it.',
+            '"That is not money. Do not try to spend it." He returns to his tea. "It means the room knows you. Very few things in this district are worth more." (Received: Kinryū House Chip.)',
           ], 'Shinzo Towzawa');
         } else if (s.bossDuelLosses >= 5 && !s.storySeen.includes('towzawa-tea')) {
           // The rival capstone: take five hands off him and the man who says
@@ -3320,15 +3469,41 @@ const LittleApartmentGame: React.FC = () => {
         }
         return;
       }
-      // Charlie the filmmaker: ordinary chatter, plus a one-time "sponsor the
-      // film" reply (becomes his patron / your executive-producer keepsake).
+      // Charlie the filmmaker: ordinary chatter, plus the "sponsor the film" reply
+      // (becomes his patron / your executive-producer keepsake) — but only after
+      // he's actually pitched it to you, which he does once you're real friends.
       if (npc.id === 'charlie') {
         const v = NPC_VOICES['charlie'];
+        if (prestigeAskReady(s, 'charlie', 'charlie-film-ask', s.charliePatron)) {
+          s.storySeen.push('charlie-film-ask');
+          persistSave(s);
+          showDialog([
+            'Charlie stops filming. That alone is new. He sits down on the konbini step and turns the camera over in his hands.',
+            '"Okay. Real talk, because you\'re — you\'re actually my friend now, and I don\'t say that loose." He takes a breath. "I\'ve got four years of this neighborhood on tape. Four YEARS. And I can\'t finish it. Colour, sound mix, the licence for the one song it has to be — it\'s forty grand and I do not have forty grand."',
+            '"I\'m not asking. I want to be clear I\'m not asking." A beat. "But if you ever WERE the kind of person who backed a thing like this, I\'d put your name on it. Right up front, where the money goes."',
+            '(Charlie will take a sponsor now, whenever you\'re ready — the offer sits at the end of his conversations.)',
+          ], v.speaker);
+          return;
+        }
         const set = v.sets[Math.floor(Math.random() * v.sets.length)];
-        const sponsorAct: DialogAction[] = s.charliePatron
-          ? []
-          : [{ label: '🎬 Sponsor the film · ¥40,000', onPick: sponsorCharlieFilm }];
+        const sponsorAct: DialogAction[] = prestigeOffered(s, 'charlie-film-ask') && !s.charliePatron
+          ? [{ label: '🎬 Sponsor the film · ¥40,000', onPick: sponsorCharlieFilm }]
+          : [];
         showDialog(warm([...set, ...npcDynamicLines('charlie', s)]), v.speaker, [...sponsorAct, ...(giftAct ?? [])]);
+        return;
+      }
+      // Yoshi the miko: once you're real friends she finally admits what the
+      // shrine needs, which is what puts the restoration on the offering box.
+      // She asks; she does not sell. The button lives on the box, not on her.
+      if (npc.id === 'miko' && prestigeAskReady(s, 'miko', 'shrine-restore-ask', s.shrineRestored)) {
+        s.storySeen.push('shrine-restore-ask');
+        persistSave(s);
+        showDialog([
+          'Yoshi is looking up at the roof of the offering hall, and does not stop when you arrive. "You see it too. Everyone sees it. Nobody says it."',
+          '"The beams are going. The thatch has three more winters, and that is a generous three." She says it evenly, the way she says everything. "My grandmother kept this place. Her mother kept it. I am the one who will have to watch it come down."',
+          '"A full restoration is ¥80,000. I tell you this because you have never once come here to ask the kami for something." A pause. "That is rarer than you think."',
+          '(The offering box will take a restoration donation now, whenever you\'re ready.)',
+        ], 'Yoshi');
         return;
       }
       const voice = NPC_VOICES[npc.id];
@@ -3475,11 +3650,13 @@ const LittleApartmentGame: React.FC = () => {
       }
       case 'gacha': rollGacha(); break;
       case 'shrine': {
-        // Once-only restoration is offered as a trailing reply on whatever the
-        // shrine says, until you've funded it (then it never shows again).
-        const restoreAct: DialogAction[] | undefined = s.shrineRestored
-          ? undefined
-          : [{ label: '⛩️ Fund the restoration · ¥80,000', onPick: fundShrineRestoration }];
+        // Once-only restoration, offered as a trailing reply on whatever the shrine
+        // says — but only after Yoshi has raised it with you (the 'shrine-restore-ask'
+        // beat at PRESTIGE_ASK_HEARTS ♥), and until you've funded it.
+        const restoreAct: DialogAction[] | undefined =
+          prestigeOffered(s, 'shrine-restore-ask') && !s.shrineRestored
+            ? [{ label: '⛩️ Fund the restoration · ¥80,000', onPick: fundShrineRestoration }]
+            : undefined;
         if (s.shrineDay === s.day) { showDialog(['You have already made your offering today. The kami are not a vending machine.', 'Come back tomorrow.'], undefined, restoreAct); break; }
         if (s.money < 500) { showDialog(['The offering box waits patiently. It has waited longer than you have been broke.'], undefined, restoreAct); break; }
         s.money -= 500;
@@ -3861,7 +4038,7 @@ const LittleApartmentGame: React.FC = () => {
           const what = slot.kind === 'art' ? 'frame' : 'pedestal';
           showDialog([
             `An empty ${what}. A little brass plate reads: "${slot.label}".`,
-            'This display is empty — Bingus is waiting for the right piece. (You\'ll know it when you find it.)',
+            'This display is waiting for the right piece. (You\'ll know it when you find it — and your phone\'s Collection app keeps track of the ones you have.)',
           ], 'Museum');
         }
         break;
@@ -4078,6 +4255,22 @@ const LittleApartmentGame: React.FC = () => {
           'Something far away seems to hear you. Tomorrow will lean a little your way. 🍀',
         ]);
         return;
+      }
+    }
+
+    // The town-event window closing (8 PM) sends the derby/festival crowd back to
+    // their routines. Wanderers are only built on scene ENTER, so without this a
+    // player standing in the city at 8 PM would never see Granny come back.
+    {
+      const se = saveRef.current;
+      const ev = townEventNow(se);
+      if (ev !== townEventRef.current) {
+        townEventRef.current = ev;
+        // Rebuild, but keep everyone who was ALREADY walking exactly where they
+        // are — makeWanderers re-seeds x/y from the map tile, so a blind swap
+        // would snap Tex and Genji back to their spawns mid-stride at 8 PM.
+        const live = new Map(wanderersRef.current.map(w => [w.id, w]));
+        wanderersRef.current = makeWanderers(sceneRef.current, se).map(w => live.get(w.id) ?? w);
       }
     }
 
@@ -4918,12 +5111,16 @@ const LittleApartmentGame: React.FC = () => {
     }
 
     // ---- Fishing-derby decor (transient — shore, derby days only) ------------
-    // The town turns out to fish the waterline: a row of static townsfolk casting
-    // toward the sea, plus a chalkboard derby sign. Drawn after the ground / before
-    // the y-sorted entities (like the festival decor) so the player passes in front.
-    // Purely decorative & non-blocking; every sprite guarded by atlas[key].
+    // The town turns out to fish the waterline: a row of townsfolk casting toward
+    // the sea, plus a chalkboard derby sign. Drawn after the ground / before the
+    // y-sorted entities (like the festival decor) so the player passes in front.
+    // Non-blocking; every sprite guarded by atlas[key]. The named ones are real
+    // attendees (hidden from their usual venue) and are talkable — see
+    // stagedAttendeeAt. The CROWD is gated on townEventNow, not on the calendar
+    // day: it has to disappear at the same 8 PM the attendees walk home, or you
+    // would see Granny in the city and a second Granny still casting here.
     if (scene.id === TOURNAMENT_SCENE && fishingTournamentDay(saveRef.current.day)) {
-      for (const f of DERBY_FISHERS) {
+      for (const f of townEventNow(saveRef.current) === 'derby' ? DERBY_FISHERS : []) {
         const fx = f.x * TILE - cam.x, fy = f.y * TILE - cam.y;
         const sh = atlas['m-shadow']; if (sh) ctx.drawImage(sh, fx, fy + 2);
         // a gentle cast-bob so the line of fishers reads as "alive" without walking
@@ -5392,6 +5589,8 @@ const LittleApartmentGame: React.FC = () => {
       for (let i = 0; i < spots.length; i++) {
         if (taken.includes(i)) continue;
         const sp = spots[i];
+        // Don't draw a grabbable sparkle under someone who's standing on it.
+        if (stagedAttendeeAt(saveRef.current, scene.id, { x: sp.x, y: sp.y })) continue;
         const bx = sp.x * TILE - cam.x, by = sp.y * TILE - cam.y;
         const bob = Math.round(Math.sin(t * 3 + i) * 1.5);               // gentle hop so it reads as "alive"
         ctx.drawImage(atlas[forageById(sp.kind).sprite], bx, by + bob);
@@ -6296,6 +6495,8 @@ const LittleApartmentGame: React.FC = () => {
       }
       // Kinryū patrons: facing a seated gambler offers a chat (they'll decline).
       if (scene.id === 'casino' && casinoGamblersFor(sv.day).some(g => g.x === faced.x && g.y === faced.y)) label = 'Talk';
+      // A townsperson attending the derby / festival is a real, talkable person.
+      if (stagedAttendeeAt(sv, scene.id, faced)) label = 'Talk';
       // Derby chalkboard: name the readable sign so it invites a look (2 tiles wide).
       {
         const onSign = (tt: Vec) => tt.y === DERBY_SIGN.y && (tt.x === DERBY_SIGN.x || tt.x === DERBY_SIGN.x + 1);
@@ -6835,7 +7036,7 @@ const LittleApartmentGame: React.FC = () => {
     applyHomeOnsen(s.homeOnsen);        // inject the private-onsen interactable if owned
     sceneRef.current = SCENES[s.scene] ?? SCENES.apartment;
     streetEventRef.current = sceneRef.current.id === 'city' ? streetEventFor(s) : null;
-    wanderersRef.current = makeWanderers(sceneRef.current);
+    wanderersRef.current = makeWanderers(sceneRef.current, s);
     posRef.current = { x: s.px, y: s.py };
     dirRef.current = s.dir;
     pendingBeatsRef.current = [];
@@ -7431,6 +7632,11 @@ const LittleApartmentGame: React.FC = () => {
     if (duel.result === 'win') {
       s.money += duel.stake * (pBJ && !dBJ && rule === 'pays2to1' ? 3 : 2);
       s.bossDuelLosses += 1;
+      // Beat him under every placard and the table has nothing left to teach you.
+      // Deliberately rewards sitting down on his BAD nights, not just the two that
+      // favour you (the placard is visible before the bet, so cherry-picking is easy).
+      if (!s.duelRulesWon.includes(rule)) s.duelRulesWon.push(rule);
+      if (HOUSE_RULES.every(hr => s.duelRulesWon.includes(hr.id))) award('read-the-placard');
       duel.say = bossLossLine(s.bossDuelLosses);
       sfxCasinoWin(); award('boss-duel'); countCasinoWin();
       // A rival, not a friend: his first loss earns you a stiff one-off text
@@ -7626,8 +7832,7 @@ const LittleApartmentGame: React.FC = () => {
     award('geode-crack');
     sfxCatch();
     // Rare: a geode is hollow around an ancient coin — a museum curio.
-    if (!s.collectibles.includes('arti-coin') && !s.museum.donated.includes('arti-coin') && Math.random() < 0.08) {
-      s.collectibles.push('arti-coin');
+    if (Math.random() < 0.08 && pocketCurio(s, 'arti-coin')) {
       res.text = 'A COIN! (First Coin of the Realm)';
       res.color = '#ffe9a0';
     }
@@ -8931,6 +9136,56 @@ const LittleApartmentGame: React.FC = () => {
       );
     })();
 
+    // Collection: the museum tracker. `s.collectibles` had no UI anywhere in the
+    // game, so a curio sat invisible in your bag with nothing to say which display
+    // it belonged to. Three states per slot (museumProgress in state.ts): on
+    // display, in your bag, or never seen — an unfound piece stays '???' so the
+    // app tracks progress without spoiling where anything is.
+    const collectionApp = (() => {
+      const rows = museumProgress(s);
+      const done = rows.filter(r => r.status === 'donated').length;
+      const held = rows.filter(r => r.status === 'held').length;
+      const ask = bingusNextAsk(s);
+      return (
+        <div className="px-3 py-2">
+          <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">THE KAWAMACHI MUSEUM</p>
+          <p className="text-xs opacity-50 mb-2 leading-snug">
+            {done} of {rows.length} displays filled{held > 0 ? ` · ${held} in your bag` : ''}. Donate a piece at its own plinth or frame in the gallery.
+          </p>
+          {rows.map(({ slotId, status }) => {
+            const sl = MUSEUM_SLOTS.find(m => m.id === slotId)!;
+            return (
+              <div key={slotId} className="flex items-start gap-2 py-1.5 border-b border-white/10">
+                <span className="shrink-0 text-base w-5 text-center">
+                  {status === 'donated' ? '✓' : status === 'held' ? '🎒' : '❓'}
+                </span>
+                <div className="flex-grow min-w-0">
+                  {status === 'unfound' ? (
+                    <p className="text-base leading-tight opacity-35">??? <span className="text-xs">({sl.kind === 'art' ? 'wall frame' : 'pedestal'})</span></p>
+                  ) : (
+                    <>
+                      <p className={`text-base leading-tight ${status === 'held' ? 'text-[#ffd24a]' : ''}`}>{sl.label}</p>
+                      <p className="text-xs opacity-55 leading-snug">
+                        {status === 'held' ? "In your bag — take it to the museum and find its empty display." : sl.blurb}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {ask && (
+            <p className="text-xs opacity-60 mt-3 leading-snug italic">
+              <span className="text-[#ffd24a]/80 not-italic">The curator is asking for: </span>{ask.ask}
+            </p>
+          )}
+          {done >= rows.length && (
+            <p className="text-xs text-[#ffd24a]/80 mt-3 leading-snug">Every plinth filled, every frame occupied. There is a plaque with your name on it.</p>
+          )}
+        </div>
+      );
+    })();
+
     // Friends: the cast you can befriend. Tap one to give a gift; hearts unlock perks.
     // Only people you've actually met — the app shouldn't spoil the cast you
     // haven't run into yet (their names, blurbs, or that they exist at all).
@@ -8938,7 +9193,7 @@ const LittleApartmentGame: React.FC = () => {
     const friendsApp = (
       <div className="px-3 py-2">
         <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">FRIENDS</p>
-        <p className="text-xs opacity-50 mb-2 leading-snug">Walk up to someone and choose GIVE A GIFT (one each per day) to grow closer. Hearts unlock perks. (Loves/likes reveal at 2 ♥.)</p>
+        <p className="text-xs opacity-50 mb-2 leading-snug">Walk up to someone and choose GIVE A GIFT (one each per day) to grow closer. Hearts unlock perks. The gift picker tells you what each person thinks of what you're carrying.</p>
         {metFriends.length === 0 && (
           <p className="py-3 text-base opacity-50 leading-snug">You haven't met anyone worth noting yet. Get out there and talk to people.</p>
         )}
@@ -8946,6 +9201,12 @@ const LittleApartmentGame: React.FC = () => {
           const hearts = friendHearts(s, f.id);
           const met = metFriend(s, f.id);
           const gifted = !canGiftToday(s, f.id);
+          // The best thing in your bag for THIS person right now — turns the roster
+          // into a daily to-do instead of a static list of faces.
+          const best = gifted ? null : giftableItems(s)
+            .map(it => ({ it, tier: giftTier(f.id, it.kind) }))
+            .filter(x => x.tier === 'loved' || x.tier === 'liked')
+            .sort((a, b) => (a.tier === 'loved' ? 0 : 1) - (b.tier === 'loved' ? 0 : 1))[0];
           return (
             <div key={f.id} className="w-full flex items-center gap-3 py-2 border-b border-white/10">
               <span className="text-2xl shrink-0">{f.emoji}</span>
@@ -8953,6 +9214,11 @@ const LittleApartmentGame: React.FC = () => {
                 <p className="text-base leading-tight">{f.name}</p>
                 <p className="text-xs opacity-55 leading-tight truncate">{f.blurb}</p>
                 <p className="text-sm leading-tight tracking-tight">{'❤️'.repeat(hearts)}<span className="opacity-25">{'·'.repeat(MAX_HEARTS - hearts)}</span></p>
+                {best && (
+                  <p className="text-xs leading-tight text-[#a8d8b0]/80 truncate">
+                    carrying: {best.it.label} — {best.tier === 'loved' ? `${f.name} would love it` : `${f.name} likes those`}
+                  </p>
+                )}
               </div>
               {met && gifted && <span className="shrink-0 text-xs px-2 py-1 rounded opacity-40 bg-white/5">gifted today ✓</span>}
             </div>
@@ -9213,7 +9479,7 @@ const LittleApartmentGame: React.FC = () => {
     );
 
     const titles: Record<Exclude<PhoneApp, 'home'>, string> = {
-      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends', music: 'Music', skills: 'Skills', fishopedia: 'Fishopedia', almanac: 'Almanac', recipes: 'Recipe Book',
+      inventory: 'Bag', messages: 'Messages', achievements: 'Trophies', settings: 'Settings', cheats: 'Codes', zamazonk: 'ZamaZonk', journal: 'Journal', friends: 'Friends', collection: 'Collection', music: 'Music', skills: 'Skills', fishopedia: 'Fishopedia', almanac: 'Almanac', recipes: 'Recipe Book',
     };
 
     return (
@@ -9250,7 +9516,13 @@ const LittleApartmentGame: React.FC = () => {
               <AppIcon icon="🧳" label="Bag" bg="linear-gradient(160deg,#c9952f,#8a5a1f)" onClick={() => open('inventory')} />
               <AppIcon icon="💬" label="Messages" bg="linear-gradient(160deg,#3da26b,#1f6e45)" badge={unread || undefined} onClick={() => open('messages')} />
               <AppIcon icon="📓" label="Journal" bg="linear-gradient(160deg,#4a6ea0,#28406a)" onClick={() => { checkMissions(); open('journal'); }} />
-              <AppIcon icon="💛" label="Friends" bg="linear-gradient(160deg,#d0506e,#8a2f4a)" onClick={() => open('friends')} />
+              <AppIcon icon="💛" label="Friends" bg="linear-gradient(160deg,#d0506e,#8a2f4a)" badge={giftableItems(s).length > 0 ? (FRIENDS.filter(f => metFriend(s, f.id) && canGiftToday(s, f.id)).length || undefined) : undefined} onClick={() => open('friends')} />
+              {/* The museum tracker only appears once the museum is part of your life —
+                  the app grid shouldn't announce a collection you've never heard of.
+                  Badge = curios in your bag waiting for a plinth. */}
+              {(s.visited.includes('museum') || s.collectibles.length > 0 || s.museum.donated.length > 0) && (
+                <AppIcon icon="🖼️" label="Collection" bg="linear-gradient(160deg,#3f5f8a,#243a5a)" badge={heldCollectibleCount(s) || undefined} onClick={() => open('collection')} />
+              )}
               {s.jukeboxUnlocked && (
                 <AppIcon icon="🎵" label="Music" bg="linear-gradient(160deg,#7a4fd0,#3a2a8a)" onClick={() => open('music')} />
               )}
@@ -9290,6 +9562,7 @@ const LittleApartmentGame: React.FC = () => {
               {ov.tab === 'inventory' && inventoryApp}
               {ov.tab === 'journal' && journalApp}
               {ov.tab === 'friends' && friendsApp}
+              {ov.tab === 'collection' && collectionApp}
               {ov.tab === 'music' && musicApp}
               {ov.tab === 'skills' && skillsApp}
               {ov.tab === 'almanac' && almanacApp}
@@ -9373,31 +9646,46 @@ const LittleApartmentGame: React.FC = () => {
     const f = friendById(ov.npcId);
     if (!f) { close(); return null; }
     const hearts = friendHearts(s, ov.npcId);
-    const items = giftableItems(s);
     const already = !canGiftToday(s, ov.npcId);
+    // Every row says what THIS person thinks of it. The old picker showed nothing
+    // and hid loves/likes until 2 ♥, which was circular — gifting is how you get
+    // to 2 ♥. Sorted best-first so the right gift is the obvious one.
+    const TIER_TAG: Record<GiftTier, { text: string; cls: string; rank: number }> = {
+      loved: { text: '❤ LOVES', cls: 'text-[#ff9ec4]', rank: 0 },
+      liked: { text: '👍 likes', cls: 'text-[#a8d8b0]', rank: 1 },
+      neutral: { text: 'fine', cls: 'opacity-45', rank: 2 },
+      disliked: { text: '👎 no', cls: 'text-[#e0552e]/80', rank: 3 },
+    };
+    const items = giftableItems(s)
+      .map(it => ({ it, tag: TIER_TAG[giftTier(ov.npcId, it.kind)] }))
+      .sort((a, b) => a.tag.rank - b.tag.rank);
     return (
       <ShopFrame
         title={`${f.emoji} GIVE ${f.name.toUpperCase()} A GIFT`}
         subtitle={`${'❤️'.repeat(hearts)}${'·'.repeat(MAX_HEARTS - hearts)}  ${hearts}/10`}
         money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}
       >
-        {already
-          ? <p className="text-base opacity-65 py-3">You've already given {f.name} something today. Come back tomorrow.</p>
-          : items.length === 0
-            ? <p className="text-base opacity-65 py-3">Nothing to give right now. Catch a fish, grow a crop, cook a dish, grab a soda…</p>
-            : items.map((it, i) => (
-                <div key={i} className="flex items-center gap-2 py-1 border-b border-white/10">
-                  {it.sprite ? <SpriteIcon atlas={atlasRef.current} sprite={it.sprite} size={22} /> : <span className="w-[22px] text-center text-lg">{it.emoji}</span>}
-                  <p className="flex-grow text-base">{it.label} <span className="opacity-40 text-sm">×{it.count}</span></p>
-                  <button className={`${btnCls} text-sm px-2 py-0.5`} onClick={() => doGift(ov.npcId, it)}>GIVE</button>
-                </div>
-              ))}
+        {/* Already gifted today still shows the whole list, tagged — you can plan
+            tomorrow's gift instead of being shown an empty panel. */}
+        {already && <p className="text-base opacity-65 py-2 leading-snug">You've already given {f.name} something today. Come back tomorrow.</p>}
+        {items.length === 0
+          ? <p className="text-base opacity-65 py-3">Nothing to give right now. Catch a fish, grow a crop, cook a dish, grab a soda…</p>
+          : items.map(({ it, tag }, i) => (
+              <div key={i} className={`flex items-center gap-2 py-1 border-b border-white/10 ${already ? 'opacity-55' : ''}`}>
+                {it.sprite ? <SpriteIcon atlas={atlasRef.current} sprite={it.sprite} size={22} /> : <span className="w-[22px] text-center text-lg">{it.emoji}</span>}
+                <p className="flex-grow min-w-0 text-base truncate">{it.label} <span className="opacity-40 text-sm">×{it.count}</span></p>
+                <span className={`shrink-0 text-xs tracking-tight ${tag.cls}`}>{tag.text}</span>
+                <button
+                  className={`${btnCls} text-sm px-2 py-0.5 ${already ? 'opacity-40 cursor-default' : ''}`}
+                  disabled={already}
+                  onClick={already ? undefined : () => doGift(ov.npcId, it)}
+                >GIVE</button>
+              </div>
+            ))}
         {ov.npcId === 'bingus' && (
           <p className="text-xs opacity-50 mt-2 italic leading-snug">A personal gift — Bingus keeps this one. Pieces for the museum are separate: he asks for those in conversation, as donations, and they go straight on display.</p>
         )}
-        {hearts >= 2 && (
-          <p className="text-xs opacity-55 mt-2 italic">Loves: {f.loved.join(', ')}{f.liked.length ? ` · Likes: ${f.liked.join(', ')}` : ''}</p>
-        )}
+        <p className="text-xs opacity-55 mt-2 italic">Loves: {f.loved.join(', ')}{f.liked.length ? ` · Likes: ${f.liked.join(', ')}` : ''}</p>
         {f.perk && <p className="text-xs opacity-45 mt-1">✦ At {f.perk.hearts} ♥: {f.perk.text}</p>}
       </ShopFrame>
     );
@@ -9411,10 +9699,18 @@ const LittleApartmentGame: React.FC = () => {
     // dialog, so they miss the end-of-conversation gift hook. Give their stalls a
     // "Give a gift" button (same gift picker) when you can still gift them today
     // and you're carrying something giftable.
-    const shopGiftButton = (friendId: string) =>
-      (canGiftToday(s, friendId) && giftableItems(s).length > 0) ? (
-        <button className={`${btnCls} w-full mt-3`} onClick={() => setOverlayBoth({ type: 'gift', npcId: friendId })}>🎁 Give a gift</button>
-      ) : null;
+    const shopGiftButton = (friendId: string) => {
+      const gifted = !canGiftToday(s, friendId);
+      const empty = giftableItems(s).length === 0;
+      const why = gifted ? 'One gift each per day — come back tomorrow.' : empty ? 'Nothing giftable in your bag right now.' : undefined;
+      return (
+        <button
+          className={`${btnCls} w-full mt-3 ${why ? 'opacity-40 cursor-default' : ''}`}
+          disabled={Boolean(why)} title={why}
+          onClick={why ? undefined : () => setOverlayBoth({ type: 'gift', npcId: friendId })}
+        >{gifted ? '🎁 Gift given today' : empty ? '🎁 Nothing to give' : '🎁 Give a gift'}</button>
+      );
+    };
 
     if (ov.shop === 'yakuza') {
       return (
@@ -10410,6 +10706,17 @@ const LittleApartmentGame: React.FC = () => {
             </span>
           )}
 
+          {/* museum-curio chip — something in your bag belongs on a plinth. A found
+              piece used to vanish silently into an invisible save array. */}
+          {hud.curios > 0 && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs sm:text-sm font-bold leading-none chip-pop bg-[#3f5f8a]/30 text-[#bfe0ff]"
+              title="Museum piece in your bag — donate it at its display in the Kawamachi Museum (see the Collection app)"
+            >
+              🖼️<span className="hidden sm:inline">{hud.curios === 1 ? 'Curio' : `${hud.curios} curios`}</span>
+            </span>
+          )}
+
           {/* special-day chip — Market / Lucky Day */}
           {hud.event && (
             <span
@@ -10925,7 +11232,13 @@ const LittleApartmentGame: React.FC = () => {
                           gift/buy buttons to pick those. */}
                       <button className={`${btnCls} text-base py-1`} onClick={() => setOverlayBoth(null)}>Done</button>
                       {acts.map((a, i) => (
-                        <button key={i} className={`${btnCls} text-base py-1`} onClick={a.onPick}>{a.label}</button>
+                        <button
+                          key={i}
+                          className={`${btnCls} text-base py-1 ${a.disabled ? 'opacity-40 cursor-default' : ''}`}
+                          disabled={a.disabled}
+                          title={a.why}
+                          onClick={a.disabled ? undefined : a.onPick}
+                        >{a.label}</button>
                       ))}
                     </div>
                   ) : (
