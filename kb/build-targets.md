@@ -28,6 +28,23 @@ Built by `.github/workflows/release.yml` on every merge to `main`, attached to d
 | **macOS** (Apple Silicon) | `.dmg` | Built by `scripts/make-dmg.mjs` (see below). |
 | **Linux** | `.deb` **+** `.AppImage` | **Official, supported builds.** `.deb` for Debian/Ubuntu (`sudo apt install ./Little*.deb` or `dpkg -i`); `.AppImage` portable/distro-agnostic — `chmod +x` then run. Built on `ubuntu-22.04` (its `webkit2gtk-4.1` packages match Tauri v2). AppImage needs FUSE; on hosts without it run `./App.AppImage --appimage-extract-and-run`. |
 
+### Windows WebView2 handling
+Tauri renders in the system WebView2 runtime — preinstalled on Windows 11, often missing
+on Windows 10. The NSIS installer pulls it via `webviewInstallMode: downloadBootstrapper`
+(`tauri.conf.json`); the **portable exe has no installer to do that**, so three pieces
+cover it:
+- **`src-tauri/src/webview2.rs`** — startup guard. Detects a missing runtime, re-runs the
+  bundled Evergreen bootstrapper, and shows an error box if it still isn't there. This runs
+  on **every** Windows build, portable or installed.
+- **`steam/installscript.vdf`** — runs the bootstrapper once on first install, keyed on
+  `HasRunKey` so it skips when the runtime is already present.
+- **`scripts/prepare-steam-depot.mjs`** — stages a loose-file folder (exe + bootstrapper +
+  vdf) into `src-tauri/target/steam-depot/`.
+
+The last two were written for a possible Steam depot (no longer planned — the `.vdf` format
+is Steam-specific). Keep `webview2.rs`: it is the only thing protecting the portable exe on
+Windows 10. The other two are inert unless `prepare-steam-depot.mjs` is run by hand.
+
 ### macOS = Apple Silicon only
 - Builds target **`aarch64-apple-darwin`** only (no Intel/universal). `tauri.conf.json` `bundle.macOS.minimumSystemVersion: 11.0`.
 - **dmg NOT Tauri bundle target** (`bundle.targets` = `["app","deb","appimage","nsis"]`). Tauri `bundle_dmg.sh` styles image window via Finder/AppleScript, fails in headless/SSH/CI shells. Instead **`scripts/make-dmg.mjs`** builds dmg with `hdiutil` (app + `/Applications` symlink, UDZO) — same result locally and CI, no GUI.
@@ -38,6 +55,16 @@ Built by `.github/workflows/release.yml` on every merge to `main`, attached to d
 ## Toolchain prerequisites
 - **Dev preview / Vite build**: Node + npm. Nothing else.
 - **Any native target**: **Rust** via [rustup](https://rustup.rs).
+- **Linux host**: system dev packages, or the Rust build fails at link/`pkg-config` time:
+  ```sh
+  sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+    librsvg2-dev patchelf libgtk-3-dev libudev-dev
+  ```
+  `libudev-dev` is easy to miss — it is not a Tauri requirement but a **gilrs** one
+  (`gilrs` → `gilrs-core` → `libudev-sys`, whose build script shells out to
+  `pkg-config --libs --cflags libudev` and panics if `libudev.pc` is absent). It broke
+  the `main` Linux release build on 2026-09-11; the same list is installed by
+  `release.yml`, so keep the two in sync when either changes.
 - **Android**: Android Studio + SDK + NDK; `JAVA_HOME`, `ANDROID_HOME`, `NDK_HOME` set. Run `npm run tauri android init` once.
 - **iOS**: macOS + Xcode + command-line tools. Run `npm run tauri ios init` once.
 - **Desktop cross-builds**: Windows binary needs Windows host (or CI runner); macOS binary needs macOS. Tauri does not cross-compile desktop targets from single host.

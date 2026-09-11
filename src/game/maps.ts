@@ -759,7 +759,7 @@ const shrine: SceneDef = {
 };
 
 // ---- Community Greenhouse (off the shrine grounds) -----------------------------------
-// Granny Soto's glass house. Plant a sunflower in a soil plot, flip the sprinklers
+// Granny Sato's glass house. Plant a sunflower in a soil plot, flip the sprinklers
 // on, and it climbs a stage each watered morning until it blooms — then harvest it.
 // Built to extend toward a small farming sim (see CROPS in data.ts + GREENHOUSE_PLOTS).
 

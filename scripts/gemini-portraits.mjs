@@ -40,7 +40,7 @@ const PORTRAIT_DIR = join(root, 'public', 'images', 'portraits');
 
 // Roster of shipped portraits: key → source file.
 const ROSTER = {
-  'granny-sato': join(PORTRAIT_DIR, 'granny-soto.png'),
+  'granny-sato': join(PORTRAIT_DIR, 'granny-sato.jpeg'),
   genji: join(PORTRAIT_DIR, 'genji.jpeg'),
   'the-manager': join(PORTRAIT_DIR, 'the-manager.jpeg'),
   'jean-pierre': join(PORTRAIT_DIR, 'jean-pierre.jpeg'),

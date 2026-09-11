@@ -1,0 +1,56 @@
+version: 2
+
+# Day-to-day work lands on DEV (see CLAUDE.md "Git workflow"), so Dependabot
+# targets DEV rather than the default branch — its PRs merge where everything
+# else does, and `main` stays a promotion of a branch that already passed CI.
+#
+# Tuned for low noise: monthly, grouped into one PR per ecosystem, small open-PR
+# caps. Security advisories still arrive immediately and separately (Dependabot
+# alerts / security updates are repo settings, not configured here).
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: DEV
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      # The whole toolchain is devDependencies — nothing here ships in the game
+      # binary, so batching it into one PR is safe and keeps the queue short.
+      dev-toolchain:
+        dependency-type: development
+        update-types: [minor, patch]
+      # React is the game's only runtime dependency (src/game/ is React-only by
+      # invariant). Majors stay out of the group so they land on their own.
+      runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    target-branch: DEV
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      rust:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: DEV
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore(ci)

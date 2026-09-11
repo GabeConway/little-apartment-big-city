@@ -99,7 +99,7 @@ export interface GameSave {
   deliveryDay: number;          // last day the Kojima Motors delivery race was run (0 = never); one per day
   deliveryBest: number;         // best delivery time in seconds (0 = none yet); lower is better
   streetEventDay: number;       // last day the daily random street event was completed (0 = none); one per day
-  greenhouseUnlocked: boolean;  // Granny Soto handed over the greenhouse key (after the fish errand)
+  greenhouseUnlocked: boolean;  // Granny Sato handed over the greenhouse key (after the fish errand)
   ended: boolean;               // ending seen (free play continues)
   today: DayLog;                // running tally for the end-of-day recap
   messages: PhoneMessage[];     // smartphone texts delivered so far
@@ -109,7 +109,7 @@ export interface GameSave {
   shrineDay: number;            // last day an offering was made at the shrine (0 = never); one per day
   wishDay: number;              // last day a meteor-shower wish was made (0 = never); one wish per shower-night
   museum: { donated: string[] }; // MUSEUM_SLOTS ids the player has donated a piece to (empty by default)
-  greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
+  greenhouse: GreenhouseState;  // Granny Sato's community greenhouse (crop plots + sprinklers)
   cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
   catPetDay: number;            // last day David was petted (0 = never); one pet per day
   catGiftDay: number;           // last day David left a morning gift by the door (0 = never)

@@ -1054,8 +1054,8 @@ const NPC_VOICES: Record<string, { speaker: string; sets: string[][] }> = {
   tourist: {
     speaker: 'Jean-Pierre (tourist)',
     sets: [
-      ['Ah! Bonjour, {name}! You also find ze... immersive exhibition? Magnifique. Very conceptual. Very yellow.', 'Ze guidebook said "authentic local konbini experience". Five stars. I have been here three days.'],
-      ['I ask ze big monsieur for directions. He is very polite. He sells me a table that whispers. C\'est la vie.'],
+      ['Ah! Bonjour, {name}! You also find the... immersive exhibition? Magnifique. Very conceptual. Very yellow.', 'The guidebook said "authentic local konbini experience". Five stars. I have been here three days.'],
+      ['I ask the big monsieur for directions. He is very polite. He sells me a table that whispers. C\'est la vie.'],
       ['Do not worry for me! In France we also have liminal spaces. We call them "Charles de Gaulle Airport".'],
     ],
   },
@@ -2267,9 +2267,9 @@ const LittleApartmentGame: React.FC = () => {
       } else {
         showDialog([
           'You come to on the floor of your own apartment. There is a damp towel on your forehead, folded with surprising precision.',
-          'Jean-Pierre is standing over you, beret slightly askew. "Bonjour. You were face-down in ze yellow place. Very dramatique."',
-          '"I carry you up ze ladder, through ze freezer, past ze nice monster. He says hello, by ze way."',
-          '"In France we have a saying: do not fight ze crawling things on an empty battery." He pats your head exactly once.',
+          'Jean-Pierre is standing over you, beret slightly askew. "Bonjour. You were face-down in the yellow place. Very dramatique."',
+          '"I carry you up the ladder, through the freezer, past the nice monster. He says hello, by the way."',
+          '"In France we have a saying: one does not fight the crawling things on an empty battery." He pats your head exactly once.',
           '"I let myself out. Rest. Eat something." He turns for the door.',
         ], 'Jean-Pierre');
       }
@@ -3416,7 +3416,7 @@ const LittleApartmentGame: React.FC = () => {
       // of energy (bigger than konbini food). (Feature #20.)
       if (npc.id === 'baguette') {
         if (s.money < 400) { showDialog(['"Une baguette, four hundred yen — oui, we take yen here, do not ask." He shrugs, very French.', 'You count your coins. Not today.'], 'Baguette Vendor'); return; }
-        if (s.energy >= maxEnergy(s)) { showDialog(['"You are already full of life, mon ami! Come back when ze city has tired you out."'], 'Baguette Vendor'); return; }
+        if (s.energy >= maxEnergy(s)) { showDialog(['"You are already full of life, mon ami! Come back when the city has tired you out."'], 'Baguette Vendor'); return; }
         s.money -= 400;
         s.energy = Math.min(maxEnergy(s), s.energy + 70);
         sfxCatch();
@@ -3454,7 +3454,7 @@ const LittleApartmentGame: React.FC = () => {
         bingusTalk();
         return;
       }
-      // Granny Soto (out in the city): she gatekeeps the community greenhouse
+      // Granny Sato (out in the city): she gatekeeps the community greenhouse
       // behind a small fish errand — she adores a fresh fish. Speaker EXACTLY
       // 'Granny Sato' so her authored portrait shows.
       if (npc.id === 'granny' && !s.greenhouseUnlocked) {
@@ -3606,7 +3606,7 @@ const LittleApartmentGame: React.FC = () => {
       }
       case 'gh-poster': {
         showDialog([
-          '— COMMUNITY GREENHOUSE — a hand-lettered poster, Granny Soto\'s tidy hand —',
+          '— COMMUNITY GREENHOUSE — a hand-lettered poster, Granny Sato\'s tidy hand —',
           '1. Buy SEEDS at the supply counter, then press one into an empty soil bed.',
           '2. WATER each bed once a day (or buy a SPRINKLER to do it for you). Miss a day and it sulks.',
           '3. Tend it well — and earn the shrine\'s favor — for SILVER and GOLD harvests worth far more.',
@@ -3778,8 +3778,8 @@ const LittleApartmentGame: React.FC = () => {
               hideNpc: 'tourist',
               then: () => showDialog([
                 'Jean-Pierre scrambles across the room and plants himself between you and the ladder, a little out of breath.',
-                '"Non non non, mon ami. Down zere? Wizout ze sparkle stick? Zey will EAT you. Conceptually AND literally."',
-                '"Ze big monsieur sells ze magical girl wand. Buy first. Descend second. Zis is ze order of operations."',
+                '"Non non non, mon ami. Down there? Without the sparkle stick? They will EAT you. Conceptually AND literally."',
+                '"The big monsieur sells the magical girl wand. Buy first. Descend second. This is the order of operations."',
               ], 'Jean-Pierre'),
             };
           }
@@ -4859,7 +4859,7 @@ const LittleApartmentGame: React.FC = () => {
             showDialog(['A wall of a man in a black suit fills the curtain gap. "Members only."',
               `He taps a small ledger without opening it. "The house counts its winners. Keep playing." (${s.casinoWins}/${BACKROOM_WINS} wins)`], 'Kinryū Doorman');
           else
-            showDialog(['The greenhouse door is locked tight. Granny Soto keeps the key — do her a kindness first.', '(Word around the block is she loves a fresh fish.)']);
+            showDialog(['The greenhouse door is locked tight. Granny Sato keeps the key — do her a kindness first.', '(Word around the block is she loves a fresh fish.)']);
         }
         return;
       }
@@ -8236,7 +8236,7 @@ const LittleApartmentGame: React.FC = () => {
   const buyGhBeds = () => { if (expandBeds(saveRef.current)) { sfxBuy(); ghTick(); } };
   const buyGhTier = () => { if (upgradeGreenhouse(saveRef.current)) { sfxBuy(); ghTick(); } };
 
-  // Hand Granny Soto a fish (her greenhouse-key errand) — only on confirm.
+  // Hand Granny Sato a fish (her greenhouse-key errand) — only on confirm.
   const giveGrannyFish = () => {
     const s = saveRef.current;
     if (s.greenhouseUnlocked || s.fishInv.length === 0) { setOverlayBoth(null); return; }
@@ -9040,7 +9040,7 @@ const LittleApartmentGame: React.FC = () => {
       const leads: string[] = [];
       // (The forage + learn-to-fish nudges were cut — MISSIONS steps 1-2 cover both.)
       if (s.canFish && s.fishRod < 1) leads.push('Genji keeps something better than a starter rod behind his stall.');
-      if (s.canFish && !s.greenhouseUnlocked) leads.push('Granny Soto keeps asking after a fresh fish.');
+      if (s.canFish && !s.greenhouseUnlocked) leads.push('Granny Sato keeps asking after a fresh fish.');
       if (!s.gangPaid) leads.push('The east alley out of the city is "spoken for." Coin might persuade them.');
       if (s.gangPaid && !s.backroomsUnlocked) leads.push('The big fella holding up the bar at Club Kaiju looks thirsty for something ice-cold, diet, and hard to find.');
       if (s.backroomsUnlocked && allRaresOwned(s) && !s.parisRevealed) leads.push('The Manager has the air of someone holding one last secret.');
@@ -9729,8 +9729,8 @@ const LittleApartmentGame: React.FC = () => {
 
     if (ov.shop === 'granny-fish') {
       return (
-        <ShopFrame title="GRANNY SOTO" subtitle={'"Is that... a fresh fish?"'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
-          <p className="text-lg opacity-85 py-1 leading-snug">Granny Soto's eyes light up at the fish in your bag. "Hand an old woman a fresh fish, and the community greenhouse is yours to tend. Do we have a deal?"</p>
+        <ShopFrame title="GRANNY SATO" subtitle={'"Is that... a fresh fish?"'} money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+          <p className="text-lg opacity-85 py-1 leading-snug">Granny Sato's eyes light up at the fish in your bag. "Hand an old woman a fresh fish, and the community greenhouse is yours to tend. Do we have a deal?"</p>
           <div className="flex items-center gap-3 mt-3">
             <button className={`${btnCls} flex-grow`} onClick={giveGrannyFish}>GIVE HER A FISH</button>
             <button className={btnCls} onClick={close}>KEEP IT</button>

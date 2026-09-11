@@ -128,6 +128,14 @@ scene, and secret in the game — it is a complete spoiler.**
 
 ## License
 
-**All rights reserved.** The source is published so you can read it, learn from it,
-and build the game for your own personal use. Please don't redistribute the game,
-its music, or its art, or ship derivative builds. Bug reports and PRs are welcome.
+Source-available, not open source — see [LICENSE](LICENSE). The source is published
+so you can read it, learn from it, and build the game for your own personal use.
+Please don't redistribute the game, its music, or its art, sell it, or ship derivative
+builds. Bug reports and PRs are welcome.
+
+---
+
+<sub>**Made with AI assistance.** Parts of this game's code and assets were produced with
+generative AI — development with Claude Code, character portraits and title art with the
+Gemini API, and the soundtrack with Suno. All of it was directed, reviewed and edited by hand.</sub>
+

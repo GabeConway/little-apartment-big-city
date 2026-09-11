@@ -20,14 +20,13 @@ router, no site chrome. Input: keyboard, touch, or game controller.
 - `scripts/gemini-portraits.mjs` — Gemini API art generator (portraits/logos/splash; needs `GEMINI_API_KEY`), plus canvas helpers `chroma-key-logo.mjs` / `fix-nameplates.mjs`. Usage + prompt lessons: [kb/art-direction.md](kb/art-direction.md) "Gemini API pipeline".
 
 ## Knowledge base (`kb/`)
-Eight files, indexed in [kb/README.md](kb/README.md). Read before editing the matching area:
+Seven files, indexed in [kb/README.md](kb/README.md). Read before editing the matching area:
 - [kb/games.md](kb/games.md) — the game's full as-built reference (architecture, systems, hard rules, music/sfx) + the build-history appendix.
 - [kb/art-direction.md](kb/art-direction.md) — visual style law: refs (Tiny Tower/Stardew/Habbo), perspective, master palette, PNG asset pipeline. Read before generating art.
 - [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
 - [kb/testing.md](kb/testing.md) — the 3-command health check, Vitest setup, the Playwright playtest harness (`npm run playtest`), and the bug-hunting playbook.
 - [kb/conventions.md](kb/conventions.md) — coding conventions + dependency versions and security policy.
 - [kb/future-ideas.md](kb/future-ideas.md) — parked work, ideas backlog, sfx wishlist.
-- [kb/steam.md](kb/steam.md) — Steam release plan (depots, achievements port, Deck-via-Proton; not started).
 
 ## Commands
 - `npm run dev` — Vite dev server in a browser (fast iteration only; not a ship target). No Rust needed.

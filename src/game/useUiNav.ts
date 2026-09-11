@@ -82,7 +82,14 @@ export function useUiNav(): InputSource {
       // instant our click closes it).
       if (NAV_NEXT.has(k)) { e.preventDefault(); e.stopImmediatePropagation(); moveFocus(1); }
       else if (NAV_PREV.has(k)) { e.preventDefault(); e.stopImmediatePropagation(); moveFocus(-1); }
-      else if (k === 'enter' || k === ' ') { e.preventDefault(); e.stopImmediatePropagation(); clickFocused(); }
+      // Activation must NOT auto-repeat. Space is also the in-world interact key, so
+      // holding it on a menu would fire clickFocused() ~30×/s: on the title that walks
+      // focus onto DELETE SAVE, clicks it, then clicks YES on the confirm panel that
+      // mounts as a fresh navroot. Held navigation IS wanted, so the guard is here only.
+      else if (k === 'enter' || k === ' ') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (!e.repeat) clickFocused();
+      }
     };
     const onPointer = () => setSrc('pointer');
     window.addEventListener('keydown', onKey, true);

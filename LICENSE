@@ -1,0 +1,69 @@
+Little Apartment, Big City
+Copyright (c) 2026 Gabe Conway. All rights reserved.
+
+SOURCE-AVAILABLE LICENSE
+
+This project's source is published so that anyone may read it, learn from it,
+and build the game to play themselves. It is not open source: redistribution
+and commercial use are not permitted.
+
+1. PERMITTED
+
+   a. Read, study, and quote the source, with attribution.
+   b. Build the game from source and run it on devices you own, for your own
+      personal, non-commercial use.
+   c. Modify the source locally for your own personal use or in order to
+      prepare a contribution under section 3.
+
+2. NOT PERMITTED
+
+   Without prior written permission from the copyright holder, you may not:
+
+   a. Redistribute this software, in source or compiled form, in whole or in
+      part -- including uploading builds, mirroring the repository, or
+      publishing forks intended for distribution rather than contribution.
+   b. Sell, license, rent, or otherwise commercially exploit this software or
+      any work derived from it, or publish it to any storefront or
+      distribution platform.
+   c. Redistribute the game's art, music, sound effects, characters, writing,
+      or other assets separately from the software.
+   d. Remove or obscure this license or the copyright notices in the software.
+
+3. CONTRIBUTIONS
+
+   Bug reports and pull requests are welcome. By submitting a contribution you
+   agree that it is your own work and that you grant the copyright holder a
+   perpetual, worldwide, irrevocable, royalty-free license to use, modify, and
+   distribute it as part of this project, including in commercial releases.
+
+4. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+THIRD-PARTY COMPONENTS
+
+The terms above cover this project's own code and assets. Bundled third-party
+components keep their own licenses, which are not restricted by this file:
+
+  Naganoshi           SIL Open Font License 1.1
+                      Copyright (c) 2023-2024 GGBotNet (https://ggbot.net)
+                      Full text: public/fonts/Naganoshi-License.txt
+
+  Press Start 2P      SIL Open Font License 1.1
+                      Copyright (c) 2012 The Press Start 2P Project Authors
+                      Bundled via @fontsource/press-start-2p
+
+  VT323               SIL Open Font License 1.1
+                      Copyright (c) 2011 The VT323 Project Authors
+                      Bundled via @fontsource/vt323
+
+Build- and runtime dependencies (React, Vite, Tailwind CSS, Tauri and their
+transitive dependencies) are covered by their respective licenses as declared
+in package.json / Cargo.toml and their published packages.

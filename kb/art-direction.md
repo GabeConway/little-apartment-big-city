@@ -161,7 +161,7 @@ resolution and authoring art larger, rather than shrinking characters into a 16p
 
 ## Gemini API pipeline — portraits, logos, splash art (`scripts/gemini-portraits.mjs`)
 
-The second AI-art tool beside sprite-ai (2026-07-07). **Division of labor: sprite-ai = tiles/sprites/animations on the 16px grid; the Gemini tool = big painterly one-offs** — dialog portraits, the title wordmark, the title background, and future Steam capsules / Bingus-gallery paintings / scene splash art. All shipped dialog portraits + the title logo/bg were made with it (paid-tier Gemini API: no visible watermark, commercial terms; invisible SynthID remains — Steam AI disclosure still required, see steam.md).
+The second AI-art tool beside sprite-ai (2026-07-07). **Division of labor: sprite-ai = tiles/sprites/animations on the 16px grid; the Gemini tool = big painterly one-offs** — dialog portraits, the title wordmark, the title background, and future Steam capsules / Bingus-gallery paintings / scene splash art. All shipped dialog portraits + the title logo/bg were made with it (paid-tier Gemini API: no visible watermark, commercial terms; invisible SynthID remains). AI use is disclosed in the README footer; any storefront with an AI-content survey needs the same declaration.
 
 **Setup**: `export GEMINI_API_KEY=...` (paid-tier key from AI Studio; keep it in `~/.zshrc`, never commit). Model default `gemini-2.5-flash-image` (~$0.04/image).
 

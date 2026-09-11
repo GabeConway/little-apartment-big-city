@@ -8,6 +8,12 @@ on:
   push:
     branches: [main]
 
+# Read-only token. The repo is public, so fork PRs run this workflow — nothing
+# here needs write access, and being explicit stops a permissive repo-level
+# default from applying.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

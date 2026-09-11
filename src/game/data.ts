@@ -85,7 +85,7 @@ export const RARE_FURNITURE: Furniture[] = [
 export const NON_MANAGER_RARES = new Set(['coffin', 'bloomlamp']);
 
 // ---- Greenhouse crops --------------------------------------------------------
-// Granny Soto's community greenhouse. Sprinkler-watered, day-cycle grown. Built
+// Granny Sato's community greenhouse. Sprinkler-watered, day-cycle grown. Built
 // as a table so the farming sim can grow (literally) — add a crop here, give it
 // its growth-stage sprites + a harvest payout, and the plots handle the rest.
 export interface Crop {
@@ -1347,7 +1347,7 @@ export function tournamentTierFor(score: number): TournamentTier {
 // from day 1, so they stay vague: atmosphere and soft nudges, never spoilers.
 export interface Gossip { who: string; text: string }
 export const GOSSIP: Gossip[] = [
-  { who: 'Granny Soto', text: 'A good meal fixes more than an empty stomach, dear. Cook something warm before a long day.' },
+  { who: 'Granny Sato', text: 'A good meal fixes more than an empty stomach, dear. Cook something warm before a long day.' },
   { who: 'Genji', text: 'The big ones only bite for patient hands. And better gear. Mostly better gear.' },
   { who: 'a konbini regular', text: 'They say the shrine keeps count of every coin you drop in that box.' },
   { who: 'a salaryman at Club Kaiju', text: 'Someone at the casino hit it big last week. Someone else lost their tie. Same guy, probably.' },
