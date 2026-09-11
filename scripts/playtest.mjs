@@ -2,7 +2,7 @@
 // playtest.mjs — drive *Little Apartment, Big City* in a real browser so Claude
 // can playtest with confidence: boot it, seed a save, send inputs, read live
 // game state, and screenshot. Pure Playwright + the Vite dev server; no Rust,
-// no Tauri. See kb/playtesting.md for the full guide.
+// no Tauri. See kb/testing.md for the full guide.
 //
 // Quick examples:
 //   node scripts/playtest.mjs shot --new                       # title → new game, screenshot
