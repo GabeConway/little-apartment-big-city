@@ -13,7 +13,7 @@ router, no site chrome. Input: keyboard, touch, or game controller.
 
 ## Layout
 - `src/main.tsx` — entry; mounts `<LittleApartmentGame/>` at the title screen.
-- `src/game/` — the game (7 files). **Imports only `react` + sibling files — keep it dependency-free.**
+- `src/game/` — the game (8 files). **Imports only `react` + sibling files — keep it dependency-free.**
 - `src/index.css` — Tailwind + self-hosted `@fontsource` imports.
 - `public/` — `images/`, `music/`, `sfx/` (assets are absolute paths: `/images/...`).
 - `src-tauri/` — Tauri v2 project (Rust). See [kb/build-targets.md](kb/build-targets.md).
@@ -27,7 +27,7 @@ Seven files, indexed in [kb/README.md](kb/README.md). Read before editing the ma
 - [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
 - [kb/testing.md](kb/testing.md) — the 3-command health check, Vitest setup, the Playwright playtest harness (`npm run playtest`), and the bug-hunting playbook.
 - [kb/conventions.md](kb/conventions.md) — coding conventions + dependency versions and security policy.
-- [kb/future-ideas.md](kb/future-ideas.md) — parked work, ideas backlog, sfx wishlist.
+- [kb/future-ideas.md](kb/future-ideas.md) — parked work, ideas backlog, sfx wishlist, **and the "Known bugs" list (verified, unfixed, with repro steps) — check it before hunting a bug.**
 
 ## Commands
 - `npm run dev` — Vite dev server in a browser (fast iteration only; not a ship target). No Rust needed.
@@ -46,6 +46,11 @@ Day-to-day work is committed and pushed to the **`DEV` branch** — not `main`, 
 - Persistence is `localStorage` (`lab-save` v2, `lab-music-muted`, `lab-scale`) — portable across all webviews.
 - Canvas backing must be an integer multiple of 384×224 device px (Retina sharpness).
 - Fonts are self-hosted (`@fontsource`, plus Naganoshi JP pixel font in `public/fonts/`), not the Google Fonts CDN — required for offline native.
+- Every mp3 in `public/music`, `public/sfx` and `assets/music` ships **metadata-free**:
+  `ffmpeg -i in.mp3 -map 0:a -map_metadata -1 -id3v2_version 0 -c:a copy out.mp3`.
+  **Keep the Xing/LAME header** — stripping it un-trims the encoder delay, shifting decoded
+  audio ~36ms and desyncing the audio-clock-locked karaoke chart. Verify a strip by diffing
+  decoded PCM (`ffmpeg -i f.mp3 -f s16le -`), not by the duration field.
 
 ## Validate every change
 `npx tsc --noEmit` clean, then `npm test` (Vitest) clean, then `npm run build` clean. Then smoke-test via `npm run preview` (or `npm run desktop:dev`). CI runs all three on every PR; a Claude pre-commit hook runs `npm test` before commits (see [kb/testing.md](kb/testing.md)).

@@ -67,6 +67,49 @@ No npm deps (React only). All art in-code (CSP). Logical view **384×224** (24×
 
 ## Recent changes (post-decor build)
 
+### 2026-09-11 — go-public audit + v1.1.1 (Linux release build fixed) (on `main`)
+Repo-hygiene pass before making the repository public, committed **straight to `main`**
+at the owner's request (the usual DEV-first rule was waived for this one).
+- **Music metadata** 🎵 — `greenhouse`, `museum`, `karaoke-midnight-neon` (and both
+  source masters in `assets/music/`) still carried full ID3: artist alias, `suno.com`
+  song URLs, `Made with suno` comments, cover art, and for *Midnight Neon* the complete
+  lyrics in a `USLT` frame. All 27 mp3s now strip clean. **The strip command matters:**
+  use `-map_metadata -1 -id3v2_version 0` and **keep the Xing/LAME header**. Dropping it
+  (`-write_xing 0`) un-trims the encoder delay and shifts decoded audio ~36 ms — which
+  silently desyncs the **audio-clock-locked karaoke chart** (70 ms perfect window). This
+  was caught by diffing decoded PCM; the shipped files are byte-identical in PCM to the
+  originals. Verify any future strip the same way, don't trust the duration field alone.
+- **Jean-Pierre de-stereotyped** — the phonetic `ze/zis/zere/wizout` respelling is gone
+  across all 4 sites. His French now reads through vocabulary (`Bonjour`, `Magnifique`,
+  `mon ami`, `C'est la vie`, `Non non non`) and syntax (present tense, no contractions).
+  Beret, breton stripes and baguette unchanged. Don't reintroduce eye-dialect.
+- **Granny Soto → Sato** — the rename had only been half-applied; the game was showing
+  players *both* spellings (friends list and heart scenes said Sato, greenhouse dialogue
+  and the journal lead said Soto). 10 sites fixed. `kb` build-history entries below
+  deliberately keep the old spelling as a dated record.
+- **Linux release build fixed** 🐧 — `gilrs` → `gilrs-core` → `libudev-sys` shells out to
+  `pkg-config --libs --cflags libudev` in its build script and panics without it. This
+  failed the `ubuntu-22.04` job on the 1.1.0 run (macOS + Windows succeeded, so 1.1.0
+  shipped incomplete). `release.yml` now installs `libudev-dev`; the full host list is in
+  [build-targets.md](build-targets.md) — **keep the two in sync**. v1.1.1 is the first
+  release with all three platforms green (6 artifacts).
+- **Going public** — added `LICENSE` (source-available: read, learn, build for yourself;
+  no redistribution or resale; OFL fonts credited), a short AI-assistance note in the
+  README footer covering **code and assets**, `.github/dependabot.yml` (monthly, grouped,
+  targets DEV), and `permissions: contents: read` on CI now that fork PRs will run it.
+  Deleted `kb/steam.md` — the Steam port is not planned — but its **WebView2 notes moved
+  to build-targets.md**, because `src-tauri/src/webview2.rs` guards *every* Windows build,
+  not just a Steam depot.
+- **Docs corrected**: README/CLAUDE.md/GitHub About all claimed the game ships on
+  "Windows, macOS, Linux, iOS and Android". Desktop is the only ship target — `src-tauri/gen/`
+  has no android/ios projects and `release.yml` builds desktop only.
+- **From the code review**: fixed a `useUiNav` key-auto-repeat hole (Space is also the
+  in-world interact key, so *holding* it on the title walked focus onto DELETE SAVE and
+  then confirmed it) and a `gemini-portraits.mjs` roster entry pointing at the deleted
+  `granny-soto.png`. **Five other verified bugs from that review are UNFIXED** — two of
+  them eat player money. They're written up with repro steps in
+  [future-ideas.md](future-ideas.md) "Known bugs".
+
 ### 2026-09-11 — town-event attendance, prestige gating, museum & gift clarity (on `DEV`)
 Playtest-report batch. Five reported problems plus one found while fixing them.
 - **Town-event attendance** 🎣🏮 — the derby crowd used `npc-granny`/`npc-charlie`/`npc-collector` sprites while those NPCs were *still running their `ROUTINES`* elsewhere, so you could stand next to Granny in the city and watch a second Granny fish the shore. **The same bug existed at festivals** (`npc-charlie` goer in the city, `npc-miko` at the shrine) and is fixed by the same code. New pure state helpers **`TOWN_EVENT_ATTENDEES`/`TOWN_EVENT_END_MIN`/`townEventNow`/`atTownEventNow`** (+ `TownEvent` type): attendees are hidden from their venue (`npcHiddenNow` + `makeWanderers`, which now takes the save) and staged at the event as **real, talkable people** — quests, gifts and hangouts all intact, so Granny's greenhouse key and Charlie's film never go dark for a day. Windows are per-event and **must match how long the staging is drawn**, or the duplicate returns at the seam: derby ends 8 PM (its crowd draw is gated on `townEventNow`, not the calendar day), festivals run to the 2 AM collapse. Wanderers rebuild on the flip so folk walk home without a scene change. Derby attendees = granny/charlie/collector/mechanic (+2 anonymous beachgoers; `npc-stranger` dropped — that's the midnight stranger's sprite); festival = charlie/miko. **`townEventIntro`** gives each attendee an opening line that reads your **live derby tally** (no fish / on the board / leading). Also: the daily shore forage scatter can seed *under* an attendee, and the forage check runs first — it used to win, making that townsperson unreachable all derby; occupied spots are now skipped (indices untouched, so `foragedSpots` stays valid).

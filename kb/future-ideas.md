@@ -35,8 +35,90 @@ See kb/games.md Casino section + the four 07-02 "Recent changes" batches. Left:
   it. If it recurs: get WHERE + time of day ('Talk' only comes from an NPC on
   the faced tile).
 
+## Known bugs — found by code review 2026-09-11, each verified in code, all UNFIXED
+Found during the go-public audit. These are confirmed defects, not ideas: every one
+was traced through the source before being written down. Ordered worst first. They
+predate the audit and are live in v1.1.1.
+
+1. **Bailing a slots/roulette spin eats the stake.** `spinSlots`
+   (LittleApartmentGame.tsx:7465) debits `s.money -= slot.bet` at :7469 and fixes the
+   outcome in `slot.final` at :7471. If the player closes the overlay before the reels
+   land, the `[overlay]` effect at :1561 clears the interval **and sets
+   `slot.phase = 'idle'`**. The `settleSlots(true)` guard that exists for exactly this
+   case is only called from `startSlots` (:2792) — i.e. the *next* time the machine is
+   opened — and bails immediately at `if (slot.phase !== 'spin') return;` (:7443),
+   because the effect already flipped the phase. Net: stake gone, `slot.final`
+   discarded, nothing ever paid. A 7-7-7 plus the whole progressive jackpot can vanish.
+   `settleRoulette` has the identical shape (:7511/:7514, called from :2799).
+   *Fix:* settle inside the `[overlay]` effect, or stop resetting `phase` there.
+
+2. **Leaving the shore locks in the derby prize for the rest of the day.**
+   `enterScene` calls `settleDerby` on any exit from `TOURNAMENT_SCENE`
+   (LittleApartmentGame.tsx:2089). `settleDerbyPrize` (state.ts:1659) stamps
+   `storySeen['tournament-prize-<day>']` on the first settle and returns `null`
+   forever after. But `derbyScoreRef` keeps accumulating all day (only reset when
+   `derbyDayRef.current !== s.day`), and the derby banner + chalkboard keep
+   advertising the rising tally and the next tier. *Repro:* catch one minnow (~8 pts,
+   Bronze ¥200 paid), walk to the city for bait, come back and grind to 600 pts —
+   Grand Marlin is displayed, ¥2,200 is never paid.
+   *Fix:* let a later, higher tier top up the difference, or don't settle until the
+   day actually ends.
+
+3. **Home onsen is placed on the fridge's tile.** `HOME_ONSEN_TILE = { x: 13, y: 1 }`
+   (LittleApartmentGame.tsx:41); `maps.ts:67` has
+   `{ itemId: 'fridge', x: 13, y: 1, w: 1, h: 1, solid: true }`. The comment above the
+   constant claims the tile is clear of the futon, maneki and trophy shelf — it does
+   not account for the row-1 appliance slots. `mergeSave` (state.ts:354) auto-places
+   owned items at those slots for v1 saves, so a migrated save with a fridge that buys
+   the onsen gets both sprites on one solid tile, with the `home-onsen` interactable
+   sitting on the fridge. The `occ` guard at :8410 only blocks *future* placement.
+
+4. **The ¥9,000 City Bicycle does nothing.** `'bicycle'` appears exactly once in the
+   whole game — its own definition at data.ts:152. `s.vehicles` is only ever read for
+   `'car'` (driving, `carPos`, Kojima) and `'boat'` (deep-sea/island access, coconut
+   errand gating). No movement-speed effect, no scene access, and it's explicitly
+   excluded from the vehicle achievement. *Fix:* wire it to player speed, or drop it
+   from `VEHICLES`.
+
+5. **The "fully furnished" window line is unreachable.** LittleApartmentGame.tsx:3554
+   still tests `n < FURNITURE.length`, which became 24 when the 14 `optional: true`
+   decor pieces were appended to `FURNITURE`. Every other consumer was updated to
+   filter first — `allFurnished` (state.ts:832) and `coreFurniture` (:9023) both use
+   `FURNITURE.filter(f => !f.optional)`. So a player who furnishes the core set never
+   sees the payoff line. *Fix:* filter `!f.optional` here too.
+
+Two more findings from the same review are already resolved, recorded so they aren't
+re-reported: the `useUiNav` key-auto-repeat hole (holding Space on the title walked
+focus onto DELETE SAVE and confirmed it) and the `gemini-portraits.mjs` roster pointing
+at the deleted `granny-soto.png` — both fixed in the 2026-09-11 public-prep commit. A
+sixth claim, that the tea blurb's "Pricey to start" contradicts its price, is **not a
+bug**: at ¥350 tea is the second-most-expensive seed (melon 400 > tea 350 > chili 160 >
+tomato 140 > sunflower 80).
+
 ## Audit leftovers (accepted, watch)
 - Max-luck seacave sift: 37% daily Astral Stone at caveLuck 5.
+- **Accepted naming/IP risks** (go-public audit 2026-09-11 — all judged fine to ship,
+  listed so the reasoning isn't re-derived, and because they'd matter more if the game
+  is ever *sold* rather than given away):
+  - **"Backrooms"** (52 refs) — creepypasta origin, contested trademark filings exist.
+    Ubiquitous in indie games, but it's the one name most likely to draw a letter on a
+    commercial storefront. Renaming is cheap now, expensive after a store page exists.
+  - **ZamaZonk** — the arrow curves under the wordmark the way Amazon's does. The
+    closest thing in the game to real trade dress; changing the arc de-risks it.
+  - Other parody brands are standard practice and low risk: Bepsi, Diet Doctor Peepis,
+    Doki Doki Discount, NAKATOMI (Die Hard wink).
+  - **Name collisions, no legal issue**: the miko is named **Yoshi** and the mechanic
+    **Kojima**. Both are real Japanese names; both read as jokes the game isn't making.
+- **Cleared, no action** (same audit): the Shinto content is accurate and respectful
+  (etiquette, omikuji, tanzaku, komainu, temizuya, saisen-bako, shimenawa; Yoshi is
+  dignified and not sexualized); no slurs, sexual content or drug references anywhere
+  in the script; the yakuza toll-gate is genre-standard. Jean-Pierre's phonetic
+  `ze/zis/wizout` respelling was removed in the same pass — his French now reads
+  through vocabulary and syntax, with the beret, breton stripes and baguette intact.
+- **Dev-dependency CVEs**: `npm audit` reports 0 production vulns and ~9 dev-only
+  (vitest/vite/postcss/esbuild/browserslist). None ship in the game binary. Dependabot
+  (`.github/dependabot.yml`, monthly, grouped, targets DEV) now files these, so don't
+  hand-patch them.
 
 ## The Hacker (fourth-wall character) — owner idea 2026-07-02
 A character who can "hack" the actual game and is aware of the USER playing it
