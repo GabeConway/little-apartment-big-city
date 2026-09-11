@@ -12,8 +12,12 @@ import {
   RECIPES, recipeById, STARTER_RECIPES, GIFT_POINTS, HEART_POINTS, MAX_HEARTS,
   friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
   FRIENDS, FRIEND_HEART_LINES, HANGOUTS, HOME_VISITS,
+  SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE,
+  MISSIONS,
+  fishingTournamentDay, tournamentTierFor, festivalFor, TOURNAMENT_SCENE,
 } from './data';
-import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind } from './data';
+import type { TournamentTier } from './data';
+import type { Recipe, BuffId, GiftKind, GiftTier, IngredientKind, Fish, FishSky, Mission } from './data';
 import type { HangoutScene, HomeVisit } from './data';
 import type { CropRequest } from './data';
 import type { Errand, StreetEvent } from './data';
@@ -50,6 +54,10 @@ export interface GameSave {
   palmDay: number;              // day the shaken-palm list belongs to
   palmsShaken: string[];        // "x,y" palms/bananas already shaken today
   onsenDay: number;             // last day you soaked in the island hot spring (0 = never)
+  shrineRestored: boolean;      // funded the shrine's restoration → permanent extra luck tier
+  charliePatron: boolean;       // became Charlie's patron
+  homeOnsen: boolean;           // bought the private home onsen (a hot spring at the apartment)
+  homeOnsenDay: number;         // last day you soaked in the home onsen (0 = never)
   gacha: Record<string, number>; // figure name -> count
   hat: boolean;                 // Tex's $67 cowboy hat (worn on the sprite)
   peepis: number;               // cans of "Diet Doctor Peepis" in your pocket
@@ -87,6 +95,7 @@ export interface GameSave {
   forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
   foragedSpots: number[];       // indices of today's shore finds already grabbed
   errandDay: number;            // last day the odd-jobs board errand was completed (0 = none); one per day
+  caveDropDay: number;          // last day the island sea cave was searched for drops (0 = none); one per day
   deliveryDay: number;          // last day the Kojima Motors delivery race was run (0 = never); one per day
   deliveryBest: number;         // best delivery time in seconds (0 = none yet); lower is better
   streetEventDay: number;       // last day the daily random street event was completed (0 = none); one per day
@@ -102,7 +111,11 @@ export interface GameSave {
   museum: { donated: string[] }; // MUSEUM_SLOTS ids the player has donated a piece to (empty by default)
   greenhouse: GreenhouseState;  // Granny Soto's community greenhouse (crop plots + sprinklers)
   cat: { found: boolean; name: string }; // the black stray adopted from the Downtown dumpster; roams the apartment
+  catPetDay: number;            // last day David was petted (0 = never); one pet per day
+  catGiftDay: number;           // last day David left a morning gift by the door (0 = never)
+  missionsDone: string[];       // Journal MISSIONS steps already completed + paid (data.ts)
   collectibles: string[];       // museum collectible item ids found but not yet donated (in your bag)
+  keepsakes: string[];          // friendship-capstone keepsake ids held (see KEEPSAKES in data.ts)
   almanac: { minerals: string[]; forage: string[] }; // Almanac app: ever-discovered sets (ore struck / shore finds grabbed) — survives selling
   // --- Cooking / Friendship / Decor (all default-safe; see kb/games.md) ---
   friends: Record<string, { pts: number; giftDay: number }>; // npc id -> friendship points + last day gifted
@@ -110,6 +123,7 @@ export interface GameSave {
   produce: Record<string, number>;  // greenhouse crops KEPT (not shipped) for cooking (cropId -> count)
   dishes: Record<string, number>;   // cooked, uneaten dishes (recipeId -> count)
   recipes: string[];                // recipe ids the player knows
+  cookedLog: string[];              // recipe ids EVER cooked (drives cooking achievements)
   buff: { id: BuffId; day: number } | null; // active food buff (only valid while day matches)
   decor: { wall: string; floor: string };   // applied room style (DECOR ids; 'default' = original tiles)
   ownedDecor: string[];             // DECOR ids owned (wall/floor/rug)
@@ -118,6 +132,12 @@ export interface GameSave {
   jukeboxUnlocked: boolean;         // bought the home jukebox from DJ Tanuki (gates the Music phone app)
   homeTrack: string | null;         // jukebox: scene id whose music plays at the apartment (null = default theme)
   skills: { fish: number; mine: number; farm: number }; // gathering XP per skill (level derived)
+  casinoWins: number;               // lifetime winning casino bets (any game); opens the Kinryū backroom
+  jackpotDay: number;               // day the progressive slots jackpot was last hit (0 = never; pot grows since)
+  bossDuelDay: number;              // day of the last boss-duel hand (0 = never; one hand a night)
+  bossDuelLosses: number;           // times TOWZAWA has lost the duel — his gracious line quiets down
+  bossDuelPlayed: number;           // total duel hands dealt — Towzawa keeps the ledger, and quotes it
+  duelRulesWon: string[];           // HouseRuleId's you've beaten the boss duel under (drives 'read-the-placard')
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -236,6 +256,10 @@ export const newSave = (): GameSave => ({
   palmDay: 0,
   palmsShaken: [],
   onsenDay: 0,
+  shrineRestored: false,
+  charliePatron: false,
+  homeOnsen: false,
+  homeOnsenDay: 0,
   gacha: {},
   hat: false,
   peepis: 0,
@@ -273,6 +297,7 @@ export const newSave = (): GameSave => ({
   forageDay: 0,
   foragedSpots: [],
   errandDay: 0,
+  caveDropDay: 0,
   deliveryDay: 0,
   deliveryBest: 0,
   streetEventDay: 0,
@@ -288,13 +313,18 @@ export const newSave = (): GameSave => ({
   museum: { donated: [] },
   greenhouse: freshGreenhouse(),
   cat: { found: false, name: '' },
+  catPetDay: 0,
+  catGiftDay: 0,
+  missionsDone: [],
   collectibles: [],
+  keepsakes: [],
   almanac: { minerals: [], forage: [] },
   friends: {},
   pantry: {},
   produce: {},
   dishes: {},
   recipes: [...STARTER_RECIPES],
+  cookedLog: [],
   buff: null,
   decor: { ...DEFAULT_DECOR },
   ownedDecor: [...STARTER_DECOR],
@@ -303,13 +333,18 @@ export const newSave = (): GameSave => ({
   jukeboxUnlocked: false,
   homeTrack: null,
   skills: { fish: 0, mine: 0, farm: 0 },
+  casinoWins: 0,
+  jackpotDay: 0,
+  bossDuelDay: 0,
+  bossDuelLosses: 0,
+  bossDuelPlayed: 0,
+  duelRulesWon: [],
 });
 
-export const loadSave = (): GameSave | null => {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<GameSave>;
+// Merge a parsed (possibly older / partial) save blob over fresh defaults and run
+// every migration. Shared by loadSave (localStorage) and importSaveCode (pasted
+// codes) so an imported save survives shape changes exactly like a stored one.
+const mergeSave = (parsed: Partial<GameSave>): GameSave => {
     // Merge over defaults so older saves survive shape changes.
     const s = { ...newSave(), ...parsed };
     // Migration: v1 saves predate the placement system — auto-place everything
@@ -349,6 +384,51 @@ export const loadSave = (): GameSave | null => {
     // Almanac: default-safe nested merge so older saves (and partial future ones) get both sets.
     s.almanac = { minerals: [], forage: [], ...s.almanac };
     return s;
+};
+
+export const loadSave = (): GameSave | null => {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return null;
+    return mergeSave(JSON.parse(raw) as Partial<GameSave>);
+  } catch { return null; }
+};
+
+// ---- Save export / import codes ------------------------------------------------
+// A save serialized to one copy-pasteable string (phone Settings app): UTF-8 JSON
+// → base64. TextEncoder handles unicode (names like "ゆき" would blow up a bare
+// btoa, which only eats latin-1); encoding is chunked so a fat endgame save can't
+// overflow the argument list. Dependency-free — btoa/atob + TextEncoder exist in
+// every webview (and node ≥16, for the tests).
+const b64encode = (str: string): string => {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+const b64decode = (b64: string): string => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+};
+
+export const exportSaveCode = (s: GameSave): string => b64encode(JSON.stringify(s));
+
+// Paste-side: decode + parse, refuse anything that isn't plausibly a v2 save
+// (tampered/truncated codes fail the base64/JSON step; a wrong-shaped blob fails
+// the type checks), then run the SAME default-merge + migrations as loadSave.
+// Returns null on any rejection — the caller shows the friendly message.
+export const importSaveCode = (code: string): GameSave | null => {
+  try {
+    const parsed = JSON.parse(b64decode(code.trim())) as Partial<GameSave>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    if (parsed.v !== 2) return null;
+    if (typeof parsed.money !== 'number' || !Number.isFinite(parsed.money)) return null;
+    if (typeof parsed.day !== 'number' || parsed.day < 1) return null;
+    if (typeof parsed.name !== 'string' || typeof parsed.scene !== 'string') return null;
+    if (!Array.isArray(parsed.owned)) return null;
+    return mergeSave(parsed);
   } catch { return null; }
 };
 
@@ -394,6 +474,17 @@ export const sleep = (s: GameSave): void => {
 export const isRainyDay = (s: GameSave): boolean =>
   !s.rainCleared && (s.forceRain || (s.day > 1 && mulberry32(s.day * 1013904223 + 53)() < 0.2));
 
+// Even shopkeepers take a sick day. ~10% chance a given retail shop is shut for
+// the day — seeded per day + shop so it's stable across reloads but a surprise.
+// The konbini (24h) and service venues never close; only the proper storefronts.
+const CLOSEABLE_STORES = new Set(['denden', 'pawn', 'gacha']);
+export const storeClosedToday = (day: number, sceneId: string): boolean => {
+  if (day <= 1 || !CLOSEABLE_STORES.has(sceneId)) return false;
+  let h = 0;
+  for (let i = 0; i < sceneId.length; i++) h = (h * 31 + sceneId.charCodeAt(i)) | 0;
+  return mulberry32(day * 2654435761 + h * 40503 + 17)() < 0.1;
+};
+
 // Extra outdoor weather, layered on top of (and mutually exclusive with) rain.
 // Each is its own per-day seeded roll — stable across reloads, never day 1 — but
 // priority is enforced by construction: rain wins over fog, and a meteor shower
@@ -411,6 +502,21 @@ export const foggyDay = (s: GameSave): boolean =>
 // one wish per shower-night (see `wishDay`) for a next-day `lucky` buff.
 export const meteorNight = (s: GameSave): boolean =>
   !isRainyDay(s) && !foggyDay(s) && s.day > 1 && mulberry32(s.day * 374761397 + 89)() < 0.062;
+
+// ---- Weather-gated fish --------------------------------------------------------
+// The SKY snapshot a Fish.when predicate reads (see the weather-only species in
+// data.ts). The Stargazer only rises to a shower sky once it's properly dark —
+// past half the evening ramp — so a meteor-forecast day can't hook it at noon.
+export const fishSky = (s: GameSave): FishSky => ({
+  rainy: isRainyDay(s),
+  meteorNight: meteorNight(s) && nightT(s) > 0.5,
+});
+// Filter a bite table down to the species actually biting under today's sky.
+// Ungated fish always pass, so a clear day just yields the classic table.
+export const biteTableFor = (s: GameSave, table: Fish[]): Fish[] => {
+  const sky = fishSky(s);
+  return table.filter(f => !f.when || f.when(sky));
+};
 
 // ---- Daily special events ----------------------------------------------------
 // At most one "special day" rolls per day — seeded so it's stable across reloads,
@@ -479,19 +585,29 @@ export const timeBlock = (timeMin: number): RoutineBlock => {
 
 export interface RoutineStop { block: RoutineBlock; tile: { x: number; y: number } }
 
-// Scene-local tiles (verified walkable + reachable against maps.ts). Each NPC id
-// matches its `npcs[]` entry in maps.ts. Cover folk with a clear scene + role:
-//   granny  — city: greenhouse in the morning, the torii-garden pond by midday
-//   charlie — city: loiters by the konbini, drifts west then down to the garden
-//   miko    — shrine: works the forecourt around the honden, gate, and lanterns
-//   tex     — shore: dune grass up top, then down to the waterline and along it
-//   old-man — shore: Genji the angler hugs the waterline, rests up on the sand
+// Scene-local tiles (verified walkable + reachable against maps.ts: cross-checked
+// each tile against the scene's grid + legend, avoiding solids/warps/props). Each
+// NPC id matches its `npcs[]` entry in maps.ts, and must also be in WANDER_IDS in
+// the monolith so it's spawned as a live, routine-steered wanderer. Folk with a
+// clear scene + role:
+//   granny      — city: greenhouse at dawn, the torii-garden pond by midday, home at night
+//   charlie     — city: loiters by the konbini, drifts west then down to the garden
+//   miko        — shrine: works the forecourt around the honden, gate, and lanterns
+//   tex         — shore: dune grass up top, down to the waterline, then by the boardwalk
+//   old-man     — shore: Genji the angler hugs the waterline, rests up on the sand
+//   dancer2/3/4 — nightclub: drift the dancefloor + bar across the night
+//   kaiju       — nightclub: the club mascot prowls the floor edges
+//   mechanic    — garage: lifts at open, the counter midday, the bays, the toolbench
+//   bingus      — museum: the curator does the rounds of the gallery floor
+//   tiki        — island: the tiki host works the bar, the sands, then up among the palms
+//   casino-host — casino: greets the floor, slots → roulette → blackjack side
+//   collector   — gacha: browses the cabinets corner to corner
 export const ROUTINES: Record<string, RoutineStop[]> = {
   granny: [
     { block: 'morning', tile: { x: 15, y: 14 } }, // outside the greenhouse door
     { block: 'midday', tile: { x: 24, y: 14 } },  // open grass by the torii garden (not the boxed-in pocket)
     { block: 'evening', tile: { x: 12, y: 16 } }, // back toward home/the planters
-    { block: 'night', tile: { x: 12, y: 16 } },
+    { block: 'night', tile: { x: 8, y: 16 } },    // pottering the home-block grass after dark
   ],
   charlie: [
     { block: 'morning', tile: { x: 15, y: 3 } },  // sidewalk outside the konbini
@@ -509,13 +625,73 @@ export const ROUTINES: Record<string, RoutineStop[]> = {
     { block: 'morning', tile: { x: 9, y: 3 } },   // up on the dune grass
     { block: 'midday', tile: { x: 10, y: 7 } },   // down on the warm sand
     { block: 'evening', tile: { x: 16, y: 6 } },  // strolling east along the beach
-    { block: 'night', tile: { x: 9, y: 3 } },
+    { block: 'night', tile: { x: 18, y: 3 } },    // packing the stand up by the boardwalk gate
   ],
   'old-man': [
     { block: 'morning', tile: { x: 4, y: 8 } },   // Genji at the waterline
     { block: 'midday', tile: { x: 12, y: 8 } },   // working the tide further along
     { block: 'evening', tile: { x: 6, y: 6 } },   // up on the sand
     { block: 'night', tile: { x: 4, y: 4 } },     // resting on the grass
+  ],
+  // --- Club Kaiju patrons (dancefloor = 'd' tiles, surrounding floor = '.') ----
+  dancer2: [
+    { block: 'morning', tile: { x: 11, y: 7 } },  // far corner of the floor
+    { block: 'midday', tile: { x: 8, y: 4 } },    // up toward the front of the floor
+    { block: 'evening', tile: { x: 5, y: 7 } },   // back-left of the floor
+    { block: 'night', tile: { x: 10, y: 5 } },    // mid-floor, peak hours
+  ],
+  dancer3: [
+    { block: 'morning', tile: { x: 6, y: 4 } },
+    { block: 'midday', tile: { x: 10, y: 6 } },
+    { block: 'evening', tile: { x: 4, y: 7 } },
+    { block: 'night', tile: { x: 8, y: 5 } },
+  ],
+  dancer4: [
+    { block: 'morning', tile: { x: 9, y: 7 } },
+    { block: 'midday', tile: { x: 5, y: 4 } },
+    { block: 'evening', tile: { x: 11, y: 4 } },
+    { block: 'night', tile: { x: 7, y: 6 } },
+  ],
+  kaiju: [
+    { block: 'morning', tile: { x: 13, y: 3 } },  // by the DJ side
+    { block: 'midday', tile: { x: 6, y: 7 } },    // down across the floor
+    { block: 'evening', tile: { x: 3, y: 1 } },   // prowling the back wall
+    { block: 'night', tile: { x: 13, y: 5 } },    // right edge of the floor
+  ],
+  // --- Kojima Motors (avoids lifts P / benches T / counter C / tires Y / B) ----
+  mechanic: [
+    { block: 'morning', tile: { x: 3, y: 3 } },   // by the hydraulic lifts at open
+    { block: 'midday', tile: { x: 4, y: 5 } },    // at the parts counter
+    { block: 'evening', tile: { x: 13, y: 4 } },  // out on the oil-stained bay floor
+    { block: 'night', tile: { x: 11, y: 1 } },    // tidying the toolbench wall
+  ],
+  // --- Kawamachi Museum (floor only; avoids pedestals 'p' + wall frames 'A') ---
+  bingus: [
+    { block: 'morning', tile: { x: 2, y: 1 } },   // opens up the west gallery
+    { block: 'midday', tile: { x: 13, y: 3 } },   // the east wall of frames
+    { block: 'evening', tile: { x: 7, y: 6 } },   // centre of the hall
+    { block: 'night', tile: { x: 3, y: 7 } },     // closing rounds, south-west
+  ],
+  // --- Kiwami Island (sand 's' + grass 'g'; avoids water/lagoon/palms/tiki) ----
+  tiki: [
+    { block: 'morning', tile: { x: 7, y: 10 } },  // tending the tiki bar
+    { block: 'midday', tile: { x: 15, y: 12 } },  // along the south sands
+    { block: 'evening', tile: { x: 18, y: 6 } },  // up among the palm grove
+    { block: 'night', tile: { x: 5, y: 9 } },     // back by the island signpost
+  ],
+  // --- Kinryū Lounge (carpet only; avoids slots S / poker V / blackjack B / roulette R r) -
+  'casino-host': [
+    { block: 'morning', tile: { x: 2, y: 4 } },   // greets near the west slots
+    { block: 'midday', tile: { x: 7, y: 7 } },    // working the centre floor
+    { block: 'evening', tile: { x: 13, y: 2 } },  // the east side, top
+    { block: 'night', tile: { x: 7, y: 4 } },     // by the roulette, peak hours
+  ],
+  // --- Gacha Gacha (floor only; avoids the cabinets 'G') -----------------------
+  collector: [
+    { block: 'morning', tile: { x: 3, y: 2 } },   // first cabinets of the day
+    { block: 'midday', tile: { x: 9, y: 3 } },    // east bank of machines
+    { block: 'evening', tile: { x: 6, y: 5 } },   // the back row
+    { block: 'night', tile: { x: 3, y: 6 } },     // last pulls, south-west corner
   ],
 };
 
@@ -604,22 +780,25 @@ export const errandDoneToday = (s: GameSave): boolean => s.errandDay === s.day;
 // The minigame physics/draw live in LittleApartmentGame.tsx (driveRef, like the
 // shift game) — only the daily gate + the payout math live here so they're unit-
 // testable and default-safe across saves.
-export const DELIVERY_TIME_LIMIT = 60;      // seconds — deliver under this for the full bonus
+export const DELIVERY_TIME_LIMIT = 60;      // seconds — the DEFAULT limit (each track sets its own; see DRIVE_TRACKS)
 export const DELIVERY_BASE = 900;           // flat fee for a completed delivery
-export const DELIVERY_ACE_TIME = 34;        // deliver under this (seconds) → the "ace driver" achievement
+export const DELIVERY_ACE_FRAC = 0.57;      // "ace driver" = finishing under ~57% of the track's limit
+// Ace threshold for a given track limit (proportional, so it's fair on long + short courses).
+export const driveAceTime = (timeLimit: number = DELIVERY_TIME_LIMIT): number => Math.round(timeLimit * DELIVERY_ACE_FRAC);
 export const deliveryDoneToday = (s: GameSave): boolean => s.deliveryDay === s.day;
 export interface DrivePayout { total: number; base: number; timeBonus: number; cleanBonus: number; onTime: boolean }
-// elapsedSec = run time; grassSec = seconds spent off the dirt (the clean-driving penalty).
+// elapsedSec = run time; grassSec = seconds spent off the dirt (the clean-driving penalty);
+// timeLimit = the active track's limit (longer courses get more seconds — see DRIVE_TRACKS).
 // On-time runs earn base + a big time bonus (faster is more, capped) + a clean bonus.
 // A late delivery still pays — just a smaller flat "late" fee (cozy: never fail-hard).
-export const drivePayout = (elapsedSec: number, grassSec: number): DrivePayout => {
-  const onTime = elapsedSec <= DELIVERY_TIME_LIMIT;
+export const drivePayout = (elapsedSec: number, grassSec: number, timeLimit: number = DELIVERY_TIME_LIMIT): DrivePayout => {
+  const onTime = elapsedSec <= timeLimit;
   if (!onTime) {
     const late = Math.round(DELIVERY_BASE * 0.4);
     return { total: late, base: late, timeBonus: 0, cleanBonus: 0, onTime: false };
   }
   const base = DELIVERY_BASE;
-  const timeBonus = Math.min(2000, Math.round(Math.max(0, DELIVERY_TIME_LIMIT - elapsedSec) * 42));
+  const timeBonus = Math.min(2000, Math.round(Math.max(0, timeLimit - elapsedSec) * 42));
   const cleanBonus = Math.round(Math.max(0, 1 - grassSec / 8) * 450);
   return { total: base + timeBonus + cleanBonus, base, timeBonus, cleanBonus, onTime: true };
 };
@@ -648,8 +827,9 @@ export const buyFurniture = (s: GameSave, itemId: string, price: number): boolea
 };
 
 // The ending wants the furniture actually IN the apartment, not in boxes.
+// Optional decor (f.optional) is ignored — only the core, non-optional set gates it.
 export const allFurnished = (s: GameSave): boolean =>
-  FURNITURE.every(f => Boolean(s.placed[f.id]));
+  FURNITURE.filter(f => !f.optional).every(f => Boolean(s.placed[f.id]));
 
 // True once every one of The Manager's rare furniture pieces has been acquired
 // (owned, boxed or placed). Drives the Manager's Paris reveal. The coffin is
@@ -685,10 +865,213 @@ export const donateToMuseum = (s: GameSave, slotId: string): boolean => {
 export const museumComplete = (s: GameSave): boolean =>
   MUSEUM_SLOTS.every(sl => s.museum.donated.includes(sl.id));
 
+// The Collection app's view of the gallery. `s.collectibles` had no UI anywhere,
+// so a curio in your pocket was invisible and there was no way to tell which
+// display it belonged to. Three states per slot, in MUSEUM_SLOTS order:
+//   'donated' — on display; show its label + blurb
+//   'held'    — in your bag right now; go find its plinth
+//   'unfound' — you have never seen it; stays a '???' (no spoilers)
+export type MuseumSlotStatus = 'donated' | 'held' | 'unfound';
+export const museumSlotStatus = (s: GameSave, slotId: string): MuseumSlotStatus =>
+  s.museum.donated.includes(slotId) ? 'donated'
+  : s.collectibles.includes(slotId) ? 'held'
+  : 'unfound';
+export const museumProgress = (s: GameSave): { slotId: string; status: MuseumSlotStatus }[] =>
+  MUSEUM_SLOTS.map(sl => ({ slotId: sl.id, status: museumSlotStatus(s, sl.id) }));
+// How many curios are in your bag waiting to be donated (drives the HUD chip).
+export const heldCollectibleCount = (s: GameSave): number =>
+  s.collectibles.filter(id =>
+    MUSEUM_SLOTS.some(sl => sl.id === id) && !s.museum.donated.includes(id)).length;
+
+// ---- Kinryū Lounge: progressive jackpot + the backroom -------------------------------
+// The slots' progressive jackpot grows a seeded ¥400–899 every day since it was
+// last hit (s.jackpotDay; 0 = never, so it's been building since before day 1 —
+// a brand-new save already sees base + day 1's growth). Deterministic — the
+// slots panel, the lobby and the morning bulletin all derive the same number.
+// Capped so a long-untouched pot (or a veteran save meeting the feature) can't
+// balloon absurdly; the pot plateaus around day ~70 untouched. Triple-7s pay it
+// out on top of the normal 50× line. The panel re-derives this every render
+// (including the 80ms reel-spin ticks), so the last result is memoized — the
+// value only changes when day or jackpotDay does.
+export const JACKPOT_BASE = 4000;
+export const JACKPOT_CAP = 50000;
+let jackpotMemo = { day: -1, jackpotDay: -1, pot: JACKPOT_BASE };
+export const jackpotFor = (s: Pick<GameSave, 'day' | 'jackpotDay'>): number => {
+  if (s.day === jackpotMemo.day && s.jackpotDay === jackpotMemo.jackpotDay) return jackpotMemo.pot;
+  let pot = JACKPOT_BASE;
+  for (let d = s.jackpotDay + 1; d <= s.day && pot < JACKPOT_CAP; d++)
+    pot += 400 + Math.floor(mulberry32(d * 1299709 + 43)() * 500); // +¥400..899/day
+  pot = Math.min(pot, JACKPOT_CAP);
+  jackpotMemo = { day: s.day, jackpotDay: s.jackpotDay, pot };
+  return pot;
+};
+// Lifetime winning bets that part the velvet curtain at the back of the hall.
+// Raised 15 → 30 (2026-07-02, owner call): the backroom is a real grind to earn.
+export const BACKROOM_WINS = 30;
+export const backroomOpen = (s: GameSave): boolean => s.casinoWins >= BACKROOM_WINS;
+
+// ---- The boss duel (behind the curtain) ----------------------------------------
+// One blackjack hand a night at the boss's private table, double-or-nothing at a
+// fixed high stake that creeps up with your lifetime win count. A seeded daily
+// house rule — the placard by the table — bends that night's blackjack.
+export const BOSS_STAKE_BASE = 10000;
+export const BOSS_STAKE_CAP = 25000;
+export const bossStakeFor = (s: Pick<GameSave, 'casinoWins'>): number =>
+  Math.min(BOSS_STAKE_CAP, BOSS_STAKE_BASE + Math.max(0, s.casinoWins - BACKROOM_WINS) * 250);
+
+export type HouseRuleId = 'pays2to1' | 'hitSoft17' | 'peek' | 'fiveCard' | 'pushHouse';
+export interface HouseRule { id: HouseRuleId; placard: string }
+export const HOUSE_RULES: HouseRule[] = [
+  { id: 'pays2to1',  placard: 'A natural 21 pays 2 to 1.' },
+  { id: 'hitSoft17', placard: 'The house hits soft 17.' },
+  { id: 'peek',      placard: "The house's cards are dealt face up." },
+  { id: 'fiveCard',  placard: 'Five cards under 22 win outright.' },
+  { id: 'pushHouse', placard: 'A tie goes to the house.' },
+];
+// Seed multiplier 48271 — unique among the mulberry32 sites (checked 2026-07-02).
+export const houseRuleFor = (day: number): HouseRule =>
+  HOUSE_RULES[Math.floor(mulberry32(day * 48271 + 7)() * HOUSE_RULES.length)];
+
+// ---- Video poker (Jacks or Better, main casino floor) --------------------------
+// Pure 5-card evaluator vs a fixed pay table — the machine UI lives in the
+// monolith, but the hand maths are here so they're unit-testable. `mult` is the
+// TOTAL credit multiplier on the bet (1 = your stake back, 0 = the house eats it).
+export interface PokerHandCard { rank: number; suit: number } // rank 1..13 (1=A)
+export interface PokerRank { id: string; label: string; mult: number }
+export const POKER_PAYTABLE: PokerRank[] = [
+  { id: 'royal',    label: 'Royal Flush',     mult: 250 },
+  { id: 'sflush',   label: 'Straight Flush',  mult: 50 },
+  { id: 'quads',    label: 'Four of a Kind',  mult: 25 },
+  { id: 'full',     label: 'Full House',      mult: 9 },
+  { id: 'flush',    label: 'Flush',           mult: 6 },
+  { id: 'straight', label: 'Straight',        mult: 4 },
+  { id: 'trips',    label: 'Three of a Kind', mult: 3 },
+  { id: 'twopair',  label: 'Two Pair',        mult: 2 },
+  { id: 'jacks',    label: 'Jacks or Better', mult: 1 },
+];
+export const POKER_NOTHING: PokerRank = { id: 'nothing', label: 'No hand', mult: 0 };
+export const pokerEval = (hand: PokerHandCard[]): PokerRank => {
+  const n: Record<number, number> = {};
+  for (const c of hand) n[c.rank] = (n[c.rank] ?? 0) + 1;
+  const counts = Object.values(n).sort((a, b) => b - a);
+  const ranks = Object.keys(n).map(Number).sort((a, b) => a - b);
+  const flush = hand.every(c => c.suit === hand[0].suit);
+  // Aces play high (10-J-Q-K-A, the "broadway") or low (A-2-3-4-5, the "wheel").
+  const broadway = ranks.length === 5 && ranks[0] === 1 && ranks[1] === 10;
+  const straight = ranks.length === 5 && (ranks[4] - ranks[0] === 4 || broadway);
+  const row = (id: string) => POKER_PAYTABLE.find(r => r.id === id)!;
+  if (flush && broadway) return row('royal');
+  if (flush && straight) return row('sflush');
+  if (counts[0] === 4) return row('quads');
+  if (counts[0] === 3 && counts[1] === 2) return row('full');
+  if (flush) return row('flush');
+  if (straight) return row('straight');
+  if (counts[0] === 3) return row('trips');
+  if (counts[0] === 2 && counts[1] === 2) return row('twopair');
+  if (counts[0] === 2) {
+    const pair = Number(Object.keys(n).find(r => n[Number(r)] === 2));
+    if (pair === 1 || pair >= 11) return row('jacks'); // J/Q/K/A
+  }
+  return POKER_NOTHING;
+};
+
 // Shrine luck: tier 1 at ¥5,000 donated, tier 2 at ¥20,000. Each tier makes
-// the rarer (valuable) fish noticeably more willing to bite.
-export const shrineLuck = (s: GameSave): number =>
-  s.donated >= 20000 ? 2 : s.donated >= 5000 ? 1 : 0;
+// the rarer (valuable) fish noticeably more willing to bite. Funding the shrine's
+// full restoration (see restoreShrine) grants a PERMANENT extra tier on top of the
+// donation tiers, capped at 3.
+export const SHRINE_LUCK_MAX = 3;
+export const shrineLuck = (s: GameSave): number => {
+  const base = s.donated >= 20000 ? 2 : s.donated >= 5000 ? 1 : 0;
+  return Math.min(SHRINE_LUCK_MAX, base + (s.shrineRestored ? 1 : 0));
+};
+
+// ---- Keepsakes ---------------------------------------------------------------
+// One-of-a-kind mementos earned at friendship capstones (see KEEPSAKES in
+// data.ts). Held forever once granted. Pure + testable — the wiring layer reads
+// reward.keepsake and calls grantKeepsake; effects (food/sell/luck/display) read
+// hasKeepsake. Yoshi's omamori adds a small PASSIVE luck nudge while carried.
+export const hasKeepsake = (s: GameSave, id: string): boolean => s.keepsakes.includes(id);
+export const grantKeepsake = (s: GameSave, id: string): boolean => {
+  if (s.keepsakes.includes(id)) return false;   // already held — no duplicate
+  s.keepsakes.push(id);
+  return true;
+};
+// The omamori charm's passive luck: a small, permanent richness/finds bump while
+// it's in your bag. Deliberately gentle so it stacks with shrine luck without
+// blowing the caps (the mine richness/forage paths still clamp).
+export const OMAMORI_LUCK = 0.06;
+export const omamoriLuck = (s: GameSave): number => hasKeepsake(s, 'omamori') ? OMAMORI_LUCK : 0;
+
+// ---- Island sea cave: luck drops + the Bigfoot sighting -----------------------
+// Squeezing into the sea cave (after the one-time nest egg) lets you search the
+// dark once a day for whatever the tide left behind. What you turn up is gated by
+// your luck — shrine favor, the omamori, a Lucky day/meal all push the roll toward
+// the rarer ore (and away from a fistful of damp coins). Pure + testable: pass an
+// rng for deterministic tests; defaults to Math.random for in-game surprise.
+export const SEACAVE_SEARCH_COST = 8;   // energy to dig through the cave floor
+export const seacaveSearchDoneToday = (s: GameSave): boolean => s.caveDropDay === s.day;
+// Total luck the cave reads: shrine tiers (0..3) + omamori (0/1) + a Lucky glow (0/1).
+export const caveLuck = (s: GameSave): number =>
+  shrineLuck(s) + (hasKeepsake(s, 'omamori') ? 1 : 0) + (luckyToday(s) ? 1 : 0); // 0..5
+export interface CaveDrop { money: number; mineralId: string | null; count: number }
+export const seacaveDrop = (s: GameSave, rng: () => number = Math.random): CaveDrop => {
+  const roll = rng() + caveLuck(s) * 0.09;   // luck nudges the roll up toward the good stuff
+  if (roll >= 1.08) return { money: 0, mineralId: 'starstone', count: 1 };
+  if (roll >= 0.88) return { money: 0, mineralId: 'opal',      count: 1 };
+  if (roll >= 0.64) return { money: 0, mineralId: 'crystal',   count: 1 };
+  if (roll >= 0.40) return { money: 0, mineralId: 'shard',     count: 1 + (rng() < 0.3 ? 1 : 0) };
+  return { money: 120 + Math.floor(rng() * 240), mineralId: null, count: 0 }; // a handful of salt-blackened coins
+};
+
+// Bigfoot only shows himself in the cave on a rare, luck-blessed day — and only
+// until you've actually met him (after that he's holed up at Club Kaiju). Seeded
+// per-day so it's stable across reloads; the THRESHOLD scales with luck, so a
+// Lucky day or a fat shrine donation genuinely improves your odds of a sighting.
+export const bigfootSightChance = (s: GameSave): number =>
+  Math.min(0.18, 0.02 + shrineLuck(s) * 0.015 + omamoriLuck(s) + (luckyToday(s) ? 0.05 : 0));
+export const bigfootInCaveToday = (s: GameSave): boolean => {
+  if (s.storySeen.includes('bigfoot-met')) return false; // already met — he's at the club now
+  return mulberry32(s.day * 2654435761 + 909)() < bigfootSightChance(s);
+};
+
+// ---- One-time prestige purchases ---------------------------------------------
+// Each charges once, sets its flag, and returns true on success (false if already
+// owned or short on money). Pure + testable — the wiring agent just CALLs these.
+
+// Fund the shrine's full restoration → a permanent extra shrineLuck tier.
+export const restoreShrine = (s: GameSave): boolean => {
+  if (s.shrineRestored || s.money < SHRINE_RESTORE_PRICE) return false;
+  s.money -= SHRINE_RESTORE_PRICE;
+  s.shrineRestored = true;
+  return true;
+};
+
+// Become Charlie's patron.
+export const sponsorCharlie = (s: GameSave): boolean => {
+  if (s.charliePatron || s.money < CHARLIE_PATRON_PRICE) return false;
+  s.money -= CHARLIE_PATRON_PRICE;
+  s.charliePatron = true;
+  return true;
+};
+
+// Install a private hot spring at the apartment (unlocks homeSoak).
+export const buyHomeOnsen = (s: GameSave): boolean => {
+  if (s.homeOnsen || s.money < HOME_ONSEN_PRICE) return false;
+  s.money -= HOME_ONSEN_PRICE;
+  s.homeOnsen = true;
+  return true;
+};
+
+// Soak in the home onsen (once per day). Mirrors the island spring: restores a big
+// chunk of energy (capped) and grants the day-long `warm` buff (cheaper exertions).
+export const homeSoak = (s: GameSave): boolean => {
+  if (!s.homeOnsen || s.homeOnsenDay === s.day) return false;
+  s.homeOnsenDay = s.day;
+  const max = maxEnergy(s);
+  s.energy = Math.min(max, s.energy + Math.round(max * 0.6));
+  s.buff = { id: 'warm', day: s.day };
+  return true;
+};
 
 // ---- greenhouse (Community Garden 2.0) ---------------------------------------
 // Costs for the upgrades.
@@ -697,8 +1080,6 @@ export const FERTILIZER_COST = 250;
 export const BED_COSTS: Record<number, number> = { 6: 4000, 9: 12000 }; // pay to till to the next bed count
 export const TIER_COSTS: Record<number, number> = { 1: 8000, 2: 30000 }; // glass-repair tiers (quality bonus + better seeds)
 
-// How many beds are tilled & usable (drives which plots are interactive).
-export const greenhouseBeds = (s: GameSave): number => s.greenhouse.beds;
 // Visual growth stage (0..3) for a planted plot.
 export const plotStage = (plot: GreenhousePlot): number => {
   const crop = plot.crop ? CROPS[plot.crop] : undefined;
@@ -772,7 +1153,7 @@ const harvestQuality = (s: GameSave, plot: GreenhousePlot): number => {
   if (plot.missed === 0) pts += 2; else if (plot.missed <= 1) pts += 1; // tended it well
   if (plot.fertilized) pts += 1;
   pts += s.greenhouse.tier;     // 0..2
-  pts += shrineLuck(s);         // 0..2 — the shrine's favor shows in the soil
+  pts += shrineLuck(s);         // 0..3 — the shrine's favor shows in the soil
   pts += skillLevel(s, 'farm') >= 8 ? 2 : skillLevel(s, 'farm') >= 4 ? 1 : 0; // a green thumb shows
   return pts >= 5 ? 2 : pts >= 3 ? 1 : 0;
 };
@@ -914,8 +1295,8 @@ export interface MineLayout {
 // floor (stable across reloads, independent of the ore/crawler rolls), only from
 // VAULT_MIN_FLOOR down, and uncommon enough to feel like a real event. It stocks
 // the floor richer and drops a centerpiece chest with a one-time haul.
-export const VAULT_MIN_FLOOR = 3;
-export const VAULT_CHANCE = 0.07;        // ~7% per qualifying floor
+export const VAULT_MIN_FLOOR = 4;
+export const VAULT_CHANCE = 0.05;        // ~5% per qualifying floor
 export const isVaultFloor = (s: GameSave, floor: number): boolean =>
   floor >= VAULT_MIN_FLOOR && mulberry32(s.day * 999983 + floor * 7919 + 31)() < VAULT_CHANCE;
 
@@ -988,11 +1369,11 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
   let richness = rand() * rand();
   const luckyOre = luckyToday(s) ? 0.2 : 0; // Lucky Day or a Lucky meal: veins run rich
   const mineSkill = skillLevel(s, 'mine') * 0.025; // a seasoned miner finds more
-  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre + mineSkill);
+  richness = Math.min(1, richness + luck * 0.18 + grace + streakBonus + depth * 0.06 + luckyOre + mineSkill + omamoriLuck(s));
   if (ch.id === 'rich') richness = Math.min(1, richness + 0.2);
   if (ch.id === 'calm') richness = Math.min(1, richness + 0.05);
   if (vault) richness = Math.min(1, richness + 0.45);   // a vault floor runs rich
-  const oreCount = Math.round(3 + richness * 12 + depth + (vault ? 6 : 0));
+  const oreCount = Math.round(2 + richness * 7 + depth * 0.7 + (vault ? 5 : 0));
 
   // Mineral pool is gated by floor — deep ore simply isn't here until you descend.
   const pool = MINERALS.filter(m => m.minFloor <= floor);
@@ -1027,8 +1408,8 @@ export const mineLayoutFor = (s: GameSave, floor = 1): MineLayout => {
     for (const m of pool) { r -= tiltedW(m); if (r <= 0) { mineral = m; break; } }
     // Rich veins yield extra; deeper floors hit them more often.
     const vein = rand();
-    const hi = 0.02 + richness * 0.05 + depth * 0.01;
-    const mid = 0.07 + richness * 0.13 + depth * 0.03;
+    const hi = 0.01 + richness * 0.03 + depth * 0.006;
+    const mid = 0.04 + richness * 0.08 + depth * 0.02;
     const amount = vein < hi ? 3 : vein < mid ? 2 : 1;
     ore.push({ x: c.x, y: c.y, mineral, amount });
   }
@@ -1085,7 +1466,7 @@ export const lootVault = (s: GameSave, floor: number): VaultHaul | null => {
   const lucky = luckyToday(s) ? 1 : 0;
   const mult = 1 + luck * 0.15 + streakBonus + lucky * 0.25;
 
-  const cash = Math.round((2500 + depth * 500) * mult);
+  const cash = Math.round((1800 + depth * 350) * mult);
   s.money += cash;
 
   const add = (id: string, n: number) => { s.minerals[id] = (s.minerals[id] ?? 0) + n; };
@@ -1118,7 +1499,7 @@ export const crackGeode = (s: GameSave): { text: string; color: string } | null 
     case 'opal': { const n = 1 + Math.floor(Math.random() * 2); add('opal', n); return { text: `${n}× Void Opal!`, color: '#b06ad0' }; }
     case 'starstone': { add('starstone', 1); return { text: 'An Astral Stone!', color: '#ff7cc4' }; }
     case 'gacha': { const fig = GEODE_FIGURES[Math.floor(Math.random() * GEODE_FIGURES.length)]; s.gacha[fig] = (s.gacha[fig] ?? 0) + 1; return { text: `A figure: ${fig}!`, color: '#ff7cc4' }; }
-    case 'jackpot': { s.money += 5000; add('opal', 2); return { text: 'JACKPOT! ¥5,000 + 2 Void Opal!', color: '#ffd24a' }; }
+    case 'jackpot': { s.money += 3000; add('opal', 2); return { text: 'JACKPOT! ¥3,000 + 2 Void Opal!', color: '#ffd24a' }; }
   }
   return null;
 };
@@ -1166,6 +1547,8 @@ const msgCtx = (s: GameSave): MsgCtx => ({
   fishCount: Object.values(s.fishLog).reduce((a, b) => a + b, 0),
   visited: s.visited,
   gameAch: s.gameAch,
+  gangPaid: s.gangPaid,
+  friendsMet: Object.keys(s.friends),
 });
 
 export const syncMessages = (s: GameSave): PhoneMessage[] => {
@@ -1188,12 +1571,100 @@ export const syncMessages = (s: GameSave): PhoneMessage[] => {
 export const unreadCount = (s: GameSave): number =>
   s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0);
 
+// ---- Journal missions ----------------------------------------------------------
+// Mark + pay any newly-completed MISSIONS steps (mirrors syncMessages: called on
+// scene enter and when the Journal opens). Each step pays its reward exactly once
+// (save.missionsDone dedupes); returns the fresh completions for a toast.
+export const syncMissions = (s: GameSave): Mission[] => {
+  const fresh: Mission[] = [];
+  for (const m of MISSIONS) {
+    if (s.missionsDone.includes(m.id) || !m.isDone(s)) continue;
+    s.missionsDone.push(m.id);
+    s.money += m.reward;
+    fresh.push(m);
+  }
+  return fresh;
+};
+
 // Push a one-off (non-catalog) message — used for ZamaZonk order/delivery
 // receipts. Deduped by id so re-running is safe.
 export const pushMessage = (s: GameSave, m: Omit<PhoneMessage, 'day' | 'read'>): void => {
   if (s.messages.some(x => x.id === m.id)) return;
   s.messages.push({ ...m, day: s.day, read: false });
 };
+
+// ---- Town events: who leaves their post ---------------------------------------
+// On a derby day the shore fills with townsfolk, and on a festival day the
+// festival scene does — but the same people were also still ambling their usual
+// venues, so you could stand next to Granny in the city and watch a second Granny
+// fish at the beach. These helpers are the single source of truth for "this NPC
+// is AT the event right now, so they are not at their post": the monolith uses
+// them to hide the routine wanderer, and to stage the real character (talkable,
+// quests intact) at the event instead.
+//
+// Only folk with somewhere else to be are listed — Tex and Genji already live on
+// the shore, and the shopkeepers mind their counters.
+//
+// Keyed by event AND by the scene the event takes over, because an attendee must
+// only be pulled from their post when the event is somewhere that actually STAGES
+// them. The festival calendar rotates between two venues: a city matsuri stages
+// Charlie, a shrine tanabata/hatsumode stages Yoshi. A flat per-event list meant
+// that on a city festival day Yoshi was hidden from the shrine and staged nowhere
+// — gone from the game for the whole day, ungiftable, her shrine looking abandoned.
+export const TOWN_EVENT_ATTENDEES: Record<string, Record<string, string[]>> = {
+  derby: { [TOURNAMENT_SCENE]: ['granny', 'charlie', 'collector', 'mechanic'] },
+  festival: { city: ['charlie'], shrine: ['miko'] },
+};
+// When each crowd breaks up. These MUST match how long the world stays dressed
+// for the event, or the duplicate-NPC bug comes straight back at the seam: the
+// staging keeps drawing a goer after the real one has walked home. The derby is
+// a daytime affair that packs up at 8 PM; a festival is an evening one and runs
+// until the 2 AM collapse, which is exactly how long its staging is drawn.
+export const TOWN_EVENT_END_MIN: Record<'derby' | 'festival', number> = {
+  derby: 20 * 60,
+  festival: COLLAPSE_MIN,
+};
+
+// Which event (if any) is pulling people out of their routines right now.
+// Derby and festival calendars never collide by construction (TOURNAMENT_PHASE is
+// chosen to keep them clear, asserted in tests/calendar.test.ts), so checking the
+// derby first loses nothing.
+export type TownEvent = 'derby' | 'festival' | null;
+export const townEventNow = (s: Pick<GameSave, 'day' | 'timeMin'>): TownEvent => {
+  if (fishingTournamentDay(s.day)) return s.timeMin < TOWN_EVENT_END_MIN.derby ? 'derby' : null;
+  if (festivalFor(s.day)) return s.timeMin < TOWN_EVENT_END_MIN.festival ? 'festival' : null;
+  return null;
+};
+// Which scene today's event takes over (null when nothing is on).
+export const townEventSceneNow = (s: Pick<GameSave, 'day' | 'timeMin'>): string | null => {
+  const ev = townEventNow(s);
+  if (ev === 'derby') return TOURNAMENT_SCENE;
+  if (ev === 'festival') return festivalFor(s.day)?.scene ?? null;
+  return null;
+};
+export const atTownEventNow = (s: Pick<GameSave, 'day' | 'timeMin'>, npcId: string): boolean => {
+  const ev = townEventNow(s);
+  const scene = townEventSceneNow(s);
+  if (ev === null || scene === null) return false;
+  return (TOWN_EVENT_ATTENDEES[ev][scene] ?? []).includes(npcId);
+};
+
+// ---- Fishing-derby payout (pure core) ---------------------------------------
+// Settle a derby run: pay the tier prize for `score` points and push Genji's
+// chalkboard text. Guarded so it's safe to call from EVERY path that can end a
+// run (walking off the shore, sleeping/collapsing, Save&Quit) — the storySeen
+// `tournament-prize-<day>` stamp pays at most once per derby day. Returns the
+// tier paid, or null if nothing settled (no score / not a derby day / paid).
+// The caller owns the transient bits (score ref, toast, sfx, achievement).
+export function settleDerbyPrize(s: GameSave, score: number): TournamentTier | null {
+  if (score <= 0 || !fishingTournamentDay(s.day) || s.storySeen.includes(`tournament-prize-${s.day}`)) return null;
+  s.storySeen.push(`tournament-prize-${s.day}`);
+  const tier = tournamentTierFor(score);
+  s.money += tier.prize;
+  pushMessage(s, { id: `tournament-prize-${s.day}`, from: 'Genji 🎣', avatar: '🎣', company: false,
+    body: [`Genji chalks your name on the board: "${score} points — that's the ${tier.name}, kid." The gathered crowd gives a warm cheer as he presses ¥${tier.prize} into your hand. "Tide's turning. Same shore next derby."`] });
+  return tier;
+}
 
 // ---- ZamaZonk (the everything store) ----------------------------------------
 // An aggressively convenient megacorp. Order furniture from the phone; it pays
@@ -1291,6 +1762,7 @@ export const cook = (s: GameSave, recipeId: string): boolean => {
   if (!r || !canCook(s, r)) return false;
   for (const i of r.ingredients) consumeIngredient(s, i.kind, i.n);
   s.dishes[recipeId] = (s.dishes[recipeId] ?? 0) + 1;
+  if (!s.cookedLog.includes(recipeId)) s.cookedLog.push(recipeId); // ever-cooked log (achievements)
   persistSave(s);
   return true;
 };
@@ -1371,6 +1843,37 @@ export const giftTo = (s: GameSave, npcId: string, kind: GiftKind): { tier: Gift
   persistSave(s);
   const hearts = friendHearts(s, npcId);
   return { tier, hearts, gainedHeart: hearts > before };
+};
+
+// ---- David the cat: pets & morning gifts --------------------------------------
+// Pet David once a day (the dialog's "Pet David 🐾" action): a modest friendship
+// bump on the FRIENDS id 'david' — smaller than any gift, but free and daily.
+// Points route through the same clamp as giftTo; giftDay is untouched so a pet
+// never spends the day's gift.
+export const CAT_PET_PTS = 6;
+export const catPetToday = (s: GameSave): boolean => s.catPetDay === s.day;
+export const petCat = (s: GameSave): boolean => {
+  if (!s.cat.found || s.catPetDay === s.day) return false;
+  s.catPetDay = s.day;
+  const cur = s.friends['david'] ?? { pts: 0, giftDay: -1 };
+  cur.pts = Math.max(0, Math.min(MAX_HEARTS * HEART_POINTS, cur.pts + CAT_PET_PTS));
+  s.friends['david'] = cur;
+  return true;
+};
+
+// Some mornings (~8%, seeded per day like the weather rolls — stable across
+// reloads, never day 1) David leaves a little something by the door. The wake
+// flow checks the roll once per morning and dedupes via save.catGiftDay.
+export const CAT_GIFT_CHANCE = 0.08;
+export const catGiftMorning = (day: number): boolean =>
+  day > 1 && mulberry32(day * 1103515245 + 61)() < CAT_GIFT_CHANCE;
+// What he left: usually a small pile of coins (¥50–300), sometimes one pantry egg.
+// Seeded by the same day so the haul is as deterministic as the roll.
+export interface CatGift { money: number; egg: boolean }
+export const catGiftFor = (day: number): CatGift => {
+  const rand = mulberry32(day * 1103515245 + 62);
+  if (rand() < 0.3) return { money: 0, egg: true };
+  return { money: 50 + Math.floor(rand() * 251), egg: false };
 };
 
 // ---- Heart-event hangouts & home visits --------------------------------------

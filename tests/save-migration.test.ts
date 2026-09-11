@@ -131,3 +131,29 @@ describe('loadSave — fail safe on bad data', () => {
     expect(loadSave()).toBeNull();
   });
 });
+
+describe('loadSave — cat-depth + missions fields (default-safe)', () => {
+  it('a v2 save from before catPetDay/catGiftDay/missionsDone gains the defaults', () => {
+    const blob = { ...newSave(), money: 777, day: 9 } as Record<string, unknown>;
+    delete blob.catPetDay; delete blob.catGiftDay; delete blob.missionsDone;
+    seed(JSON.stringify(blob));
+    const s = loadSave()!;
+    expect(s.catPetDay).toBe(0);
+    expect(s.catGiftDay).toBe(0);
+    expect(s.missionsDone).toEqual([]);
+  });
+});
+
+describe('loadSave — cookedLog field (default-safe)', () => {
+  it('a v2 save from before cookedLog gains the empty log', () => {
+    const blob = { ...newSave(), money: 555, day: 6 } as Record<string, unknown>;
+    delete blob.cookedLog;
+    seed(JSON.stringify(blob));
+    expect(loadSave()!.cookedLog).toEqual([]);
+  });
+
+  it('an existing cookedLog round-trips untouched', () => {
+    persistSave({ ...newSave(), cookedLog: ['onigiri', 'ramen'] });
+    expect(loadSave()!.cookedLog).toEqual(['onigiri', 'ramen']);
+  });
+});

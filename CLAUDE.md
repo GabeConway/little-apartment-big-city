@@ -17,25 +17,28 @@ router, no site chrome. Input: keyboard, touch, or game controller.
 - `public/` — `images/`, `music/`, `sfx/` (assets are absolute paths: `/images/...`).
 - `src-tauri/` — Tauri v2 project (Rust). See [kb/build-targets.md](kb/build-targets.md).
 - `scripts/make-dmg.mjs` — builds the macOS dmg via `hdiutil` (see build-targets).
+- `scripts/gemini-portraits.mjs` — Gemini API art generator (portraits/logos/splash; needs `GEMINI_API_KEY`), plus canvas helpers `chroma-key-logo.mjs` / `fix-nameplates.mjs`. Usage + prompt lessons: [kb/art-direction.md](kb/art-direction.md) "Gemini API pipeline".
 
 ## Knowledge base (`kb/`)
-Read before editing the matching area:
-- [kb/games.md](kb/games.md) — the game's full as-built reference (architecture, systems, hard rules, music/sfx).
+Eight files, indexed in [kb/README.md](kb/README.md). Read before editing the matching area:
+- [kb/games.md](kb/games.md) — the game's full as-built reference (architecture, systems, hard rules, music/sfx) + the build-history appendix.
 - [kb/art-direction.md](kb/art-direction.md) — visual style law: refs (Tiny Tower/Stardew/Habbo), perspective, master palette, PNG asset pipeline. Read before generating art.
-- [kb/little-apartment-progress.md](kb/little-apartment-progress.md) — build-history checklist.
 - [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
-- [kb/conventions.md](kb/conventions.md) — coding conventions.
-- [kb/dependencies.md](kb/dependencies.md) — versions, security policy.
-- [kb/testing.md](kb/testing.md) — Vitest setup, CI, pre-commit hook.
-- [kb/playtesting.md](kb/playtesting.md) — Playwright playtest harness (`npm run playtest`): seed a save, drive inputs, read live state, screenshot.
+- [kb/testing.md](kb/testing.md) — the 3-command health check, Vitest setup, the Playwright playtest harness (`npm run playtest`), and the bug-hunting playbook.
+- [kb/conventions.md](kb/conventions.md) — coding conventions + dependency versions and security policy.
+- [kb/future-ideas.md](kb/future-ideas.md) — parked work, ideas backlog, sfx wishlist.
+- [kb/steam.md](kb/steam.md) — Steam release plan (depots, achievements port, Deck-via-Proton; not started).
 
 ## Commands
 - `npm run dev` — Vite dev server in a browser (fast iteration only; not a ship target). No Rust needed.
 - `npm run build` — Vite build → `dist/` (the bundle Tauri wraps; not deployed anywhere).
 - `npm test` — Vitest unit tests.
-- `npm run playtest -- <shot|state|drive|title|presets> [opts]` — drive the game in a headless browser (seed save, send input, read live state, screenshot). See [kb/playtesting.md](kb/playtesting.md).
+- `npm run playtest -- <shot|state|drive|title|presets> [opts]` — drive the game in a headless browser (seed save, send input, read live state, screenshot). See [kb/testing.md](kb/testing.md).
 - `npm run desktop:dev` / `:build` (+ `desktop:build:mac` for .app+.dmg), `android:dev` / `:build`, `ios:dev` / `:build` — Tauri (needs Rust; see build-targets).
 - `./start-dev.sh [desktop|android|ios]` (mac/linux) · `start-dev.ps1`/`.cmd` (Windows).
+
+## Git workflow
+Day-to-day work is committed and pushed to the **`DEV` branch** — not `main`, no feature branches, no PRs. `main` is promoted from `DEV` when the owner decides (CI + release workflows key off `main`).
 
 ## Invariants (don't break)
 - `src/game/` stays React-only (no new npm deps inside it).

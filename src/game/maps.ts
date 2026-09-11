@@ -142,15 +142,21 @@ const city: SceneDef = {
   name: 'Kawamachi St.',
   legend: {
     ...OUTDOOR,
-    'H': T('t-apt-wall', true),    // Nakatomi Apartments facade (home building)
-    'N': T('t-nakatomi-l', true),  // sign over the door: "NAKA"
-    'K': T('t-nakatomi-r', true),  // sign over the door: "TOMI"
+    'H': T('t-apt-wall', true),    // Nakatomi Apartments facade (home building; name plate = SCENE_SIGNS.city)
     'p': T('t-planter', true),     // flowering planter flanking the entrance
     'F': T('t-grass-v2'),          // clover/daisy grass detail (walkable)
     'E': T('t-gh-front', true),    // community greenhouse glass facade (east of home)
     'R': T('t-gh-roof', true),     // greenhouse pitched glass roof (over the facade)
     'G': T('t-gh-door'),           // greenhouse glass door (walk-in warp, gated)
-    'J': T('t-terminal', true),    // courier gig terminal (deposit-kiosk errand giver)
+    'k': T('t-boardwalk'),         // beach-access boardwalk gate at the SW shore seam (matches the shore boardwalk)
+    // Torii-garden kit (SE corner — the shrine approach): stone sando trail,
+    // beam-over-path, stone toro lanterns, sakura + fallen petals, koi pond.
+    'x': T('t-stonepath'),         // stone sando trail (walkable)
+    'X': T('t-torii-beam-path'),   // torii crossbar where the trail runs under the gate
+    'O': T('t-toro', true),        // stone ishidoro lantern flanking the approach
+    'Y': T('t-sakura', true),      // cherry-blossom tree shading the garden ('C' is taken by the t-bld-c storefront)
+    'q': T('t-sakura-petals'),     // fallen petals beside the trail (walkable)
+    'u': T('t-pond', true),        // garden koi pond (solid)
   },
   outdoor: true,
   grid: [
@@ -167,11 +173,11 @@ const city: SceneDef = {
     'gTggggwwggggggRRRRggggggggggggfg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
     'ggHHHHHHHHggggEEEEgggggggggggggg',
-    'ggHHHHDDHHgJggEGGEggTgggggggggfg',
-    'gggggpwwpggggggggggfgfgggggggggg',
-    'wwwwwwwwgggggggggggggggnmmnggggg',
-    'wwwwwwwwggggggggggggggojggjo~~gg',
-    'ggggFgggggggggFggggggggggggg~~gg',
+    'ggHHHHDDHHggggEGGEggTgggxxgYggfg',
+    'sggggpwwpggggggggggfgfgOxxOggggg',
+    'kwwwwwwwgggggggggggggggnXXnouuog',
+    'kwwwwwwwggggggggggggggojxxjouugg',
+    'ssggFgggggggggFggggggggqxxqggggg',
   ],
   warps: [
     { x: 4, y: 2, to: 'denden', tx: 8, ty: 8, dir: 'up' },
@@ -200,8 +206,6 @@ const city: SceneDef = {
   interactables: [
     { id: 'vending', x: 8, y: 4, label: 'Vending machine' },
     { id: 'vending', x: 26, y: 4, label: 'Vending machine' },
-    { id: 'gig-terminal', x: 11, y: 13, label: 'Courier terminal' },
-    { id: 'landlord', x: 9, y: 13, label: 'Lease office' },
   ],
   npcs: [
     { id: 'charlie', x: 17, y: 3, sprite: 'npc-charlie', dir: 'down' },
@@ -222,6 +226,7 @@ export interface SceneSign {
   bg?: string; border?: string; blink?: boolean;
   font?: number;        // px size; >6 also switches to sans-serif for CJK glyphs
   vertical?: boolean;   // stacked characters, Kabukicho-style
+  guide?: boolean;      // municipal wayfinding: slim flat plate + baked-in pole, matte (no bevel/shadow/night bloom)
 }
 export const SCENE_SIGNS: Record<string, SceneSign[]> = {
   city: [
@@ -234,9 +239,12 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'PAWN', x: 22, y: 1, color: '#e89a7c', bg: 'rgba(0,0,0,0.55)' },
     { text: 'ガチャ', x: 27, y: 0, color: '#fff', bg: '#e857a8', border: '#ffd5ec', blink: true, font: 8 },
     { text: 'GACHA!', x: 27, y: 1, color: '#e857a8', bg: 'rgba(0,0,0,0.55)' },
-    { text: '⛩ SHRINE', x: 22, y: 14, color: '#e8a0a0', bg: 'rgba(0,0,0,0.35)' },
-    { text: '< SHORE', x: 1, y: 15, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
-    { text: 'DOWNTOWN >', x: 26, y: 8, color: '#e857a8', bg: 'rgba(0,0,0,0.55)', blink: true },
+    // Wayfinding is municipal guide signage (slim navy enamel plate on a grey
+    // pole, baked into one sprite — see the `guide` branch of the sign renderer)
+    // so it reads as Tokyo street furniture. The shrine has no sign — the torii
+    // gate IS the sign.
+    { text: '← BEACH', x: 0, y: 13, color: '#e8f0f4', bg: '#27517c', guide: true },
+    { text: 'DOWNTOWN →', x: 27, y: 8, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
   // Signs sit over the four venue facades of the 28-wide strip:
   // club N (cols 1-4), garage G (cols 7-10), casino K (cols 13-16), museum U (cols 19-24).
@@ -249,7 +257,7 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'CASINO', x: 13, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
     { text: 'はくぶつかん', x: 19, y: 0, color: '#16181d', bg: '#e8d8a0', border: '#c9a227', font: 8 },
     { text: 'MUSEUM', x: 19, y: 1, color: '#ffd24a', bg: 'rgba(0,0,0,0.55)' },
-    { text: '< STATION ST.', x: 1, y: 8, color: '#9fc4e8', bg: 'rgba(0,0,0,0.45)' },
+    { text: '← MID TOWN', x: 0, y: 6, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
   museum: [
     { text: 'カワマチ びじゅつかん', x: 1, y: 9, color: '#3a3322', bg: '#e0d8c4', border: '#b08a50', font: 7 },
@@ -258,24 +266,26 @@ export const SCENE_SIGNS: Record<string, SceneSign[]> = {
     { text: 'バー', x: 1, y: 0, color: '#ffd24a', bg: '#16121d', border: '#ffd24a', font: 8, blink: true },
     { text: '☄ KAIJU ☄', x: 9, y: 0, color: '#aef0a0', bg: '#0f2a14', border: '#7ce8a0', font: 7, blink: true },
   ],
-  shore: [],
+  shore: [
+    // Mirror of the city's '← BEACH' gate — the boardwalk at the NE corner leads back to town.
+    { text: 'TOWN →', x: 18, y: 2, color: '#e8f0f4', bg: '#27517c', guide: true },
+  ],
   garage: [
     { text: 'こじまモータース せいび', x: 2, y: 0, color: '#ffd24a', bg: '#33302a', border: '#c9a227', font: 8 },
     { text: 'オイル OIL', x: 14, y: 0, color: '#d05050', bg: '#e8e0d0', border: '#9e3a3a', font: 7 },
   ],
   shrine: [],
   greenhouse: [],
-  island: [
-    { text: 'きわみじま KIWAMI', x: 7, y: 3, color: '#16181d', bg: '#ffe9a0', border: '#b08a50', font: 8 },
-  ],
+  island: [],
   deepsea: [
     { text: '↓ HOME / SHORE', x: 5, y: 10, color: '#9fc4e8', bg: 'rgba(0,0,0,0.5)' },
   ],
   paris: [
-    { text: 'CAFÉ DE LA LUNE', x: 1, y: 5, color: '#ffe9a0', bg: '#7a1f18', border: '#c0392b', font: 7 },
-    { text: 'BOULANGERIE', x: 16, y: 5, color: '#ffd24a', bg: '#16304a', border: '#2e5e8e', font: 7 },
-    { text: '↩ RETOUR', x: 2, y: 6, color: '#e8e0d0', bg: 'rgba(0,0,0,0.5)' },
-    { text: 'PARIS, FRANCE', x: 9, y: 12, color: '#e8e0d0', bg: 'rgba(0,0,0,0.4)' },
+    // Fascia plates mounted directly over each shopfront (they hug the awning row).
+    { text: 'CAFÉ DE LA LUNE', x: 1, y: 5, color: '#ffe9a0', bg: '#7a1f18', border: '#c9a227', font: 7 },
+    { text: 'BOULANGERIE', x: 21, y: 5, color: '#ffe9a0', bg: '#0f2a14', border: '#c9a227', font: 7 },
+    // The way home — a municipal guide plate beside the café doors.
+    { text: '← RETOUR', x: 4, y: 8, color: '#e8f0f4', bg: '#27517c', guide: true },
   ],
 };
 
@@ -310,7 +320,7 @@ const denden: SceneDef = {
 const konbini: SceneDef = {
   id: 'konbini',
   name: 'Konbini 24h',
-  legend: { ...SHOP, 'Z': T('t-freezer', true) },
+  legend: { ...SHOP, 'Z': T('t-freezer', true), 'J': T('t-terminal', true) },
   grid: [
     '################',
     '#FFFZ......SSSS#',
@@ -318,7 +328,7 @@ const konbini: SceneDef = {
     '#...CCC........#',
     '#..............#',
     '#SSSS......SSSS#',
-    '#..............#',
+    '#.............J#',
     '#..............#',
     '#######DD#######',
   ],
@@ -330,6 +340,7 @@ const konbini: SceneDef = {
     { id: 'shop-konbini', x: 4, y: 3, w: 3, h: 1, label: 'Counter' },
     // The walk-in freezer. No prompt until you've been through once.
     { id: 'portal', x: 4, y: 1, label: 'Walk-in freezer' },
+    { id: 'gig-terminal', x: 14, y: 6, label: 'Courier terminal' },
   ],
   npcs: [{ id: 'clerk-konbini', x: 5, y: 2, sprite: 'npc-konbini', dir: 'down' }],
 };
@@ -368,7 +379,10 @@ const shore: SceneDef = {
   // and a boardwalk in from the city, a deep beach of dry then wet sand (rocks,
   // tide pools, driftwood), an animated tide-foam line, a little pier, and the sea.
   // Scrolls vertically (24×16). 'd'/'v' dune, 'P' pine, 'k' boardwalk, 's'/'S' dry/
-  // wet sand, 'f' foam, 'o' beach rock, 't' tide pool, 'L' driftwood, 'D' pier.
+  // wet sand, 'f' foam, 'D' pier. Props bake their backing tile in, so each uses
+  // the variant matching its row: 'o'/'O'/'W'/'w' boulder on dry sand / wet sand /
+  // foam line / open sea, 'L'/'l' driftwood dry/wet. A rocky point (O/W/w col
+  // 20-21) runs from the wet sand out into the water.
   legend: {
     'g': T('t-grass'),
     'd': T('t-dune'),
@@ -379,7 +393,11 @@ const shore: SceneDef = {
     'S': T('t-sand-wet'),
     'f': T('t-foam-0'),
     'o': T('t-beachrock', true),
+    'O': T('t-beachrock-wet', true),  // same boulder, wet-sand backing
+    'W': T('t-beachrock-surf', true), // boulder breaking the foam line
+    'w': T('t-searock', true),        // boulder standing in the sea
     'L': T('t-driftwood', true),
+    'l': T('t-driftwood-wet', true),  // washed-up log, wet-sand backing
     'D': T('t-dock'),
     '~': T('t-water-0', true),
     'b': T('t-buoy', true),
@@ -390,16 +408,16 @@ const shore: SceneDef = {
   grid: [
     'PgdvggPddvggdPvdggPdvggP',
     'gdvddvgddvddgddvvddvgddv',
-    'vddvUdJddvddvddvdvddPddd',
-    'ddsddsdsddsssddssdsddkkk',
-    'sssossssssUsssssLsssssss',
+    'vddvdddddvddvddvdvddPddd',
+    'ddsddsdsddsssddssdsdkkkk',
+    'sssossJsssUsssssLssssskk',
     'ssssssssssssssssssssssss',
-    'ssssssssssssssssssssssss',
+    'sssssssssssssssssUssssss',
     'ssssssssssssssssssssssss',
     'SSSSSSSSSSSSSSSSSSSSSSSS',
-    'SSSSSSSSSoSSSSSLSSSSooSS',
-    'ffDfffffffffffffffffooff',
-    '~~D~~~~~~~~~~~~~~~~~~o~~',
+    'SSSSSSSSSOSSSSSlSSSSOOSS',
+    'ffDfffffffffffffffffWWff',
+    '~~D~~~~~~~~~~~~~~~~~~w~~',
     '~~D~~~~~~~~~~~~~~~~~~~~~',
     '~~~~~~~~b~~~~~~~~~~~~~~~',
     '~~~~~~~~~~~~~~~~~b~~~~~~',
@@ -423,6 +441,8 @@ const shore: SceneDef = {
     // David + his campfire only appear on even-numbered nights (gated in code).
     { id: 'campfire', x: 13, y: 6, sprite: 'prop-campfire', dir: 'down' },
     { id: 'david', x: 14, y: 6, sprite: 'npc-vampire', dir: 'left' },
+    // The shadow figure — only out in the deepest hour (1:30 AM → collapse); see shadowActive.
+    { id: 'shadow-shore', x: 22, y: 7, sprite: 'npc-shadow', dir: 'down' },
   ],
 };
 
@@ -530,6 +550,9 @@ const nightclub: SceneDef = {
     { id: 'dancer3', x: 7, y: 4, sprite: 'npc-dancer', dir: 'down' },
     { id: 'dancer4', x: 10, y: 7, sprite: 'npc-dancer', dir: 'up' },
     { id: 'kaiju', x: 13, y: 6, sprite: 'npc-kaiju', dir: 'left' },
+    // Bigfoot, once you've met him in the island cave — hidden until then
+    // (npcHiddenNow gates on the 'bigfoot-met' story flag).
+    { id: 'bigfoot-club', x: 12, y: 3, sprite: 'npc-bigfoot', dir: 'down' },
   ],
 };
 
@@ -763,17 +786,19 @@ const greenhouse: SceneDef = {
     'b': T('t-gh-shipbox', true),    // shipping box — harvest sells here at dawn
     'Y': T('t-gh-poster', true),
     'D': T('t-door'),
+    'x': T('t-gh-path'),             // stepping-stone path (walkable)
+    'F': T('t-gh-flowers', true),    // flower bed (decor)
   },
   grid: [
     'RRRRRRRRRRRRRRRR',
-    'G...HYH........G',
+    'GGGGHYHGGHGGHGGG',
     'G..o...o...o...G',
-    'G..............G',
+    'G.P....xx....P.G',
     'G..o...o...o...G',
-    'G..............G',
+    'G......xx......G',
     'G..o...o...o...G',
-    'G..............G',
-    'G.vw.......b...G',
+    'G.F....xx....P.G',
+    'G.vw...xx..b.F.G',
     'GGGGGGGDDGGGGGGG',
   ],
   warps: [
@@ -801,28 +826,30 @@ const island: SceneDef = {
     's': T('t-sand'),
     'g': T('t-grass'),
     'D': T('t-dock'),               // wooden pier (walkable, over water)
-    'P': T('t-tree', true),         // coconut palms
+    'P': T('t-palm', true),         // coconut palms
     'B': T('t-banana', true),       // banana palms (scenery)
-    'R': T('t-rock', true),         // volcanic rock
+    'R': T('t-basalt', true),       // volcanic basalt (cone flanks)
     'V': T('t-volcano', true),      // the crater peak
-    'H': T('t-hotspring', true),    // onsen pool
+    'H': T('t-hotspring-l', true),  // onsen pool, left half (steam scan keys on 'H')
+    'h': T('t-hotspring-r', true),  // onsen pool, right half (the pair reads as ONE pool)
     'K': T('t-tiki', true),
     'Z': T('t-zama-poster', true),  // ZamaZonk billboard
     'b': T('t-bottle'),             // message in a bottle (secret; walkable sand)
     'c': T('t-cave-crack', true),   // hidden sea-cave crack in the volcanic rock (secret; solid, faced from the grass below)
+    'I': T('t-island-sign', true),  // Kiwami Island signpost (solid; greets the player by the west dock)
   },
   outdoor: true,
   grid: [
     '~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
     '~~~~~~~ssssRRVVRRssss~~~~~~~',
     '~~~~~ssssgggRRRcgggssss~~~~~',
-    '~~~~ssgggggggHHgggggssss~~~~',
+    '~~~~ssgggggggHhgggggssss~~~~',
     '~~~sssgggPgggggggBgggsss~~~~',
     '~~ssgggggggggggggggsslll~~~~',
     '~~sgggggPgggggggggggslllll~~',
     '~DDsgggggggggggggggslllll~~~',
     '~~sggggggggggggggggDDDll~~~~',
-    '~~ssggggggBgggggggggsslll~~~',
+    '~~sIggggggBgggggggggsslll~~~',
     '~~~sssgggggggggggggsssll~~~~',
     '~~~~ssKKKssssssZsssssss~~~~~',
     '~~~~ssssssssssssssssssbs~~~~',
@@ -832,6 +859,7 @@ const island: SceneDef = {
   warps: [],
   interactables: [
     { id: 'boat-island', x: 1, y: 7, w: 2, h: 1, label: 'The skiff' },
+    { id: 'island-sign', x: 3, y: 9, label: 'Kiwami Island' },
     { id: 'tiki', x: 6, y: 11, w: 3, h: 1, label: 'Tiki bar' },
     { id: 'zama-poster', x: 15, y: 11, label: 'Read the poster' },
     { id: 'onsen', x: 13, y: 3, w: 2, h: 1, label: 'Hot spring' },
@@ -840,10 +868,49 @@ const island: SceneDef = {
     { id: 'banana', x: 17, y: 4, label: 'Banana palm' },
     { id: 'banana', x: 10, y: 9, label: 'Banana palm' },
     { id: 'island-bottle', x: 22, y: 12, label: 'A bottle in the sand' },
-    { id: 'island-cave', x: 15, y: 2, label: 'A crack in the rock' },
+    { id: 'island-cave', x: 15, y: 2, label: 'Enter the crack' },
     { id: 'fish-tropical', x: 19, y: 4, w: 7, h: 7, label: 'Fish the lagoon' },
   ],
   npcs: [{ id: 'tiki', x: 7, y: 10, sprite: 'npc-hatvendor', dir: 'down' }],
+};
+
+// ---- Sea cave (squeeze through the crack in the island's volcanic rock) ---------------
+// A small hand-authored cave the island forgot it had. Reuses the mine's cave tiles
+// ('#' = wall, '.' = floor). The player drops in just above the daylight crack ('X',
+// the walk-on warp back out); a little alcove at the top hides the one-time nest egg
+// (the 'seacave-niche' interactable, gated by storySeen 'island-cave').
+
+const seacave: SceneDef = {
+  id: 'seacave',
+  name: 'Sea Cave',
+  legend: {
+    '#': T('t-cave-wall', true),   // reused from the mines
+    '.': T('t-cave-floor'),        // reused from the mines
+    'x': T('t-cave-exit-l'),       // daylight crack, left half — walkable, warps back to the island
+    'X': T('t-cave-exit-r'),       // daylight crack, right half (the pair reads as ONE opening)
+  },
+  grid: [
+    '############',
+    '#..........#',
+    '#...####...#',
+    '#...#..#...#',
+    '#...#..#...#',
+    '#..........#',
+    '#....xX....#',
+    '############',
+  ],
+  warps: [
+    { x: 5, y: 6, to: 'island', tx: 15, ty: 3, dir: 'down' },
+    { x: 6, y: 6, to: 'island', tx: 15, ty: 3, dir: 'down' },
+  ],
+  interactables: [
+    { id: 'seacave-niche', x: 5, y: 2, label: 'A niche in the rock' },
+    { id: 'seacave-search', x: 8, y: 1, w: 3, h: 1, label: 'Sift the cave floor' },
+  ],
+  // Bigfoot only resolves here on a rare, luck-blessed day (bigfootInCaveToday);
+  // npcHiddenNow keeps him out of the cave otherwise — and forever once you've met
+  // him, by which point he's a regular at Club Kaiju instead.
+  npcs: [{ id: 'bigfoot-cave', x: 2, y: 4, sprite: 'npc-bigfoot', dir: 'right' }],
 };
 
 // ---- Open water (take the skiff out from the shore) -----------------------------------
@@ -892,15 +959,17 @@ const casino: SceneDef = {
     'R': T('t-roulette', true),
     'r': T('t-roulette-felt', true),
     'D': T('t-door'),
+    'C': T('t-casino-curtain'), // velvet curtain to the backroom (walkable warp, win-gated)
+    'V': T('t-videopoker', true), // video-poker cabinets (the floor's 4th game)
   },
   grid: [
-    '################',
-    '#SS.SS.SS.SS.SS#',
+    '#######CC#######',
+    '#SS.SS....SS.SS#',
     '#..............#',
     '#...B.....B....#',
     '#..............#',
     '#......Rr......#',
-    '#SS.SS....SS.SS#',
+    '#SS.SS.VV.SS.SS#',
     '#..............#',
     '#..............#',
     '#######DD#######',
@@ -908,16 +977,98 @@ const casino: SceneDef = {
   warps: [
     { x: 7, y: 9, to: 'badtown', tx: 14, ty: 3, dir: 'down' },
     { x: 8, y: 9, to: 'badtown', tx: 15, ty: 3, dir: 'down' },
+    // The backroom curtain: gated on BACKROOM_WINS lifetime wins (bounced in the
+    // warp check like the yakuza toll — see lockedGate in the monolith).
+    { x: 7, y: 0, to: 'backroom', tx: 5, ty: 5, dir: 'up' },
+    { x: 8, y: 0, to: 'backroom', tx: 6, ty: 5, dir: 'up' },
   ],
   interactables: [
-    { id: 'casino-slots', x: 1, y: 1, w: 14, h: 1, label: 'Slot machine' },
+    { id: 'casino-slots', x: 1, y: 1, w: 5, h: 1, label: 'Slot machine' },
+    { id: 'casino-slots', x: 10, y: 1, w: 5, h: 1, label: 'Slot machine' },
     { id: 'casino-slots', x: 1, y: 6, w: 5, h: 1, label: 'Slot machine' },
     { id: 'casino-slots', x: 10, y: 6, w: 5, h: 1, label: 'Slot machine' },
     { id: 'casino-blackjack', x: 4, y: 3, w: 1, h: 1, label: 'Blackjack table' },
     { id: 'casino-blackjack', x: 10, y: 3, w: 1, h: 1, label: 'Blackjack table' },
     { id: 'casino-roulette', x: 7, y: 5, w: 2, h: 1, label: 'Roulette table' },
+    { id: 'casino-poker', x: 7, y: 6, w: 2, h: 1, label: 'Video poker' },
   ],
-  npcs: [{ id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' }],
+  npcs: [
+    { id: 'casino-host', x: 7, y: 3, sprite: 'npc-casino', dir: 'down' },
+    // The doorman: plants himself in front of the curtain until the win count
+    // says otherwise, then stands aside holding the rope (two conditional
+    // placements, filtered on backroomOpen like the badtown yakuza on gangPaid).
+    { id: 'kinryu-doorman', x: 7, y: 1, sprite: 'npc-yakuza', dir: 'down' },
+    { id: 'kinryu-doorman-aside', x: 9, y: 1, sprite: 'npc-yakuza', dir: 'left' },
+  ],
+};
+
+// ---- The Kinryū backroom (the hidden VIP room behind the casino curtain) ---------------
+// Parted open only after BACKROOM_WINS lifetime winning bets (gated at the warp).
+// Small and plush: one private table, one enormous boss who keeps the count.
+const backroom: SceneDef = {
+  id: 'backroom',
+  name: 'Kinryū Backroom',
+  legend: {
+    '#': T('t-casino-wall', true),
+    '.': T('t-vip-carpet'),        // richer crimson pile than the floor outside
+    'B': T('t-blackjack-vip', true), // same table, baked on the VIP pile (no base-color box)
+    'C': T('t-casino-curtain'),
+    'L': T('t-vip-lantern', true), // wall lanterns flanking the mural
+    '1': T('t-dragon-0', true),    // the 金龍 itself — 4-tile gold-dragon mural
+    '2': T('t-dragon-1', true),
+    '3': T('t-dragon-2', true),
+    '4': T('t-dragon-3', true),
+    'b': T('t-vip-bonsai', true),
+  },
+  grid: [
+    '##L#1234#L##',
+    '#b........b#',
+    '#..........#',
+    '#.....B....#',
+    '#..........#',
+    '#..........#',
+    '#####CC#####',
+  ],
+  warps: [
+    { x: 5, y: 6, to: 'casino', tx: 7, ty: 1, dir: 'down' },
+    { x: 6, y: 6, to: 'casino', tx: 8, ty: 1, dir: 'down' },
+  ],
+  interactables: [
+    { id: 'backroom-table', x: 6, y: 3, w: 1, h: 1, label: 'Private table' },
+  ],
+  npcs: [{ id: 'kinryu-boss', x: 6, y: 2, sprite: 'npc-yakuza', dir: 'down' }],
+};
+
+// The Moon — reached only through the shadow figure on the shore at 1:30 AM.
+// Outside time: no warps out; the shadow figure (shadow-moon) is the only way home.
+const moon: SceneDef = {
+  id: 'moon',
+  name: 'The Moon',
+  legend: {
+    'S': T('t-space', true),      // star void — the edge of everything
+    '.': T('t-moon-floor'),       // pale regolith
+    'c': T('t-moon-crater'),      // walkable crater dimple
+    'R': T('t-moon-rock', true),  // solid boulder
+    'W': T('t-moon-watch'),       // the half-buried pocket watch (secret)
+  },
+  grid: [
+    'SSSSSSSSSSSSSSSSSSSS',
+    'SSSSSSSSSSSSSSSSSSSS',
+    'SS.....R......c..SSS',
+    'S...c.....R.......SS',
+    'S......c......R....S',
+    'S..R.......c......SS',
+    'S....c..R......c..SS',
+    'SS..........R.....SS',
+    'SS...R...c......WSSS',
+    'SSS..............SSS',
+    'SSSSSSSSSSSSSSSSSSSS',
+  ],
+  warps: [],
+  interactables: [
+    { id: 'moon-watch', x: 16, y: 8, label: 'Something half-buried' },
+  ],
+  npcs: [{ id: 'shadow-moon', x: 9, y: 3, sprite: 'npc-shadow', dir: 'down' }],
 };
 
 // ---- Paris (the secret entrance behind the backrooms) ---------------------------------
@@ -932,7 +1083,14 @@ const paris: SceneDef = {
     'k': T('t-paris-sky', true),
     'c': T('t-cobble'),
     'a': T('t-cafe-awning', true),
-    'b': T('t-boulangerie', true),
+    'A': T('t-boul-awning', true),   // boulangerie awning (green/cream stripes)
+    'v': T('t-boul-win', true),      // bakery window — the baguette rack
+    'd': T('t-boul-door', true),     // bakery door
+    'r': T('t-boul-rack', true),     // patisserie window
+    'f': T('t-cafe-win', true),      // café front window under the awning
+    't': T('t-bistro', true),        // bistro table + chairs on the cobbles
+    'L': T('t-paris-lamp', true),    // wrought-iron lamppost (night glow in the draw block)
+    'B': T('t-bouquiniste', true),   // Seine bookseller's box
     'D': T('t-paris-door'),
     'T': T('t-paris-tree', true),
     'q': T('t-quay'),
@@ -950,10 +1108,10 @@ const paris: SceneDef = {
     'PPkkkkkkkkkkkkkkkkkkkkkkPP',
     'PPkkkkkkkkkkkkkkkkkkkkkkPP',
     'PPkkkkkkkkkkkkkkkkkkkkkkPP',
-    'PaaakkkkkkkkkkkkkkkkkkbbbP',
-    'PaDDkkkkkkkkkkkkkkkkkkbbbP',
+    'PaaakkkkkkkkkkkkkkkkkkAAAP',
+    'PfDDkkkkkkkkkkkkkkkkkkvdrP',
     'cccccccccccccccccccccccccc',
-    'cccTccccTccccccccTccccTccc',
+    'ctcTctccTcBBLcBBcTcccTccLc',
     'qqqqqqqqqqqqqqqqqqqqqqqqqq',
     'wwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwwwwwwwwwwwww',
@@ -967,7 +1125,7 @@ const paris: SceneDef = {
     { id: 'seine', x: 0, y: 10, w: 26, h: 2, label: 'The Seine' },
   ],
   npcs: [
-    { id: 'baguette', x: 16, y: 8, sprite: 'npc-tourist', dir: 'down' },
+    { id: 'baguette', x: 22, y: 8, sprite: 'npc-tourist', dir: 'down' },
   ],
 };
 
@@ -987,16 +1145,19 @@ const museum: SceneDef = {
     'A': T('t-frame-empty', true),  // empty wall art frame
     'D': T('t-door'),
     'm': T('t-doormat'),
+    'c': T('t-mus-carpet'),         // red runner, door -> hall (walkable)
+    'r': T('t-mus-rope', true),     // velvet rope barrier flanking the hall
+    'B': T('t-mus-banner', true),   // hanging gallery tapestry (wall row)
   },
   grid: [
-    '##A##A##A##A####',
+    '#BA##A##A##A#B##',
     '#..............#',
     '#.p..p..p..p...#',
     '#..............#',
     '#.p..p..p..p...#',
-    '#..............#',
-    '#..............#',
-    '#..............#',
+    '#......cc......#',
+    '#.rr...cc...rr.#',
+    '#......cc......#',
     '#......mm......#',
     '#######DD#######',
   ],
@@ -1010,5 +1171,5 @@ const museum: SceneDef = {
 };
 
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, deepsea, casino, paris, museum,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, deepsea, casino, backroom, paris, moon, museum,
 };

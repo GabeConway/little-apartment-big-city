@@ -2,13 +2,16 @@ import { describe, it, expect } from 'vitest';
 import {
   newSave, freshDayLog, maxEnergy, energyCost, sleep, clockLabel, nightT,
   buyFurniture, shrineLuck, gachaComplete, pawnStockFor, sketchyOfferFor,
+  restoreShrine, buyHomeOnsen, homeSoak,
+  grantKeepsake, hasKeepsake, omamoriLuck, OMAMORI_LUCK,
   allFurnished, itemFootprintW, placeItem, unplaceItem,
   WAKE_MIN, type GameSave,
   morningT, syncMessages, unreadCount, zamazonkCatalog, zamazonkPrice,
   orderZamaZonk, fulfillDeliveries, ZAMAZONK_FEE, mineLayoutFor, minedKey,
   mineChallengeFor, enterMineStreak, crackGeode, lootVault, isVaultFloor, VAULT_MIN_FLOOR,
   unlockGameAch, dayEventFor, shoreForageFor,
-  isRainyDay, foggyDay, meteorNight,
+  caveLuck, seacaveDrop, seacaveSearchDoneToday, bigfootSightChance, bigfootInCaveToday,
+  isRainyDay, foggyDay, meteorNight, storeClosedToday,
   plantCrop, clearPlot, harvestCrop, plotReady, growGreenhouse, plotStage, sellShipping,
   streetEventFor, streetEventDoneToday,
   timeBlock, routineTargetFor, ROUTINES, type RoutineBlock,
@@ -22,7 +25,8 @@ import {
   buyDecor, applyDecor, ownsDecor, placeRug, removeRugAt, rugAt,
   skillLevel, addSkillXp, skillProgress, SKILL_XP, ROOM_PRICE,
 } from '../src/game/state';
-import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS, HANGOUTS, HOME_VISITS } from '../src/game/data';
+import { recipeById, MAX_HEARTS, GIFT_POINTS, MUSEUM_SLOTS, BINGUS_FETCHES, FRIENDS, HANGOUTS, HOME_VISITS, KEEPSAKES, keepsakeById } from '../src/game/data';
+import { museumProgress, museumSlotStatus, heldCollectibleCount } from '../src/game/state';
 import { SCENES } from '../src/game/maps';
 
 describe('newSave', () => {
@@ -158,6 +162,70 @@ describe('shrineLuck', () => {
     expect(shrineLuck({ ...newSave(), donated: 5000 })).toBe(1);
     expect(shrineLuck({ ...newSave(), donated: 19999 })).toBe(1);
     expect(shrineLuck({ ...newSave(), donated: 20000 })).toBe(2);
+  });
+  it('a restored shrine adds a permanent extra tier (capped at 3)', () => {
+    expect(shrineLuck({ ...newSave(), donated: 0, shrineRestored: true })).toBe(1);
+    expect(shrineLuck({ ...newSave(), donated: 5000, shrineRestored: true })).toBe(2);
+    expect(shrineLuck({ ...newSave(), donated: 20000, shrineRestored: true })).toBe(3);
+  });
+});
+
+describe('restoreShrine', () => {
+  it('charges once and sets the permanent flag', () => {
+    const s = newSave(); s.money = 90000;
+    expect(restoreShrine(s)).toBe(true);
+    expect(s.shrineRestored).toBe(true);
+    expect(s.money).toBe(10000);
+    expect(restoreShrine(s)).toBe(false);   // already restored
+    const poor = newSave(); poor.money = 100;
+    expect(restoreShrine(poor)).toBe(false); // can't afford
+  });
+});
+
+describe('keepsakes (friendship capstone rewards)', () => {
+  it('grantKeepsake adds once and reports whether it was newly added', () => {
+    const s = newSave();
+    expect(s.keepsakes).toEqual([]);
+    expect(hasKeepsake(s, 'plums')).toBe(false);
+    expect(grantKeepsake(s, 'plums')).toBe(true);   // newly added
+    expect(hasKeepsake(s, 'plums')).toBe(true);
+    expect(grantKeepsake(s, 'plums')).toBe(false);  // already held — no duplicate
+    expect(s.keepsakes).toEqual(['plums']);
+  });
+  it('every capstone keepsake id resolves to a real KEEPSAKE', () => {
+    const ids = new Set(KEEPSAKES.map(k => k.id));
+    for (const h of HANGOUTS) {
+      if (h.keepsake) expect(ids.has(h.keepsake)).toBe(true);
+    }
+    // the six expected mappings are all present
+    for (const id of ['plums', 'demodisc', 'ring', 'omamori', 'badge', 'hatband']) {
+      expect(keepsakeById(id)).toBeDefined();
+    }
+  });
+  it("the omamori grants a small passive luck bonus only while it's held", () => {
+    const s = newSave();
+    expect(omamoriLuck(s)).toBe(0);
+    grantKeepsake(s, 'omamori');
+    expect(omamoriLuck(s)).toBe(OMAMORI_LUCK);
+    expect(OMAMORI_LUCK).toBeGreaterThan(0);
+    expect(OMAMORI_LUCK).toBeLessThan(0.2); // stays gentle — caps stay sane
+  });
+});
+
+describe('homeSoak', () => {
+  it('needs the home onsen, soaks once a day, restores energy + warms', () => {
+    const s = newSave();
+    expect(homeSoak(s)).toBe(false);        // no onsen yet
+    s.money = 70000;
+    expect(buyHomeOnsen(s)).toBe(true);
+    s.energy = 10;
+    expect(homeSoak(s)).toBe(true);
+    expect(s.homeOnsenDay).toBe(s.day);
+    expect(s.energy).toBeGreaterThan(10);
+    expect(s.buff).toEqual({ id: 'warm', day: s.day });
+    expect(homeSoak(s)).toBe(false);        // already soaked today
+    sleep(s);
+    expect(homeSoak(s)).toBe(true);          // a new day, soak again
   });
 });
 
@@ -318,8 +386,8 @@ describe('mineLayoutFor (daily mine generation)', () => {
       for (let floor = VAULT_MIN_FLOOR; floor <= 12; floor++) { total++; if (isVaultFloor({ ...newSave(), day }, floor)) vaults++; }
     expect(vaults).toBeGreaterThan(0);
     expect(vaults / total).toBeLessThan(0.2);
-    // A known trigger: day 15, floor 3.
-    expect(isVaultFloor({ ...newSave(), day: 15 }, 3)).toBe(true);
+    // A known trigger: day 12, floor 4.
+    expect(isVaultFloor({ ...newSave(), day: 12 }, 4)).toBe(true);
   });
 
   it('a vault floor is flagged, stocks a chest + a geode, and is richer than a normal floor', () => {
@@ -356,7 +424,7 @@ describe('mineLayoutFor (daily mine generation)', () => {
     // Looting again the same day+floor returns nothing (already looted).
     expect(lootVault(s, 4)).toBeNull();
     // A deeper vault floor (6+) tucks in an astral stone.
-    const deep = newSave(); deep.day = 24;
+    const deep = newSave(); deep.day = 66;
     expect(isVaultFloor(deep, 7)).toBe(true);
     expect(lootVault(deep, 7)!.starstones).toBeGreaterThanOrEqual(1);
     // The first vault opened unlocks the 'vault' achievement.
@@ -695,9 +763,14 @@ describe('cooking', () => {
     expect(canCook(s, recipeById('donburi')!)).toBe(true);
     expect(cook(s, 'donburi')).toBe(true);
     expect(s.dishes['donburi']).toBe(1);
+    expect(s.cookedLog).toEqual(['donburi']); // ever-cooked log records the first make
     expect(s.fishInv.length).toBe(0);
     expect(s.pantry['rice'] ?? 0).toBe(0);
     expect(cook(s, 'donburi')).toBe(false); // out of ingredients now
+    // A second successful cook of the same dish does NOT duplicate the log entry.
+    s.fishInv = ['minnow']; s.pantry = { rice: 1 };
+    expect(cook(s, 'donburi')).toBe(true);
+    expect(s.cookedLog).toEqual(['donburi']);
   });
   it('refuses to cook an unknown recipe even with ingredients', () => {
     const s = newSave();
@@ -960,6 +1033,8 @@ describe('NPC daily routines', () => {
   // Which scene each routine NPC lives in (matches maps.ts npcs[]).
   const NPC_SCENE: Record<string, string> = {
     granny: 'city', charlie: 'city', miko: 'shrine', tex: 'shore', 'old-man': 'shore',
+    dancer2: 'nightclub', dancer3: 'nightclub', dancer4: 'nightclub', kaiju: 'nightclub',
+    mechanic: 'garage', bingus: 'museum', tiki: 'island', 'casino-host': 'casino', collector: 'gacha',
   };
   const tileSolidAt = (sceneId: string, x: number, y: number): boolean => {
     const sc = SCENES[sceneId];
@@ -1014,7 +1089,7 @@ describe('NPC daily routines', () => {
   });
 });
 
-import { drivePayout, deliveryDoneToday, DELIVERY_TIME_LIMIT, DELIVERY_BASE } from '../src/game/state';
+import { drivePayout, driveAceTime, deliveryDoneToday, DELIVERY_TIME_LIMIT, DELIVERY_BASE } from '../src/game/state';
 
 describe('Kojima Motors delivery race', () => {
   it('gates to once per day via deliveryDay', () => {
@@ -1059,5 +1134,421 @@ describe('Kojima Motors delivery race', () => {
     expect(late.cleanBonus).toBe(0);
     expect(late.total).toBe(Math.round(DELIVERY_BASE * 0.4));
     expect(late.total).toBeGreaterThan(0); // cozy: never zero
+  });
+
+  it('honors a per-track time limit (the default stays 60)', () => {
+    // The same elapsed time is on-time under a long limit but late under a short one.
+    expect(drivePayout(70, 0, 75).onTime).toBe(true);  // 70s on a 75s course = fine
+    expect(drivePayout(70, 0, 60).onTime).toBe(false); // 70s on a 60s course = late
+    expect(drivePayout(70, 0).onTime).toBe(false);     // default limit is still 60
+    // Time bonus is measured against the track's own limit (slack from THAT limit).
+    expect(drivePayout(50, 0, 75).timeBonus).toBeGreaterThan(drivePayout(50, 0, 60).timeBonus);
+  });
+
+  it('ace time scales with the track limit (proportional, capped under the limit)', () => {
+    expect(driveAceTime(60)).toBe(34);                 // matches the legacy default
+    expect(driveAceTime(74)).toBeGreaterThan(driveAceTime(56)); // longer course → later ace cut
+    for (const lim of [56, 62, 67, 74]) expect(driveAceTime(lim)).toBeLessThan(lim);
+  });
+});
+
+describe('storeClosedToday', () => {
+  it('is deterministic for a given day + shop', () => {
+    for (const d of [2, 7, 23, 99]) for (const shop of ['denden', 'pawn', 'gacha'])
+      expect(storeClosedToday(d, shop)).toBe(storeClosedToday(d, shop));
+  });
+  it('never closes the 24h konbini, non-shop scenes, or day 1', () => {
+    for (let d = 1; d <= 60; d++) {
+      expect(storeClosedToday(d, 'konbini')).toBe(false);
+      expect(storeClosedToday(d, 'shore')).toBe(false);
+      expect(storeClosedToday(d, 'apartment')).toBe(false);
+    }
+    expect(storeClosedToday(1, 'denden')).toBe(false); // settling-in day is always open
+  });
+  it('closes a closeable shop roughly ~10% of days (1%..25% over a long window)', () => {
+    for (const shop of ['denden', 'pawn', 'gacha']) {
+      let closed = 0;
+      for (let d = 2; d <= 1001; d++) if (storeClosedToday(d, shop)) closed++;
+      const rate = closed / 1000;
+      expect(rate).toBeGreaterThan(0.01);
+      expect(rate).toBeLessThan(0.25);
+    }
+  });
+});
+
+describe('island sea cave: luck drops + Bigfoot', () => {
+  it('caveLuck sums shrine + omamori + Lucky day', () => {
+    const s = newSave();
+    expect(caveLuck(s)).toBe(0);
+    s.donated = 20000;                         // shrine tier 2
+    expect(caveLuck(s)).toBe(2);
+    grantKeepsake(s, 'omamori');               // +1
+    expect(caveLuck(s)).toBe(3);
+  });
+
+  it('seacaveSearchDoneToday gates on the current day', () => {
+    const s = newSave();
+    expect(seacaveSearchDoneToday(s)).toBe(false);
+    s.caveDropDay = s.day;
+    expect(seacaveSearchDoneToday(s)).toBe(true);
+    s.day += 1;
+    expect(seacaveSearchDoneToday(s)).toBe(false);
+  });
+
+  it('seacaveDrop with no luck and a low roll yields coins, not ore', () => {
+    const s = newSave();
+    const d = seacaveDrop(s, () => 0.1);       // luck 0, roll 0.1 → coins
+    expect(d.mineralId).toBeNull();
+    expect(d.money).toBeGreaterThan(0);
+    expect(d.count).toBe(0);
+  });
+
+  it('seacaveDrop pushes toward rarer ore as the roll climbs', () => {
+    const s = newSave();
+    expect(seacaveDrop(s, () => 0.5).mineralId).toBe('shard');
+    expect(seacaveDrop(s, () => 0.7).mineralId).toBe('crystal');
+    expect(seacaveDrop(s, () => 0.9).mineralId).toBe('opal');
+  });
+
+  it('the top-tier Astral Stone is reachable only with luck', () => {
+    const s = newSave();
+    // With no luck the rng alone (<1) can never clear the 1.08 starstone gate…
+    expect(seacaveDrop(s, () => 0.999).mineralId).toBe('opal');
+    // …but shrine + omamori + Lucky (caveLuck 4 → +0.36) pushes a high roll over.
+    s.donated = 20000; grantKeepsake(s, 'omamori'); s.buff = { id: 'lucky', day: s.day };
+    expect(caveLuck(s)).toBe(4);
+    expect(seacaveDrop(s, () => 0.95).mineralId).toBe('starstone');
+  });
+
+  it('luck nudges the same roll into a better tier', () => {
+    const lo = newSave();
+    const hi = newSave();
+    hi.donated = 20000; grantKeepsake(hi, 'omamori'); // caveLuck 3 → +0.27
+    // A roll of 0.5: no-luck stays shard (<0.64), luck-3 (→0.77) crosses into crystal.
+    expect(seacaveDrop(lo, () => 0.5).mineralId).toBe('shard');
+    expect(seacaveDrop(hi, () => 0.5).mineralId).toBe('crystal');
+  });
+
+  it('bigfootSightChance is rare and rises with luck', () => {
+    const s = newSave();
+    const base = bigfootSightChance(s);
+    expect(base).toBeCloseTo(0.02, 5);
+    s.donated = 20000; grantKeepsake(s, 'omamori');
+    s.buff = { id: 'lucky', day: s.day };
+    expect(bigfootSightChance(s)).toBeGreaterThan(base);
+    expect(bigfootSightChance(s)).toBeLessThanOrEqual(0.18);
+  });
+
+  it('bigfootInCaveToday never fires once already met', () => {
+    const s = newSave();
+    s.donated = 20000; grantKeepsake(s, 'omamori'); s.buff = { id: 'lucky', day: s.day };
+    s.storySeen.push('bigfoot-met');
+    for (let d = 1; d < 200; d++) { s.day = d; expect(bigfootInCaveToday(s)).toBe(false); }
+  });
+
+  it('bigfootInCaveToday actually fires on some lucky days (seeded)', () => {
+    const s = newSave();
+    s.donated = 20000; grantKeepsake(s, 'omamori'); s.buff = { id: 'lucky', day: s.day };
+    let hits = 0;
+    for (let d = 1; d < 400; d++) { s.day = d; s.buff = { id: 'lucky', day: d }; if (bigfootInCaveToday(s)) hits++; }
+    expect(hits).toBeGreaterThan(0);   // rare, but not impossible
+    expect(hits).toBeLessThan(120);    // and genuinely rare
+  });
+});
+
+// ---- Save export / import codes (phone Settings) --------------------------------
+import {
+  exportSaveCode, importSaveCode,
+  petCat, catPetToday, CAT_PET_PTS, catGiftMorning, catGiftFor, CAT_GIFT_CHANCE,
+  syncMissions, biteTableFor, fishSky,
+} from '../src/game/state';
+import { MISSIONS, FISH, DEEP_FISH } from '../src/game/data';
+
+describe('save export/import codes', () => {
+  it('round-trips a save through a code, unicode name intact', () => {
+    const s = newSave();
+    s.money = 12345; s.day = 7; s.name = 'ゆき🐟'; s.owned = ['bed']; s.canFish = true;
+    const back = importSaveCode(exportSaveCode(s))!;
+    expect(back).not.toBeNull();
+    expect(back.money).toBe(12345);
+    expect(back.day).toBe(7);
+    expect(back.name).toBe('ゆき🐟');       // TextEncoder path — bare btoa would throw here
+    expect(back.owned).toEqual(['bed']);
+    expect(back.canFish).toBe(true);
+  });
+
+  it('a code survives surrounding whitespace (a sloppy paste)', () => {
+    const code = exportSaveCode(newSave());
+    expect(importSaveCode(`  ${code}\n`)).not.toBeNull();
+  });
+
+  it('rejects tampered / truncated / garbage codes', () => {
+    const code = exportSaveCode(newSave());
+    expect(importSaveCode(code.slice(0, code.length - 12))).toBeNull(); // truncated JSON
+    expect(importSaveCode('!!!not base64!!!')).toBeNull();              // not base64
+    expect(importSaveCode(btoa('{"hello":1}'))).toBeNull();             // valid JSON, wrong shape
+    expect(importSaveCode('')).toBeNull();
+  });
+
+  it('rejects a non-v2 save blob', () => {
+    const s = newSave() as unknown as { v: number };
+    s.v = 1;
+    expect(importSaveCode(exportSaveCode(s as GameSave))).toBeNull();
+  });
+
+  it('rejects insane core types (money/day/name/scene/owned)', () => {
+    const bad = (patch: Record<string, unknown>) =>
+      importSaveCode(btoa(JSON.stringify({ v: 2, money: 100, day: 3, name: 'x', scene: 'city', owned: [], ...patch })));
+    expect(bad({})).not.toBeNull();                 // the baseline blob itself imports
+    expect(bad({ money: 'lots' })).toBeNull();
+    expect(bad({ day: 0 })).toBeNull();
+    expect(bad({ name: 7 })).toBeNull();
+    expect(bad({ scene: null })).toBeNull();
+    expect(bad({ owned: 'bed' })).toBeNull();
+  });
+
+  it('merges a minimal blob over full defaults (loadSave-style)', () => {
+    const s = importSaveCode(btoa(JSON.stringify({ v: 2, money: 900, day: 3, name: 'x', scene: 'city', owned: [] })))!;
+    expect(s.energy).toBe(BASE_MAX_ENERGY);         // defaulted
+    expect(s.missionsDone).toEqual([]);             // new fields default-safe
+    expect(s.catPetDay).toBe(0);
+    expect(s.almanac).toEqual({ minerals: [], forage: [] });
+  });
+});
+
+// ---- David: petting + morning gifts ----------------------------------------------
+describe('petCat (once a day, +friendship)', () => {
+  it('needs the cat and only works once per day', () => {
+    const s = newSave();
+    expect(petCat(s)).toBe(false);                  // no cat yet
+    s.cat = { found: true, name: 'David' };
+    expect(catPetToday(s)).toBe(false);
+    expect(petCat(s)).toBe(true);
+    expect(s.friends['david'].pts).toBe(CAT_PET_PTS);
+    expect(s.catPetDay).toBe(s.day);
+    expect(catPetToday(s)).toBe(true);
+    expect(petCat(s)).toBe(false);                  // already petted today
+    s.day += 1;
+    expect(petCat(s)).toBe(true);                   // a new day, a new scritch
+    expect(s.friends['david'].pts).toBe(CAT_PET_PTS * 2);
+  });
+
+  it('never spends the day\'s gift and clamps at max points', () => {
+    const s = newSave();
+    s.cat = { found: true, name: 'David' };
+    s.friends['david'] = { pts: MAX_HEARTS * 100 - 2, giftDay: -1 };
+    expect(petCat(s)).toBe(true);
+    expect(s.friends['david'].pts).toBe(MAX_HEARTS * 100); // clamped
+    expect(s.friends['david'].giftDay).toBe(-1);           // gifting untouched
+    expect(canGiftToday(s, 'david')).toBe(true);
+  });
+});
+
+describe('catGiftMorning / catGiftFor (seeded, deterministic)', () => {
+  it('is deterministic per day and never fires on day 1', () => {
+    expect(catGiftMorning(1)).toBe(false);
+    for (let d = 2; d < 300; d++) expect(catGiftMorning(d)).toBe(catGiftMorning(d));
+  });
+
+  it('fires on roughly CAT_GIFT_CHANCE of mornings', () => {
+    let hits = 0;
+    for (let d = 2; d <= 2001; d++) if (catGiftMorning(d)) hits++;
+    expect(hits).toBeGreaterThan(2000 * CAT_GIFT_CHANCE * 0.5);
+    expect(hits).toBeLessThan(2000 * CAT_GIFT_CHANCE * 2);
+  });
+
+  it('the gift itself is deterministic and sane (¥50–300 or one egg)', () => {
+    let eggs = 0, cash = 0;
+    for (let d = 2; d < 500; d++) {
+      const a = catGiftFor(d), b = catGiftFor(d);
+      expect(a).toEqual(b);                          // same day → same haul
+      if (a.egg) { eggs++; expect(a.money).toBe(0); }
+      else { cash++; expect(a.money).toBeGreaterThanOrEqual(50); expect(a.money).toBeLessThanOrEqual(300); }
+    }
+    expect(eggs).toBeGreaterThan(0);                 // both outcomes actually occur
+    expect(cash).toBeGreaterThan(0);
+  });
+});
+
+// ---- Journal missions ---------------------------------------------------------
+describe('MISSIONS predicates (pure)', () => {
+  const ctx = () => ({ almanac: { forage: [] as string[] }, canFish: false, fishLog: {} as Record<string, number>, shiftsWorked: 0, donated: 0 });
+  const by = (id: string) => MISSIONS.find(m => m.id === id)!;
+
+  it('is the authored 5-step chain', () => {
+    expect(MISSIONS.map(m => m.id)).toEqual(['m-forage', 'm-genji', 'm-fish3', 'm-shift', 'm-shrine']);
+  });
+  it('m-forage: any shore find ever grabbed', () => {
+    expect(by('m-forage').isDone(ctx())).toBe(false);
+    expect(by('m-forage').isDone({ ...ctx(), almanac: { forage: ['shell'] } })).toBe(true);
+  });
+  it('m-genji: learning to fish', () => {
+    expect(by('m-genji').isDone(ctx())).toBe(false);
+    expect(by('m-genji').isDone({ ...ctx(), canFish: true })).toBe(true);
+  });
+  it('m-fish3: three fish across any species', () => {
+    expect(by('m-fish3').isDone({ ...ctx(), fishLog: { minnow: 2 } })).toBe(false);
+    expect(by('m-fish3').isDone({ ...ctx(), fishLog: { minnow: 2, koi: 1 } })).toBe(true);
+  });
+  it('m-shift: first konbini shift', () => {
+    expect(by('m-shift').isDone(ctx())).toBe(false);
+    expect(by('m-shift').isDone({ ...ctx(), shiftsWorked: 1 })).toBe(true);
+  });
+  it('m-shrine: any yen ever offered', () => {
+    expect(by('m-shrine').isDone(ctx())).toBe(false);
+    expect(by('m-shrine').isDone({ ...ctx(), donated: 100 })).toBe(true);
+  });
+});
+
+describe('syncMissions (pay each step once)', () => {
+  it('a fresh save has nothing to pay', () => {
+    const s = newSave();
+    expect(syncMissions(s)).toEqual([]);
+    expect(s.missionsDone).toEqual([]);
+  });
+
+  it('pays a completed step exactly once', () => {
+    const s = newSave();
+    const before = s.money;
+    s.shiftsWorked = 1;
+    const fresh = syncMissions(s);
+    expect(fresh.map(m => m.id)).toEqual(['m-shift']);
+    expect(s.money).toBe(before + fresh[0].reward);
+    expect(s.missionsDone).toEqual(['m-shift']);
+    expect(syncMissions(s)).toEqual([]);            // second sweep: nothing new
+    expect(s.money).toBe(before + fresh[0].reward);
+  });
+
+  it('sweeps multiple newly-done steps in chain order', () => {
+    const s = newSave();
+    const before = s.money;
+    s.almanac.forage.push('shell');
+    s.canFish = true;
+    s.fishLog = { minnow: 3 };
+    s.shiftsWorked = 2;
+    s.donated = 500;
+    const fresh = syncMissions(s);
+    expect(fresh).toHaveLength(5);
+    expect(s.missionsDone).toEqual(MISSIONS.map(m => m.id));
+    expect(s.money).toBe(before + MISSIONS.reduce((a, m) => a + m.reward, 0));
+  });
+});
+
+// ---- Weather-gated fish ---------------------------------------------------------
+describe('biteTableFor (weather-gated species)', () => {
+  const GATED = ['rainkoi', 'stargazer'];
+
+  it('a clear day-1 sky serves only the classic table', () => {
+    const s = newSave();                            // day 1: never rain, never meteors
+    const ids = biteTableFor(s, FISH).map(f => f.id);
+    for (const g of GATED) expect(ids).not.toContain(g);
+    expect(ids).toHaveLength(FISH.length - GATED.length);
+  });
+
+  it('rain adds the Rain Koi (and only it)', () => {
+    const s = newSave();
+    s.day = 5; s.forceRain = true;                  // forceRain wins the weather roll
+    const ids = biteTableFor(s, FISH).map(f => f.id);
+    expect(ids).toContain('rainkoi');
+    expect(ids).not.toContain('stargazer');         // rain precludes a meteor night
+  });
+
+  it('a meteor night adds the Stargazer — but only after dark', () => {
+    const s = newSave();
+    s.timeMin = 22 * 60;                            // full night
+    let found = 0;
+    for (let d = 2; d < 600 && !found; d++) { s.day = d; if (meteorNight(s)) found = d; }
+    expect(found).toBeGreaterThan(0);               // the seeded roll does land sometimes
+    s.day = found;
+    expect(biteTableFor(s, FISH).map(f => f.id)).toContain('stargazer');
+    expect(fishSky(s)).toEqual({ rainy: false, meteorNight: true });
+    s.timeMin = 12 * 60;                            // same sky at noon: not yet
+    expect(biteTableFor(s, FISH).map(f => f.id)).not.toContain('stargazer');
+  });
+
+  it('tables without gated species pass through untouched', () => {
+    const s = newSave();
+    s.day = 5; s.forceRain = true;
+    expect(biteTableFor(s, DEEP_FISH)).toHaveLength(DEEP_FISH.length);
+  });
+});
+
+// ---- Fishing-derby payout (pure core) --------------------------------------------
+import { settleDerbyPrize } from '../src/game/state';
+
+describe('settleDerbyPrize (pays once, from any exit path)', () => {
+  it('pays the earned tier + pushes Genji\'s chalkboard text on a derby day', () => {
+    const s = newSave();
+    s.day = 15;                                       // day ≡ 5 (mod 10) → derby
+    const m0 = s.money;
+    const tier = settleDerbyPrize(s, 320);
+    expect(tier?.name).toBe('Gold Hook');
+    expect(s.money).toBe(m0 + 1100);
+    expect(s.storySeen).toContain('tournament-prize-15');
+    expect(s.messages.some(m => m.id === 'tournament-prize-15')).toBe(true);
+  });
+
+  it('settles at most once per derby (storySeen dedupe survives sleep/quit re-calls)', () => {
+    const s = newSave();
+    s.day = 25;
+    const m0 = s.money;
+    expect(settleDerbyPrize(s, 50)?.name).toBe('Bronze Lure');
+    expect(s.money).toBe(m0 + 200);
+    expect(settleDerbyPrize(s, 999)).toBeNull();      // a later exit path can't double-pay
+    expect(s.money).toBe(m0 + 200);
+  });
+
+  it('no-ops without a score, and off derby days', () => {
+    const s = newSave();
+    const m0 = s.money;
+    s.day = 15;
+    expect(settleDerbyPrize(s, 0)).toBeNull();        // cast nothing, win nothing
+    s.day = 16;
+    expect(settleDerbyPrize(s, 100)).toBeNull();      // not a derby day
+    expect(s.money).toBe(m0);
+    expect(s.storySeen).toHaveLength(0);
+  });
+});
+
+// ---- The museum tracker (Collection app) -------------------------------------
+// `s.collectibles` had no UI at all before this, so a found curio sat invisible
+// in the save with nothing to say which display it belonged to.
+describe('museumProgress / museumSlotStatus', () => {
+  it('starts with every slot unfound', () => {
+    const s = newSave();
+    const rows = museumProgress(s);
+    expect(rows).toHaveLength(MUSEUM_SLOTS.length);
+    expect(rows.every(r => r.status === 'unfound')).toBe(true);
+    expect(heldCollectibleCount(s)).toBe(0);
+  });
+
+  it('reports a carried piece as held, and a donated one as donated', () => {
+    const s = newSave();
+    const [a, b] = MUSEUM_SLOTS;
+    s.collectibles.push(a.id);
+    expect(museumSlotStatus(s, a.id)).toBe('held');
+    expect(heldCollectibleCount(s)).toBe(1);
+    s.museum.donated.push(b.id);
+    expect(museumSlotStatus(s, b.id)).toBe('donated');
+    expect(museumSlotStatus(s, MUSEUM_SLOTS[2].id)).toBe('unfound');
+  });
+
+  it('prefers donated over held if a piece somehow shows up in both', () => {
+    const s = newSave();
+    const id = MUSEUM_SLOTS[0].id;
+    s.collectibles.push(id);
+    s.museum.donated.push(id);
+    expect(museumSlotStatus(s, id)).toBe('donated');
+  });
+
+  it('ignores junk ids in the bag when counting curios', () => {
+    const s = newSave();
+    s.collectibles.push('not-a-museum-slot');
+    expect(heldCollectibleCount(s)).toBe(0);
+  });
+
+  it('keeps rows in MUSEUM_SLOTS order so the app reads like the gallery', () => {
+    const s = newSave();
+    expect(museumProgress(s).map(r => r.slotId)).toEqual(MUSEUM_SLOTS.map(sl => sl.id));
   });
 });

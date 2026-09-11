@@ -82,7 +82,7 @@ export function useUiNav(): InputSource {
       // instant our click closes it).
       if (NAV_NEXT.has(k)) { e.preventDefault(); e.stopImmediatePropagation(); moveFocus(1); }
       else if (NAV_PREV.has(k)) { e.preventDefault(); e.stopImmediatePropagation(); moveFocus(-1); }
-      else if (k === 'enter') { e.preventDefault(); e.stopImmediatePropagation(); clickFocused(); }
+      else if (k === 'enter' || k === ' ') { e.preventDefault(); e.stopImmediatePropagation(); clickFocused(); }
     };
     const onPointer = () => setSrc('pointer');
     window.addEventListener('keydown', onKey, true);
