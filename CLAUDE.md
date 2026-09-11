@@ -5,8 +5,9 @@ Guidance for Claude Code in this repo. Detail lives in `kb/` — read the releva
 ## What this is
 **Little Apartment, Big City** — a cozy pixel life-sim, as a standalone **build-only** native app.
 Extracted from the `personalsite` portfolio repo (where it lived at `/games#apartment`); the
-game source is unchanged. One Vite frontend ships to **Windows, macOS, Linux, iOS, and Android**
-via **Tauri v2** wrapping the same `dist/` build. **No web/hosted target** — `npm run build`
+game source is unchanged. One Vite frontend ships to **Windows, macOS, and Linux**
+via **Tauri v2** wrapping the same `dist/` build. (iOS/Android are wired up in the
+scripts but not scaffolded, built, or released — desktop is the ship target.) **No web/hosted target** — `npm run build`
 exists only to produce the `dist/` that Tauri bundles. Boots straight to the title screen — no
 router, no site chrome. Input: keyboard, touch, or game controller.
 

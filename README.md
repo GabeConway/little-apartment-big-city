@@ -5,7 +5,7 @@
 [![Latest release](https://img.shields.io/github/v/release/GabeConway/little-apartment-big-city?include_prereleases&label=download)](https://github.com/GabeConway/little-apartment-big-city/releases)
 
 > A cozy pixel life-sim with no finish line. One codebase running native on
-> **Windows, macOS, Linux, iOS, and Android**.
+> **Windows, macOS, and Linux**.
 
 <p align="center">
   <img src="docs/shot-title.png" alt="Title screen — a neon skyline at night" width="640">
@@ -74,6 +74,10 @@ npm run desktop:build:mac  # Apple-Silicon .app + .dmg (macOS host)
 npm run android:build      # Android                   (needs Rust + Android Studio)
 npm run ios:build          # iOS                       (needs Rust + Xcode, macOS host)
 ```
+
+**Desktop is what ships.** Tauri targets mobile too and the scripts above are wired
+up, but the iOS/Android projects haven't been scaffolded or built yet (they need
+signing credentials), so there are no mobile releases — CI builds desktop only.
 
 Convenience launcher: `./start-dev.sh [desktop|android|ios]`
 (Windows: `start-dev.ps1` / `start-dev.cmd`).
