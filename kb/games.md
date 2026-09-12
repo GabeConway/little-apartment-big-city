@@ -98,7 +98,7 @@ Dependabot's five PRs reviewed and landed, and the "Known bugs" list cleared.
   fails on the old `{13,1}`), four derby top-up cases, and two checkup rows
   (`slots-bail-settles` / `roulette-bail-settles`) that assert on the casino
   **phase** newly exposed on the `?debug` snapshot — money cannot tell a settled
-  bail from an eaten one, since the stake is debited either way. Tests **264**,
+  bail from an eaten one, since the stake is debited either way. Tests **268**,
   `smoke` 22/22, `checkup` 28 → **30**.
 - **Also**: `scripts/record-demo.mjs` (gameplay showcase video recorder, with the
   fishing runtime exposed on the snapshot so it can time the strike).

@@ -594,11 +594,12 @@ async function autoKaraoke(api, page) {
         const k = window.__lab.snapshot().karaoke;
         if (!k.active) return done();
         if (k.done) return done();
-        // Bail like autoFish does. Without this, a song that never advances
-        // (blocked autoplay, stalled audio element) leaves k.active true
-        // forever, and the node side blocks on this promise while the
-        // screencast keeps writing frames into demo/.work.
-        if (performance.now() - t0 > 180000) return done();
+        // Bail like autoFish does, on the same 60s budget. A healthy run is
+        // ~30s (chart 27.5s + count-in), so this is 2x headroom. Without it, a
+        // song that never advances (blocked autoplay, stalled audio element)
+        // leaves k.active true forever, and the node side blocks on this
+        // promise while the screencast keeps writing frames into demo/.work.
+        if (performance.now() - t0 > 60000) return done();
         // Aim a hair early: the game samples the key on its next update tick.
         while (i < notes.length && k.t >= notes[i].t - 0.012) { tap(notes[i].dir); i++; }
         requestAnimationFrame(tick);

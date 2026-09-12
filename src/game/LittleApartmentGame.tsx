@@ -73,7 +73,7 @@ import {
   jackpotFor, backroomOpen, BACKROOM_WINS,
   bossStakeFor, houseRuleFor, HOUSE_RULES, type HouseRuleId,
   pokerEval, POKER_PAYTABLE,
-  restoreShrine, sponsorCharlie, buyHomeOnsen, homeSoak,
+  restoreShrine, sponsorCharlie, buyHomeOnsen, furnitureOnOnsenTile, homeSoak,
   grantKeepsake, hasKeepsake,
   fulfillDeliveries, zamazonkCatalog, zamazonkPrice, orderZamaZonk, pushMessage,
   isRainyDay, foggyDay, meteorNight, storeClosedToday, dayEventFor, DAY_EVENT_LABEL, type DayEvent, plantCrop, harvestCrop, plotReady, growGreenhouse, shoreForageFor,
@@ -948,7 +948,6 @@ interface Hud {
   event: DayEvent; // today's special day ('market' / 'lucky' / null) — HUD chip
   buff: { emoji: string; name: string; tag: string } | null; // active food buff today — HUD chip
   weather: { emoji: string; label: string; title: string } | null; // today's weather / sky event — HUD chip
-  curios: number; // museum pieces in your bag awaiting a plinth — HUD chip
 }
 
 // Every named character has a voice: several line-sets, picked at random per
@@ -1547,7 +1546,7 @@ const LittleApartmentGame: React.FC = () => {
   // Mirrored into a ref so the keyboard/click advance path can read it synchronously.
   const [typed, setTyped] = useState(0);
   const typedRef = useRef(0);
-  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null, weather: null, curios: 0 });
+  const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null, weather: null });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette(), poker: freshPoker(), duel: freshDuel(0) }); // live casino game state
   // Esc at a card table mid-hand must settle (duel stands, poker draws) instead
@@ -1567,15 +1566,25 @@ const LittleApartmentGame: React.FC = () => {
   // it, and that must never happen with no feedback at all.
   useEffect(() => {
     const { slot, roul } = casinoRef.current;
+    // award() inside a settle writes the SAME toast slot showToast does, so a win
+    // that unlocks 'high-roller'/'jackpot' would have its achievement popup
+    // overwritten by the payout line in the same tick. Compare the achievement
+    // count across the settle and let the rarer popup win.
+    const achBefore = saveRef.current.gameAch.length;
+    const quiet = () => saveRef.current.gameAch.length === achBefore;
     const onSlots = overlay?.type === 'shop' && overlay.shop === 'slots';
     if (!onSlots && slot.timer != null) {
       settleSlots(true);
-      if (slot.win > 0) showToast(`🎰 +¥${slot.win.toLocaleString()}`, 'The reels landed after you walked away — paid out in full.');
+      // slotPayout is gross, and the slots panel prints it gross too - match it.
+      if (slot.win > 0 && quiet()) showToast(`🎰 +¥${slot.win.toLocaleString()}`, 'The reels landed after you walked away — paid out in full.');
     }
     const onRoul = overlay?.type === 'shop' && overlay.shop === 'roulette';
     if (!onRoul && roul.timer != null) {
       settleRoulette(true);
-      if (roul.win > 0) showToast(`🎲 +¥${roul.win.toLocaleString()}`, `The wheel landed on ${roul.result} after you walked away — paid out in full.`);
+      // roulettePayout is GROSS (an outside bet returns 2x the stake), but the
+      // roulette panel prints net profit. Match the panel, not the raw credit.
+      const profit = roul.win - roul.bet;
+      if (profit > 0 && quiet()) showToast(`🎲 +¥${profit.toLocaleString()}`, `The wheel landed on ${roul.result} after you walked away — paid out in full.`);
     }
     // deps stay [overlay]: showToast is a stable useCallback declared further down,
     // and naming it here would be a use-before-declaration in the deps array.
@@ -1942,7 +1951,6 @@ const LittleApartmentGame: React.FC = () => {
         : foggyDay(s) ? { emoji: '🌫', label: 'Foggy Day', title: 'Foggy day — a soft grey mist hangs over town' }
         : meteorNight(s) ? { emoji: '☄️', label: 'Meteor Night', title: 'Meteor shower tonight — step outside after dark to watch & make a wish' }
         : null,
-      curios: heldCollectibleCount(s),
     });
   }, [award]);
 
@@ -2545,14 +2553,22 @@ const LittleApartmentGame: React.FC = () => {
   // Landlord text-thread: install the private home onsen (one-time, ¥70,000).
   const buyHomeOnsenFromLandlord = () => {
     const s = saveRef.current;
+    // buyHomeOnsen boxes up anything standing on the onsen's tile. Find out what
+    // BEFORE it runs, so the dialog can name it — furniture silently vanishing
+    // from the room is worse than the overlap this replaced.
+    const inTheWay = furnitureOnOnsenTile(s);
     if (!buyHomeOnsen(s)) return; // button is disabled when unaffordable/owned
     applyHomeOnsen(true);         // inject the interactable now
     computeSolids();
     sfxBuy(); persistSave(s); refreshHud();
     setOverlayBoth(null);
+    const names = inTheWay.map(id => furnitureById(id).name);
     showDialog([
       'The landlord sends a single thumbs-up, then a flurry of activity: a plumber, a delivery of hinoki planking, the smell of cedar and hot mineral water.',
       'By evening there is a steaming little hot-tub tucked into the corner of your apartment, all your own.',
+      ...(names.length
+        ? [`The plumber needed the corner, so ${names.join(' and ')} ${names.length === 1 ? 'is' : 'are'} back in storage — still yours, place ${names.length === 1 ? 'it' : 'them'} anywhere from ARRANGE.`]
+        : []),
       '(A PRIVATE ONSEN is installed at home — walk up and press E to soak once a day.)',
     ], 'Landlord');
   };
@@ -10745,17 +10761,6 @@ const LittleApartmentGame: React.FC = () => {
             >
               <span className="text-base">{hud.weather.emoji}</span>
               <span className="hidden sm:inline text-[10px] font-pixel text-[#bfe0ff] whitespace-nowrap">{hud.weather.label}</span>
-            </span>
-          )}
-
-          {/* museum-curio chip — something in your bag belongs on a plinth. A found
-              piece used to vanish silently into an invisible save array. */}
-          {hud.curios > 0 && (
-            <span
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs sm:text-sm font-bold leading-none chip-pop bg-[#3f5f8a]/30 text-[#bfe0ff]"
-              title="Museum piece in your bag — donate it at its display in the Kawamachi Museum (see the Collection app)"
-            >
-              🖼️<span className="hidden sm:inline">{hud.curios === 1 ? 'Curio' : `${hud.curios} curios`}</span>
             </span>
           )}
 

@@ -1070,16 +1070,19 @@ export const sponsorCharlie = (s: GameSave): boolean => {
 // `home-onsen` interactable shadowing the item's own. Evicted items stay OWNED
 // (only `placed` is cleared), so they go back to storage and can be re-placed.
 // Footprint-aware: a 'wide' item at x-1 still covers the onsen tile.
-export const clearHomeOnsenTile = (s: GameSave): string[] => {
-  const evicted: string[] = [];
-  for (const id of Object.keys(s.placed)) {
+// Read-only half, so a caller can NAME what it is about to box up before the
+// eviction happens (the landlord dialog does exactly that).
+export const furnitureOnOnsenTile = (s: GameSave): string[] =>
+  Object.keys(s.placed).filter(id => {
     const p = s.placed[id];
-    if (p.y !== HOME_ONSEN_TILE.y) continue;
-    if (HOME_ONSEN_TILE.x >= p.x && HOME_ONSEN_TILE.x < p.x + itemFootprintW(id)) {
-      delete s.placed[id];
-      evicted.push(id);
-    }
-  }
+    return p.y === HOME_ONSEN_TILE.y
+      && HOME_ONSEN_TILE.x >= p.x
+      && HOME_ONSEN_TILE.x < p.x + itemFootprintW(id);
+  });
+
+export const clearHomeOnsenTile = (s: GameSave): string[] => {
+  const evicted = furnitureOnOnsenTile(s);
+  for (const id of evicted) delete s.placed[id];
   return evicted;
 };
 
