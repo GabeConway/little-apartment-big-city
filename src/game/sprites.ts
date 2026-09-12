@@ -4604,62 +4604,6 @@ const buildFurniture = (atlas: Atlas) => {
     ctx.fillStyle = '#8a8a8e'; ctx.fillRect(7, 12, 2, 2); ctx.fillRect(23, 12, 2, 2);
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(2, 7, 1, 2); ctx.fillStyle = '#d05050'; ctx.fillRect(29, 7, 1, 2);
   }, 32, 16);
-  atlas['v-bicycle'] = tile(ctx => {
-    // mama-chari city bike, side profile facing left: two spoked wheels with
-    // silver fenders, swoopy step-through teal frame, handlebars + front basket
-    // (a leek poking out), brown saddle, crank + pedal.
-    const wheel = (cx: number) => {
-      const cy = 9;
-      const spans: [number, number][] = [
-        [-5, 1], [-4, 3], [-3, 4], [-2, 4], [-1, 5], [0, 5], [1, 5], [2, 4], [3, 4], [4, 3], [5, 1],
-      ];
-      ctx.fillStyle = '#2c3038';                                        // tire
-      for (const [dy, hw] of spans) {
-        const y = cy + dy;
-        if (Math.abs(dy) >= 4) ctx.fillRect(cx - hw, y, hw * 2 + 1, 1); // top/bottom caps
-        else { ctx.fillRect(cx - hw, y, 2, 1); ctx.fillRect(cx + hw - 1, y, 2, 1); } // side walls
-      }
-      ctx.fillStyle = '#8a96a0';                                        // spokes
-      ctx.fillRect(cx, cy - 3, 1, 7); ctx.fillRect(cx - 3, cy, 7, 1);
-      ctx.fillRect(cx - 2, cy - 2, 1, 1); ctx.fillRect(cx + 2, cy - 2, 1, 1);
-      ctx.fillRect(cx - 2, cy + 2, 1, 1); ctx.fillRect(cx + 2, cy + 2, 1, 1);
-      ctx.fillStyle = '#6e7682'; ctx.fillRect(cx - 1, cy - 1, 3, 3);    // hub
-      ctx.fillStyle = '#c4ccd4'; ctx.fillRect(cx - 1, cy - 1, 1, 1);    // lit hub
-      ctx.fillRect(cx - 3, cy - 6, 7, 1);                               // silver fender over top
-      ctx.fillStyle = '#9aa0a6'; ctx.fillRect(cx - 3, cy - 5, 1, 1); ctx.fillRect(cx + 3, cy - 5, 1, 1);
-    };
-    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(4, 14, 22, 1); ctx.fillRect(6, 15, 18, 1); // ground shadow
-    wheel(8); wheel(24);
-    // frame (teal) — drawn mid, then lit/shadow accents
-    ctx.fillStyle = '#50a0d0';
-    ctx.fillRect(8, 4, 1, 6);                                           // front fork
-    ctx.fillRect(8, 5, 1, 1); ctx.fillRect(9, 6, 1, 1); ctx.fillRect(10, 7, 1, 1); ctx.fillRect(11, 8, 1, 1);
-    ctx.fillRect(12, 9, 2, 1); ctx.fillRect(14, 10, 2, 1);             // swoop tube head -> bottom bracket
-    ctx.fillRect(15, 8, 1, 2); ctx.fillRect(16, 6, 1, 2); ctx.fillRect(17, 5, 1, 1); ctx.fillRect(18, 4, 1, 1); // seat tube
-    ctx.fillRect(16, 10, 4, 1); ctx.fillRect(20, 9, 4, 1);             // chainstay -> rear hub
-    ctx.fillRect(22, 8, 1, 1); ctx.fillRect(21, 7, 1, 1); ctx.fillRect(20, 6, 1, 1); ctx.fillRect(19, 5, 1, 1); // seat stay
-    ctx.fillStyle = '#9fc4e8'; ctx.fillRect(8, 4, 1, 1); ctx.fillRect(9, 6, 1, 1); ctx.fillRect(16, 6, 1, 1); // tube highlights
-    ctx.fillStyle = '#3d6e9e'; ctx.fillRect(16, 10, 4, 1); ctx.fillRect(8, 9, 1, 1);                          // tube shadow
-    // crank + pedal
-    ctx.fillStyle = '#6e7682'; ctx.fillRect(14, 10, 2, 2);             // chainring
-    ctx.fillStyle = '#3a4250'; ctx.fillRect(15, 12, 1, 2);            // crank arm
-    ctx.fillStyle = '#2c3038'; ctx.fillRect(13, 13, 3, 1);           // pedal
-    // saddle
-    ctx.fillStyle = '#5a3c24'; ctx.fillRect(15, 2, 7, 2);
-    ctx.fillStyle = '#6e4a2f'; ctx.fillRect(15, 2, 7, 1);
-    ctx.fillStyle = '#8a6440'; ctx.fillRect(16, 2, 3, 1);            // saddle lit
-    // handlebars
-    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(8, 2, 1, 2);            // stem
-    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 2, 6, 1);            // bar
-    ctx.fillStyle = '#2c3038'; ctx.fillRect(4, 2, 2, 1);          // grip
-    // front basket (wire) over the front wheel
-    ctx.fillStyle = '#c4ccd4'; ctx.fillRect(2, 3, 6, 1); ctx.fillRect(2, 3, 1, 5); ctx.fillRect(7, 3, 1, 5); ctx.fillRect(2, 7, 6, 1);
-    ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 4, 1, 3); ctx.fillRect(3, 5, 4, 1); // mesh
-    ctx.fillStyle = '#50c878'; ctx.fillRect(3, 1, 2, 2); ctx.fillStyle = '#7ce8a0'; ctx.fillRect(3, 1, 1, 1); // leek leaves
-    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 3, 1, 1);          // leek stalk
-    // little headlight
-    ctx.fillStyle = '#ffe9a0'; ctx.fillRect(6, 7, 1, 1);
-  }, 32, 16);
   atlas['v-boat'] = tile(ctx => {
     // hull: white with blue waterline, pointed bow (right)
     ctx.fillStyle = '#e8ecf0'; ctx.fillRect(2, 7, 26, 5);

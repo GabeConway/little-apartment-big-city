@@ -98,6 +98,8 @@ export interface GameSave {
   caveDropDay: number;          // last day the island sea cave was searched for drops (0 = none); one per day
   deliveryDay: number;          // last day the Kojima Motors delivery race was run (0 = never); one per day
   deliveryBest: number;         // best delivery time in seconds (0 = none yet); lower is better
+  derbyPaidDay: number;         // last day the fishing derby paid out (0 = never)
+  derbyPaid: number;            // yen already handed over for derbyPaidDay's derby; a later, higher tier tops up the difference
   streetEventDay: number;       // last day the daily random street event was completed (0 = none); one per day
   greenhouseUnlocked: boolean;  // Granny Sato handed over the greenhouse key (after the fish errand)
   ended: boolean;               // ending seen (free play continues)
@@ -300,6 +302,8 @@ export const newSave = (): GameSave => ({
   caveDropDay: 0,
   deliveryDay: 0,
   deliveryBest: 0,
+  derbyPaidDay: 0,
+  derbyPaid: 0,
   streetEventDay: 0,
   greenhouseUnlocked: false,
   ended: false,
@@ -1652,18 +1656,36 @@ export const atTownEventNow = (s: Pick<GameSave, 'day' | 'timeMin'>, npcId: stri
 // ---- Fishing-derby payout (pure core) ---------------------------------------
 // Settle a derby run: pay the tier prize for `score` points and push Genji's
 // chalkboard text. Guarded so it's safe to call from EVERY path that can end a
-// run (walking off the shore, sleeping/collapsing, Save&Quit) — the storySeen
-// `tournament-prize-<day>` stamp pays at most once per derby day. Returns the
-// tier paid, or null if nothing settled (no score / not a derby day / paid).
+// run (walking off the shore, sleeping/collapsing, Save&Quit).
+//
+// The derby runs all day and the tally keeps climbing, so settling is a TOP-UP,
+// not a one-shot: `derbyPaid` records what today's derby has already handed over
+// and only the difference to the newly earned tier is paid. Settling once at
+// Bronze then grinding to Grand Marlin pays 200 then 2000 — never 200 then
+// nothing, which is what the old once-per-day storySeen stamp did while the
+// banner and chalkboard kept advertising the higher tier.
+//
+// Returns the tier reached and the yen actually paid by THIS call, or null if
+// nothing settled (no score / not a derby day / no tier better than already paid).
 // The caller owns the transient bits (score ref, toast, sfx, achievement).
-export function settleDerbyPrize(s: GameSave, score: number): TournamentTier | null {
-  if (score <= 0 || !fishingTournamentDay(s.day) || s.storySeen.includes(`tournament-prize-${s.day}`)) return null;
-  s.storySeen.push(`tournament-prize-${s.day}`);
+export function settleDerbyPrize(s: GameSave, score: number): { tier: TournamentTier; paid: number } | null {
+  if (score <= 0 || !fishingTournamentDay(s.day)) return null;
   const tier = tournamentTierFor(score);
-  s.money += tier.prize;
-  pushMessage(s, { id: `tournament-prize-${s.day}`, from: 'Genji 🎣', avatar: '🎣', company: false,
-    body: [`Genji chalks your name on the board: "${score} points — that's the ${tier.name}, kid." The gathered crowd gives a warm cheer as he presses ¥${tier.prize} into your hand. "Tide's turning. Same shore next derby."`] });
-  return tier;
+  const already = s.derbyPaidDay === s.day ? s.derbyPaid : 0;
+  const paid = tier.prize - already;
+  if (paid <= 0) return null; // settled again at the same (or a lower) tier — nothing owed
+  s.derbyPaidDay = s.day;
+  s.derbyPaid = tier.prize;
+  s.money += paid;
+  // Kept for the journal/story checks that predate derbyPaid; stamped once.
+  if (!s.storySeen.includes(`tournament-prize-${s.day}`)) s.storySeen.push(`tournament-prize-${s.day}`);
+  // The id carries the tier so a top-up posts its own bulletin instead of being
+  // deduped away as a repeat of the first one.
+  pushMessage(s, { id: `tournament-prize-${s.day}-${tier.name}`, from: 'Genji 🎣', avatar: '🎣', company: false,
+    body: [already > 0
+      ? `Genji rubs the old number off the board and chalks up the new one. "${score} points — that's the ${tier.name} now, kid." He counts out the difference, ¥${paid}, and folds it into your hand on top of what he already gave you. "Knew you had another one in you."`
+      : `Genji chalks your name on the board: "${score} points — that's the ${tier.name}, kid." The gathered crowd gives a warm cheer as he presses ¥${paid} into your hand. "Tide's turning. Same shore next derby."`] });
+  return { tier, paid };
 }
 
 // ---- ZamaZonk (the everything store) ----------------------------------------

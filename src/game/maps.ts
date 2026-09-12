@@ -83,6 +83,16 @@ export const RARE_SLOTS: FurnitureSlot[] = [
 // Completing the gachapon set materializes a golden maneki-neko by the desk.
 export const MANEKI_SLOT = { x: 3, y: 4 };
 
+// The private home onsen's fixed tile. It lives HERE, next to APARTMENT_SLOTS,
+// because that table is what constrains it: the row-1 appliance slots take
+// x = 1,2 (futon/bed), 6 (tv), 8 (arcade), 9 (lamp), 11 (microwave), 13 (fridge)
+// and 14 (aquarium), leaving 5, 7, 10 and 12 free. It was previously declared
+// over in LittleApartmentGame.tsx at { x: 13, y: 1 } — the fridge's slot — so a
+// save with a fridge drew both sprites on one solid tile and put the onsen
+// interactable on the appliance. Keep it on row 1 of the FIRST room: that row is
+// floor in both the small and the expanded grid. `tests/maps.test.ts` enforces it.
+export const HOME_ONSEN_TILE = { x: 12, y: 1 };
+
 // Wall-mounted display shelf (3 tiles) for your gachapon figures. Appears once
 // you own at least one figure; drawn + populated by the apartment draw loop. The
 // x range (6..8 on the top wall row) is a wall in both the small and big grids.

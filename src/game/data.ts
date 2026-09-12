@@ -148,9 +148,12 @@ export const furnitureById = (id: string): Furniture => allFurnitureById(id);
 
 // Vehicles — Kojima Motors in the bad side of town.
 export interface Vehicle { id: string; name: string; price: number; blurb: string; sprite: string }
+// The City Bicycle was removed: at 9,000 yen it was referenced exactly once (its
+// own entry here) and did nothing — no speed effect, no scene access, no
+// achievement. Rather than leave a purchase that buys nothing, it's gone. Saves
+// that already own it keep a harmless unused 'bicycle' string in s.vehicles;
+// every read of s.vehicles tests for 'car' or 'boat' specifically.
 export const VEHICLES: Vehicle[] = [
-  { id: 'bicycle', name: 'City Bicycle', price: 9000, sprite: 'v-bicycle',
-    blurb: 'A trusty mama-chari. Beats waiting on the trains, and the basket holds your groceries.' },
   { id: 'car', name: 'Used Kei Car', price: 100000, sprite: 'v-car',
     blurb: 'The endgame on four wheels. Drive anywhere outdoors, park anywhere, very fast.' },
   { id: 'boat', name: 'Old Skiff', price: 22000, sprite: 'v-boat',

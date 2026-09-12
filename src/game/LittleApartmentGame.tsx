@@ -25,7 +25,7 @@ const drawVibeThumb = (el: HTMLCanvasElement | null, vibe: 'fem' | 'masc') => {
   cx.clearRect(0, 0, el.width, el.height);
   cx.drawImage(spr, 0, 0, el.width, el.height);
 };
-import { SCENES, SCENE_SIGNS, MANEKI_SLOT, SHELF_SLOT, GREENHOUSE_PLOTS, APARTMENT_BIG_GRID } from './maps';
+import { SCENES, SCENE_SIGNS, MANEKI_SLOT, SHELF_SLOT, GREENHOUSE_PLOTS, APARTMENT_BIG_GRID, HOME_ONSEN_TILE } from './maps';
 // The original (small) apartment grid, captured once before any room-expansion
 // swap so we can switch back on a fresh game.
 const APARTMENT_SMALL_GRID = SCENES.apartment.grid;
@@ -34,11 +34,9 @@ const APARTMENT_SMALL_GRID = SCENES.apartment.grid;
 const applyApartmentSize = (unlocked: boolean) => {
   SCENES.apartment.grid = unlocked ? APARTMENT_BIG_GRID : APARTMENT_SMALL_GRID;
 };
-// The private home onsen lives at a fixed top-right corner tile of the first room
-// (clear of the default futon, maneki, and trophy shelf, and present in both the
-// small and expanded grids). Once bought, it's drawn here and gets its own
-// interactable injected into the shared SceneDef (mirrors applyApartmentSize).
-const HOME_ONSEN_TILE = { x: 13, y: 1 };
+// Once bought, the onsen is drawn at HOME_ONSEN_TILE (declared in maps.ts, beside
+// the furniture slot table it has to stay clear of) and gets its own interactable
+// injected into the shared SceneDef (mirrors applyApartmentSize).
 const applyHomeOnsen = (present: boolean) => {
   const list = SCENES.apartment.interactables;
   const has = list.some(it => it.id === 'home-onsen');
@@ -1557,24 +1555,26 @@ const LittleApartmentGame: React.FC = () => {
   // update loop, so the loop calls through this ref; returns true if it handled
   // the press (the overlay stays open showing the result).
   const casinoEscRef = useRef<(shop: ShopId) => boolean>(() => false);
-  // Stop the slot reels / roulette wheel spinning if the player leaves the overlay (Esc, etc.).
+  // Leaving a spinning machine (Esc, walking out, any overlay change) must SETTLE,
+  // not merely stop the reels. The outcome is fixed at the pull, so settleSlots /
+  // settleRoulette clear the interval and pay out what was already decided.
+  // Resetting phase to 'idle' here instead threw the stake away: the settle guard
+  // bails on `phase !== 'spin'`, so the later call from startSlots/startRoulette
+  // found nothing to do and the bet — up to a 7-7-7 plus the whole progressive
+  // jackpot — was simply gone. Both settles are silent (no win/lose sfx offscreen).
   useEffect(() => {
     const { slot, roul } = casinoRef.current;
     const onSlots = overlay?.type === 'shop' && overlay.shop === 'slots';
-    if (!onSlots && slot.timer != null) {
-      window.clearInterval(slot.timer);
-      slot.timer = null;
-      if (slot.phase === 'spin') slot.phase = 'idle';
-    }
+    if (!onSlots && slot.timer != null) settleSlots(true);
     const onRoul = overlay?.type === 'shop' && overlay.shop === 'roulette';
-    if (!onRoul && roul.timer != null) {
-      window.clearInterval(roul.timer);
-      roul.timer = null;
-      if (roul.phase === 'spin') roul.phase = 'idle';
-    }
+    if (!onRoul && roul.timer != null) settleRoulette(true);
   }, [overlay]);
   useEffect(() => () => {
+    // Same on teardown: settle first so a spin still in flight pays into the
+    // persisted save, then make sure no interval outlives the component.
     const { slot, roul } = casinoRef.current;
+    if (slot.timer != null) settleSlots(true);
+    if (roul.timer != null) settleRoulette(true);
     if (slot.timer != null) window.clearInterval(slot.timer);
     if (roul.timer != null) window.clearInterval(roul.timer);
   }, []);
@@ -2066,19 +2066,22 @@ const LittleApartmentGame: React.FC = () => {
 
   // Derby payout: settle the day's run — Genji reads off your placement tier and
   // hands over the prize. `settleDerbyPrize` (state.ts, pure) owns the money +
-  // phone bulletin and the once-per-derby dedupe (storySeen `tournament-prize-
-  // <day>`, no save field); this wrapper owns the transient bits (score ref,
+  // phone bulletin and the top-up accounting (save fields derbyPaidDay /
+  // derbyPaid, so a later, higher tier pays the difference instead of being
+  // locked out); this wrapper owns the transient bits (score ref,
   // toast, sfx, achievement). Called from EVERY path that can end a run —
   // leaving the shore (enterScene), sleeping/collapsing (finishSleep, before
   // passNight bumps the day), and SAVE&QUIT (quitToMenu) — so sleeping on the
   // sand or quitting mid-derby can no longer silently eat the prize.
   const settleDerby = useCallback((s: GameSave) => {
     if (derbyDayRef.current !== s.day) return;
-    const tier = settleDerbyPrize(s, derbyScoreRef.current);
-    if (!tier) return;
+    const settled = settleDerbyPrize(s, derbyScoreRef.current);
+    if (!settled) return;
+    const { tier, paid } = settled;
     if (tier.name === 'Grand Marlin') award('grand-marlin');
     sfxCoin();
-    showToast(`🏆 ${tier.name}!`, `Derby ${derbyScoreRef.current} pts · +¥${tier.prize}`);
+    // `paid` is this call's payout, not the tier total — a top-up toasts the difference.
+    showToast(`🏆 ${tier.name}!`, `Derby ${derbyScoreRef.current} pts · +¥${paid}`);
   }, [award, showToast]);
 
   const enterScene = useCallback((id: string, tx: number, ty: number, dir: Dir) => {
@@ -3548,10 +3551,15 @@ const LittleApartmentGame: React.FC = () => {
     switch (target.id) {
       case 'window': {
         const n = s.owned.length;
+        // The payoff line is gated on the CORE set, via the same allFurnished()
+        // the granny line and the ending use. Testing `n < FURNITURE.length`
+        // made it unreachable: the 14 `optional: true` decor pieces were later
+        // appended to FURNITURE (length 24), so owning every core item never
+        // cleared the bar and nobody ever saw the last line.
         showDialog([
           n === 0
             ? 'The city goes on forever out there. Behind you, the apartment is an empty box. For now.'
-            : n < FURNITURE.length
+            : !allFurnished(s)
               ? `Trains, neon, ten million strangers. Behind you: ${n} ${n === 1 ? 'thing' : 'things'} that are yours.`
               : 'The city glitters. You turn around, and home glitters back.',
         ]);
@@ -7721,8 +7729,6 @@ const LittleApartmentGame: React.FC = () => {
     s.vehicles.push(vehicleId);
     if (vehicleId === 'car') s.carPos = { scene: 'badtown', x: 13, y: 8 };
     sfxBuy();
-    // The bicycle is the cheap entry buy and has no achievement of its own; only
-    // the kei and the skiff are milestones.
     if (vehicleId === 'car') award('wheels');
     else if (vehicleId === 'boat') award('captain');
     computeSolids();
@@ -7733,9 +7739,7 @@ const LittleApartmentGame: React.FC = () => {
     showDialog(
       vehicleId === 'car'
         ? ['Kojima slides the keys across the counter. "Treat her right."', 'She is parked out front. Walk up, press E, and drive. Press E again anywhere outdoors to park.']
-        : vehicleId === 'boat'
-          ? ['"She is moored down at the shore," Kojima says. "Deep water, and if you trust the hull — there is an island out there."']
-          : ['Kojima wheels out a well-loved mama-chari and pats the saddle. "Cheap, honest, no engine to baby. Basket\'s good for groceries."', '"She\'s yours. Beats waiting on the trains — go feel the city move."'],
+        : ['"She is moored down at the shore," Kojima says. "Deep water, and if you trust the hull — there is an island out there."'],
       'Kojima',
     );
   };

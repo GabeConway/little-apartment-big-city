@@ -1476,26 +1476,53 @@ describe('biteTableFor (weather-gated species)', () => {
 // ---- Fishing-derby payout (pure core) --------------------------------------------
 import { settleDerbyPrize } from '../src/game/state';
 
-describe('settleDerbyPrize (pays once, from any exit path)', () => {
+describe('settleDerbyPrize (tops up to the best tier, from any exit path)', () => {
   it('pays the earned tier + pushes Genji\'s chalkboard text on a derby day', () => {
     const s = newSave();
     s.day = 15;                                       // day ≡ 5 (mod 10) → derby
     const m0 = s.money;
-    const tier = settleDerbyPrize(s, 320);
-    expect(tier?.name).toBe('Gold Hook');
+    const settled = settleDerbyPrize(s, 320);
+    expect(settled?.tier.name).toBe('Gold Hook');
+    expect(settled?.paid).toBe(1100);
     expect(s.money).toBe(m0 + 1100);
     expect(s.storySeen).toContain('tournament-prize-15');
-    expect(s.messages.some(m => m.id === 'tournament-prize-15')).toBe(true);
+    expect(s.messages.some(m => m.id === 'tournament-prize-15-Gold Hook')).toBe(true);
   });
 
-  it('settles at most once per derby (storySeen dedupe survives sleep/quit re-calls)', () => {
+  it('never double-pays the same tier, however many exit paths re-call it', () => {
     const s = newSave();
     s.day = 25;
     const m0 = s.money;
-    expect(settleDerbyPrize(s, 50)?.name).toBe('Bronze Lure');
+    expect(settleDerbyPrize(s, 50)?.tier.name).toBe('Bronze Lure');
     expect(s.money).toBe(m0 + 200);
-    expect(settleDerbyPrize(s, 999)).toBeNull();      // a later exit path can't double-pay
+    expect(settleDerbyPrize(s, 50)).toBeNull();       // same tier again — nothing owed
+    expect(settleDerbyPrize(s, 10)).toBeNull();       // and a WORSE score never claws back
     expect(s.money).toBe(m0 + 200);
+  });
+
+  // The bug this replaces: leaving the shore settled at Bronze and stamped the
+  // day, so grinding back up to Grand Marlin paid nothing while the chalkboard
+  // kept advertising ¥2,200.
+  it('tops up the difference when a later, higher tier is reached the same day', () => {
+    const s = newSave();
+    s.day = 25;
+    const m0 = s.money;
+    expect(settleDerbyPrize(s, 8)?.paid).toBe(200);   // one minnow → Bronze Lure
+    const top = settleDerbyPrize(s, 600);             // ground back up to Grand Marlin
+    expect(top?.tier.name).toBe('Grand Marlin');
+    expect(top?.paid).toBe(2000);                     // 2200 total, 200 already paid
+    expect(s.money).toBe(m0 + 2200);                  // never more than the tier total
+    expect(s.messages.some(m => m.id === 'tournament-prize-25-Grand Marlin')).toBe(true);
+  });
+
+  it('starts fresh on the next derby day', () => {
+    const s = newSave();
+    s.day = 25;
+    settleDerbyPrize(s, 600);                         // Grand Marlin today
+    const m1 = s.money;
+    s.day = 35;                                       // next derby
+    expect(settleDerbyPrize(s, 50)?.paid).toBe(200);  // full Bronze, not 200 - 2200
+    expect(s.money).toBe(m1 + 200);
   });
 
   it('no-ops without a score, and off derby days', () => {
