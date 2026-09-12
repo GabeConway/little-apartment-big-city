@@ -66,6 +66,14 @@ contents — dialog `{speaker,line,idx,total}`, shop, menu tab, letter beat, sle
 null if no overlay), `scale` (live canvas integer
 scale), `money`, `day`, `energy`, `timeMin`, and full `save` object.
 
+Ref-mode minigames aren't in the save, so each publishes its own live block:
+`drive` (delivery race), `karaoke` (`t`, score, combo, perfects/goods/misses, done)
+and `fishing` — `{active:false}` when you're not fishing, else `{phase}` for
+`wait`/`bite` (with `t`, the seconds left on that phase) and, once hooked,
+`{phase:'reel', fish, fishPos, zonePos, zoneH, progress, done}`. That's enough to
+*play* the reel from a script: hold the action key while `fishPos` is above
+`zonePos + zoneH/2` and release below it.
+
 ### Commands
 - `shot` (default) — enter game, run inputs, screenshot, print snapshot.
 - `drive` — alias of `shot`; reads better when point is movement.
@@ -161,6 +169,63 @@ npm run playtest -- state --save rich --assert "money>500000"  # pass/fail via e
   screenshot of `PHONE,Bag,ARRANGE`) and verify the data side with unit tests
   (`tests/state.test.ts`). DOM buttons inside it (DONE / tray chips) are not
   plain `<button>`s, so `--click` won't drive them either.
+
+## Recording a gameplay video (`scripts/record-demo.mjs`)
+
+```bash
+node scripts/record-demo.mjs                 # → demo/little-apartment-demo.mp4 (~105s, 1152×672, 60fps)
+node scripts/record-demo.mjs --only karaoke   # just one beat (iterate fast)
+node scripts/record-demo.mjs --keep-frames    # leave the raw jpegs in demo/.work
+DEMO_TRACE=1 node scripts/record-demo.mjs …   # per-poll walker trace on stderr
+```
+
+Same harness shape as `playtest.mjs` — Vite dev server, headless Chromium, real
+keyboard events, `?debug` snapshot — but it records and cuts a showcase reel.
+`demo/` is gitignored.
+
+**Capture.** CDP `Page.startScreencast`, not Playwright's built-in recorder: the
+screencast hands you one jpeg per presented frame with a timestamp, so the
+encode is a true 60fps (Playwright's recorder is locked to 25 and judders on the
+karaoke chart). Frames land in `demo/.work`, then ffmpeg assembles them through a
+concat list with each frame's real duration.
+
+**Beats.** Only frames inside a named beat reach the video; the reload/teleport
+gaps between beats are dropped, so scenes hard-cut instead of flashing the title
+screen every time the save is reseeded. The canvas rect is measured **per beat** —
+the title screen has no HUD row above the canvas, so it sits ~48px higher than it
+does in play, and one shared crop box would letterbox half the reel. A forced
+`lab-scale` of 3 makes the canvas exactly 1152×672 (384×224 ×3) in a 1280×800
+viewport, so the crop is whole-pixel with no rescale.
+
+**Audio.** Playwright/CDP capture no audio, so the bed is built from the game's own
+mp3s: each beat gets its scene's `SCENE_MUSIC` track, trimmed and cross-faded to
+the beat's length. The karaoke beat also notes the frame the count-in ends, and
+"Midnight Neon" is `adelay`-ed by exactly that offset — the chart and the music
+line up in the video because both come off the same frame timestamps.
+
+**The minigames are played, not faked.** Karaoke replays `KARAOKE_CHART` with the
+lanes regenerated from the same fixed `mulberry32(20260701)` seed the game uses,
+tapped from a page-side rAF loop on the live song clock (a ±70ms PERFECT window is
+tighter than a CDP round-trip, so driving it from node would land GOODs at best) —
+it scores 25/25 PERFECT. Fishing strikes on the `bite` phase and bang-bang steers
+the reel off the snapshot's `fishing` block.
+
+**The walker** is closed-loop: BFS over the live `SCENES` grid (dynamically
+imported in-page, so it's the same module instance the game mutates — e.g. the
+knocked-through apartment), re-pathed every 70ms, with any tile it grinds against
+blacklisted. Two things it has to respect that a tile-grid BFS doesn't:
+- **Sub-tile alignment.** The player hitbox is `px+3..px+12` × `py+9..py+14`, but
+  the snapshot's tile is `floor((px+4)/16)` — so a tile reads clear while the box
+  already pokes into the next row. Walking a row needs `offY ∈ [-4,+1]`; walking a
+  column needs `offX ∈ [-3,+3]`. The walker squares up on the perpendicular axis
+  before committing to a direction. Without this it wedges silently: e.g. drifting
+  3px low in the club's top walkway clips the solid `JJJJ` booth row and you never
+  reach the DJ.
+- **Wanderers.** Townsfolk move, so a map's `npcs` tile is a starting guess only —
+  `talkTo(id, home)` re-reads the live position from `snapshot.wanderers` and
+  retries the approach. Some NPCs also sit in a pocket: the club DJ at (12,1) is
+  walled in by his own booth and blocks the walkway himself, so (11,1) facing
+  right is the *only* tile you can talk to him from.
 
 ## Bug-hunting playbook
 

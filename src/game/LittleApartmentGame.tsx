@@ -7321,6 +7321,22 @@ const LittleApartmentGame: React.FC = () => {
           grassT: Math.round(driveRef.current.grassT * 10) / 10,
           done: driveRef.current.done,
         } : { active: false, deliveryDay: saveRef.current.deliveryDay, deliveryBest: saveRef.current.deliveryBest },
+        // Fishing runtime (wait → bite → reel; canvas-drawn off fishModeRef, not
+        // persisted). Exposed so the harness can time the strike and steer the
+        // reel minigame instead of guessing at it blind.
+        fishing: (() => {
+          const fm = fishModeRef.current;
+          if (!fm) return { active: false };
+          if (fm.phase !== 'reel') return { active: true, phase: fm.phase, t: Math.round(fm.t * 100) / 100 };
+          return {
+            active: true, phase: 'reel', fish: fm.st.fish.name,
+            fishPos: Math.round(fm.st.fishPos * 1000) / 1000,
+            zonePos: Math.round(fm.st.zonePos * 1000) / 1000,
+            zoneH: ZONE_H,
+            progress: Math.round(fm.st.progress * 1000) / 1000,
+            done: fm.st.done,
+          };
+        })(),
         // Karaoke runtime (canvas-drawn off karaokeRef, not in the normal snapshot).
         karaoke: karaokeRef.current ? {
           active: true,

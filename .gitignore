@@ -30,3 +30,6 @@ src-tauri/gen/
 
 # agent worktrees (transient)
 .claude/worktrees/
+
+# gameplay demo recordings (scripts/record-demo.mjs)
+demo/

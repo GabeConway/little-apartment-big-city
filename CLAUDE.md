@@ -18,6 +18,7 @@ router, no site chrome. Input: keyboard, touch, or game controller.
 - `public/` — `images/`, `music/`, `sfx/` (assets are absolute paths: `/images/...`).
 - `src-tauri/` — Tauri v2 project (Rust). See [kb/build-targets.md](kb/build-targets.md).
 - `scripts/make-dmg.mjs` — builds the macOS dmg via `hdiutil` (see build-targets).
+- `scripts/record-demo.mjs` — records a gameplay showcase video locally (`demo/`, gitignored). See [kb/testing.md](kb/testing.md) "Recording a gameplay video".
 - `scripts/gemini-portraits.mjs` — Gemini API art generator (portraits/logos/splash; needs `GEMINI_API_KEY`), plus canvas helpers `chroma-key-logo.mjs` / `fix-nameplates.mjs`. Usage + prompt lessons: [kb/art-direction.md](kb/art-direction.md) "Gemini API pipeline".
 
 ## Knowledge base (`kb/`)
@@ -34,6 +35,7 @@ Seven files, indexed in [kb/README.md](kb/README.md). Read before editing the ma
 - `npm run build` — Vite build → `dist/` (the bundle Tauri wraps; not deployed anywhere).
 - `npm test` — Vitest unit tests.
 - `npm run playtest -- <shot|state|drive|title|presets> [opts]` — drive the game in a headless browser (seed save, send input, read live state, screenshot). See [kb/testing.md](kb/testing.md).
+- `node scripts/record-demo.mjs [--only <beats>]` — record a gameplay demo video to `demo/` (needs ffmpeg).
 - `npm run desktop:dev` / `:build` (+ `desktop:build:mac` for .app+.dmg), `android:dev` / `:build`, `ios:dev` / `:build` — Tauri (needs Rust; see build-targets).
 - `./start-dev.sh [desktop|android|ios]` (mac/linux) · `start-dev.ps1`/`.cmd` (Windows).
 
