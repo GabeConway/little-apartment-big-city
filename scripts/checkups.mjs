@@ -228,4 +228,29 @@ export const CHECKS = [
     click: 'PHONE,Collection',
     assert: "overlay==='menu' && overlayData && overlayData.tab==='collection'",
   },
+  // --- Bailing out of a spin settles it, never eats the stake -----------------
+  // Both rows assert on the PHASE, not on money: the stake is debited either way
+  // and most spins pay nothing, so the cash balance looks identical whether the
+  // outcome was settled or thrown away. phase 'done' = settled (paid what the
+  // reels/wheel had already fixed); phase 'idle' = the old bug, stake gone.
+  // The click sequence fires PULL/SPIN then the frame's close button back to
+  // back, which lands while the reels are still turning.
+  {
+    name: 'slots-bail-settles',
+    note: 'closing the slots panel mid-spin settles the fixed reels instead of eating the bet',
+    save: { scene: 'casino', px: 192, py: 32, dir: 'up', money: 20000, gangPaid: true, visited: ['casino'] },
+    keys: 'e',
+    click: 'PULL,✕',
+    wait: 900,
+    assert: "overlay===null && casino.slotPhase==='done' && money===20000-casino.slotBet+casino.slotWin",
+  },
+  {
+    name: 'roulette-bail-settles',
+    note: 'closing the roulette panel mid-spin settles the wheel instead of eating the bet',
+    save: { scene: 'casino', px: 112, py: 96, dir: 'up', money: 20000, gangPaid: true, visited: ['casino'] },
+    keys: 'e',
+    click: 'SPIN,✕',
+    wait: 900,
+    assert: "overlay===null && casino.roulPhase==='done' && money===20000-casino.roulBet+casino.roulWin",
+  },
 ];

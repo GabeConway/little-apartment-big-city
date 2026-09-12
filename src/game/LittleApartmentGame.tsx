@@ -7335,6 +7335,14 @@ const LittleApartmentGame: React.FC = () => {
           done: karaokeRef.current.done,
           tips: karaokeRef.current.tips,
         } : { active: false },
+        // Casino runtime (casinoRef, not persisted). The reel/wheel PHASE is the
+        // only way to see from outside that bailing mid-spin settled the stake
+        // instead of eating it: 'done' means it paid, 'idle' means it was thrown
+        // away. `checkup --only slots-bail-settles` asserts on it.
+        casino: {
+          slotPhase: casinoRef.current.slot.phase, slotBet: casinoRef.current.slot.bet, slotWin: casinoRef.current.slot.win,
+          roulPhase: casinoRef.current.roul.phase, roulBet: casinoRef.current.roul.bet, roulWin: casinoRef.current.roul.win,
+        },
         save: saveRef.current,
       }),
     };
