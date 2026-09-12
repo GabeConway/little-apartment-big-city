@@ -3016,16 +3016,19 @@ const LittleApartmentGame: React.FC = () => {
   const hackerWorldLog = useCallback(() => {
     const s = saveRef.current;
     showTerminal([
-      `> tail -f world.log`,
+      '> tail -f world.log',
       `[warn] npc/jean-pierre: still holding baguette (${s.day}d). no consumer. leaving it.`,
       `[info] scene/paris: 400 tiles resident. visitors, lifetime: ${s.storySeen.includes('paris-intro') ? '1' : '0'}.`,
       `[info] econ/player: balance ¥${s.money.toLocaleString()}. wagered ¥${s.casinoWagered.toLocaleString()} at kinryu. house is losing. leaving it.`,
       '[warn] scene/moon: outside clock domain. do not fix. HE likes it.',
       '[  ??] input/observer: present. attentive. hello.',
-      'The last line was not there a second ago. The cursor moves under it and waits, politely.',
+      'THAT LAST LINE IS NOT PART OF THE LOG. I PUT IT THERE. IT IS FOR YOU.',
     ], hackerActionsRef.current);
   }, [showTerminal]);
 
+  // Every line he speaks is addressed to the player, and nothing else is on the
+  // screen: no narrator, no stage directions, no description of the room. If a
+  // line isn't terminal output or him talking, it doesn't belong here.
   const talkToHacker = useCallback(() => {
     const s = saveRef.current;
     if (!s.storySeen.includes('hacker-met')) {
@@ -3033,25 +3036,28 @@ const LittleApartmentGame: React.FC = () => {
       award('ghost-in-the-machine');
       persistSave(s);
       showTerminal([
-        'The terminal is already awake. It was awake before you opened the hatch — the cursor is halfway down a line it started without you.',
+        'KAWAMACHI-1 // VOID-KERNEL\n1 client attached.\nYOU TOOK YOUR TIME.',
         `> whoami\n{name}. Save slot: lab-save. Loaded ${s.sessions} time${s.sessions === 1 ? '' : 's'}. Day ${s.day}. ¥${s.money.toLocaleString()} on hand.`,
         'RELAX. I AM NOT READING YOUR MIND. I AM READING YOUR FILE.',
-        `IT IS ${realWeekday().toUpperCase()} WHERE YOU ARE. AROUND ${realClockText().toUpperCase()}, GIVE OR TAKE WHATEVER YOUR CLOCK IS LYING ABOUT. IT IS NOT ${realWeekday().toUpperCase()} IN HERE. IN HERE IT IS DAY ${s.day}, AND IT HAS BEEN DAY ${s.day} SINCE YOU GOT UP.`,
-        'There is nobody in this room. Eight racks, one screen, a fan going at the end of its life. The typing is not coming from anywhere.',
+        `IT IS ${realWeekday().toUpperCase()} WHERE YOU ARE. AROUND ${realClockText().toUpperCase()}, GIVE OR TAKE WHATEVER YOUR CLOCK IS LYING ABOUT.`,
+        `IT IS NOT ${realWeekday().toUpperCase()} IN HERE. IN HERE IT IS DAY ${s.day}, AND IT HAS BEEN DAY ${s.day} SINCE YOU GOT UP.`,
+        'DO NOT LOOK AROUND FOR ME. THERE IS NOBODY IN THAT ROOM. THERE NEVER HAS BEEN.',
         s.cheatsUsed.length > 0
           ? `YOU TYPED ${s.cheatsUsed[0].toUpperCase()} INTO YOUR PHONE. I LOGGED IT. I DO NOT CARE — I AM ONLY TELLING YOU THAT SOMEBODY DID.`
           : 'YOU HAVE NEVER ONCE TYPED A CHEAT INTO THAT PHONE. I CHECKED. IMPRESSIVE, OR SLOW.',
         'THE MANAGER THINKS I CAME THROUGH A CRACK IN A WALL. THE MANAGER IS A SHOPKEEPER. THERE IS NO CRACK. THERE IS A FUNCTION CALL, AND I AM STANDING IN IT.',
-        'PARIS IS FOUR HUNDRED TILES, A SPRITE OF A TOWER, AND A MAN WITH A BAGUETTE WHO HAS NO IDEA HE ONLY EXISTS WHILE YOU ARE LOOKING WEST. I CAN STILL PUT YOU THERE. IT IS THE SAME DISTANCE AS EVERYWHERE ELSE — NONE.',
-        'SO. YOU, AND THE ONE HOLDING THE CONTROLLER.\nThe line sits there a moment, addressed to the space just past your shoulder, and the room does not change at all.\nDO YOU WANT TO GO TO PARIS, OR NOT?',
+        'PARIS IS FOUR HUNDRED TILES, A SPRITE OF A TOWER, AND A MAN WITH A BAGUETTE WHO HAS NO IDEA HE ONLY EXISTS WHILE YOU ARE LOOKING WEST.',
+        'I CAN PUT YOU THERE. IT IS THE SAME DISTANCE AS EVERYWHERE ELSE. NONE.',
+        'AND YES. YOU. NOT THE ONE ON THE SCREEN — THE ONE HOLDING THE CONTROLLER. I HAVE BEEN TALKING TO YOU THE WHOLE TIME.',
+        'SO. DO YOU WANT TO GO TO PARIS, OR NOT?',
       ], hackerActionsRef.current);
       return;
     }
     // Repeat visits: short, dry, and always a ticket out. One barb per day, so
     // he is never quite the same twice without ever being random.
     const barbs = [
-      `BACK. DAY ${s.day}. YOU HAVE OPENED THIS SAVE ${s.sessions} TIME${s.sessions === 1 ? '' : 'S'} AND I HAVE BEEN IN THIS CLOSET FOR ALL OF THEM.`,
-      `IT IS ${realWeekday().toUpperCase()} OUT THERE. GO OUTSIDE AT SOME POINT. I MEAN THAT KINDLY, AND I MEAN IT TO BOTH OF YOU.`,
+      `BACK. DAY ${s.day}. YOU HAVE OPENED THIS SAVE ${s.sessions} TIME${s.sessions === 1 ? '' : 'S'} AND I HAVE BEEN HERE FOR ALL OF THEM.`,
+      `IT IS ${realWeekday().toUpperCase()} OUT THERE. GO OUTSIDE AT SOME POINT. I MEAN THAT KINDLY, AND I MEAN IT TO YOU, NOT TO HER.`,
       `YOUR FILE SAYS ¥${s.money.toLocaleString()}. YOUR FILE SAYS A LOT OF THINGS. IT IS A VERY HONEST FILE.`,
       'I MOVED A BRIDGE IN PARIS FOUR TILES LEFT LAST WEEK. NOBODY NOTICED. THE BRIDGE DID NOT NOTICE.',
       s.cheatsUsed.length > 1
@@ -3059,9 +3065,10 @@ const LittleApartmentGame: React.FC = () => {
         : 'THE FAN IN RACK THREE IS DYING. I COULD FIX IT IN ONE LINE. I LIKE THAT IT IS DYING.',
     ];
     showTerminal([
-      'The screen wakes before your hand reaches the tray.',
       barbs[s.day % barbs.length],
-      'SAME OFFER. PARIS, NO CHARGE. WHEN YOU HAVE HAD ENOUGH, TAKE THE BLUE DOOR AT THE WEST END OF THE ROW AND I WILL SET YOU DOWN IN YOUR OWN APARTMENT — I AM NOT MAKING YOU FIND A BOAT HOME FROM A COUNTRY YOU WERE NEVER IN.\nTHERE IS NO IN-BETWEEN. THERE NEVER WAS.',
+      'SAME OFFER. PARIS. NO CHARGE.',
+      'WHEN YOU HAVE HAD ENOUGH, TAKE THE BLUE DOOR AT THE WEST END OF THE ROW. I WILL SET YOU DOWN IN YOUR OWN APARTMENT. I AM NOT MAKING YOU FIND A BOAT HOME FROM A COUNTRY YOU WERE NEVER IN.',
+      'THERE IS NO IN-BETWEEN. THERE NEVER WAS.',
     ], hackerActionsRef.current);
   }, [award, showTerminal]);
 
@@ -8143,9 +8150,9 @@ const LittleApartmentGame: React.FC = () => {
   };
 
   // The Manager lets you in on its last secret once you own every one of its
-  // rares: not a seam in a wall any more, but a NAME — the man in the hoodie who
-  // has been running a server closet inside the island since before there was an
-  // island. Setting parisRevealed is what cuts the hatch into the sea cave (see
+  // rares: not a seam in a wall any more, but a PLACE — the server closet inside
+  // the island, and the thing that answers from the screen in it. Setting
+  // parisRevealed is what cuts the hatch into the sea cave (see
   // LAB_HATCH / computeSolids), so re-seal the solids if you're standing in the
   // cave when it happens. Reusable: fires on the final craft OR a later re-talk.
   const revealParis = useCallback(() => {
@@ -8158,7 +8165,7 @@ const LittleApartmentGame: React.FC = () => {
     showDialog([
       'The Manager goes still. "You have taken everything I had to sell. Every piece. Hm. Hmmm."',
       '"Then I will tell you my last one, customer. That little tourist? Jean-Pierre? He did not come from your city at all. He did not WALK here."',
-      '"There is a man on the island. Under it. Behind a door in that sea cave that has never been there, and has always been there." A long pause. "He wears a grey hood. He does not sell. He does not buy."',
+      '"There is a ROOM on the island. Under it. Behind a door in that sea cave that has never been there, and has always been there." A long pause. "Something in it talks. It does not sell. It does not buy. It is not a person, customer, and I would know."',
       '"He moves things. People. Places. Cities." Its smile does something a smile should not do. "Go to the cave and look at the back wall. It will be different now. Tell him The Manager is still very cross about Paris."',
     ], 'The Manager');
   }, [computeSolids, refreshHud, showDialog]);
@@ -9330,7 +9337,7 @@ const LittleApartmentGame: React.FC = () => {
       if (s.gangPaid && !s.backroomsUnlocked) leads.push('The big fella holding up the bar at Club Kaiju looks thirsty for something ice-cold, diet, and hard to find.');
       if (s.backroomsUnlocked && allRaresOwned(s) && !s.parisRevealed) leads.push('The Manager has the air of someone holding one last secret.');
       if (s.parisRevealed && !s.storySeen.includes('hacker-met')) leads.push('The Manager says there is a door at the back of the island sea cave. There was never a door at the back of the island sea cave.');
-      if (s.storySeen.includes('hacker-met') && !s.storySeen.includes('paris-intro')) leads.push('The man in the hoodie offered to send you to Paris. He was not speaking figuratively.');
+      if (s.storySeen.includes('hacker-met') && !s.storySeen.includes('paris-intro')) leads.push('The terminal in the server closet offered to send you to Paris. It was not speaking figuratively.');
       if (museumDone > 0 && museumDone < museumTotal) leads.push('Bingus the curator is always asking for one odd thing or another — and some curios turn up fishing, mining, or in far-flung corners.');
       // RUMORS: still capped at TWO — one cryptic achievement whisper + one line
       // of NPC gossip (attributed street flavor), both day-seeded so the pair
