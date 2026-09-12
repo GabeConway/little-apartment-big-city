@@ -27,7 +27,7 @@ All three are exit-code checkable. If any fails after your change, the change di
 - `npm run test:watch` — watch mode while developing.
 
 ### Coverage (as built)
-`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers, town-event attendance windows). ~257 tests (incl. save-code round-trips, cat-gift seeding, mission predicates, weather-fish gating). Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see the bug-hunting playbook below).
+`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers, town-event attendance windows), `maps.test.ts` (the apartment's fixed tiles — home onsen, maneki, trophy shelf — must not collide with `APARTMENT_SLOTS`/`RARE_SLOTS` and must be floor in both the small and expanded grids; this is the guard for the onsen-on-the-fridge bug). ~257 tests (incl. save-code round-trips, cat-gift seeding, mission predicates, weather-fish gating). Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see the bug-hunting playbook below).
 
 ### Where it runs
 - **CI on every PR + push to main**: `.github/workflows/ci.yml` (`check` job) runs `tsc --noEmit` → `npm test` → `npm run build` on ubuntu. Rust-free + fast; native bundling stays in `release.yml`.
@@ -49,6 +49,11 @@ Vite **dev** server — no Rust, no Tauri, no build step. Lives in
 ### How it works
 - Spawns `vite` on port **5179** (override `PLAYTEST_PORT`), opens Chromium,
   navigates to `/?debug`.
+- Beyond the persisted save, the snapshot carries the **runtime** blocks that are
+  canvas-drawn and never persisted — `drive`, `karaoke`, `fishing` and `casino`.
+  Add one when a minigame needs driving or asserting from outside. `casino` exposes
+  `slotPhase`/`roulPhase` (+ bet, win), which is the only way to see that bailing
+  out of a spin settled the stake rather than eating it.
 - `?debug` makes game publish **read-only** snapshot at `window.__lab.snapshot()`
   (see gated `useEffect` in `LittleApartmentGame.tsx`). Exists **only**
   with that flag — never in normal play or shipped builds. Dependency-free

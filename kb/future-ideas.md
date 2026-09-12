@@ -35,65 +35,72 @@ See kb/games.md Casino section + the four 07-02 "Recent changes" batches. Left:
   it. If it recurs: get WHERE + time of day ('Talk' only comes from an NPC on
   the faced tile).
 
-## Known bugs — found by code review 2026-09-11, each verified in code, all UNFIXED
-Found during the go-public audit. These are confirmed defects, not ideas: every one
-was traced through the source before being written down. Ordered worst first. They
-predate the audit and are live in v1.1.1.
+## Known bugs
+**The list is currently empty.** The five defects found by the 2026-09-11 go-public
+code review were all fixed on 2026-09-12 — see "Fixed on 2026-09-12" below for what
+they were and what guards them now. Add a bug here only once it is *verified in the
+source*, with a repro; this file is the first place to check before hunting one.
 
-1. **Bailing a slots/roulette spin eats the stake.** `spinSlots`
-   (LittleApartmentGame.tsx:7465) debits `s.money -= slot.bet` at :7469 and fixes the
-   outcome in `slot.final` at :7471. If the player closes the overlay before the reels
-   land, the `[overlay]` effect at :1561 clears the interval **and sets
-   `slot.phase = 'idle'`**. The `settleSlots(true)` guard that exists for exactly this
-   case is only called from `startSlots` (:2792) — i.e. the *next* time the machine is
-   opened — and bails immediately at `if (slot.phase !== 'spin') return;` (:7443),
-   because the effect already flipped the phase. Net: stake gone, `slot.final`
-   discarded, nothing ever paid. A 7-7-7 plus the whole progressive jackpot can vanish.
-   `settleRoulette` has the identical shape (:7511/:7514, called from :2799).
-   *Fix:* settle inside the `[overlay]` effect, or stop resetting `phase` there.
+## Fixed on 2026-09-12 (was: the go-public audit's five known bugs)
+All five were live in v1.1.1 and are now fixed on DEV in one commit
+(`fix: clear the five verified bugs from the go-public audit`). Kept here so they
+are not re-reported as new findings, and so the guards are discoverable.
 
-2. **Leaving the shore locks in the derby prize for the rest of the day.**
-   `enterScene` calls `settleDerby` on any exit from `TOURNAMENT_SCENE`
-   (LittleApartmentGame.tsx:2089). `settleDerbyPrize` (state.ts:1659) stamps
-   `storySeen['tournament-prize-<day>']` on the first settle and returns `null`
-   forever after. But `derbyScoreRef` keeps accumulating all day (only reset when
-   `derbyDayRef.current !== s.day`), and the derby banner + chalkboard keep
-   advertising the rising tally and the next tier. *Repro:* catch one minnow (~8 pts,
-   Bronze ¥200 paid), walk to the city for bait, come back and grind to 600 pts —
-   Grand Marlin is displayed, ¥2,200 is never paid.
-   *Fix:* let a later, higher tier top up the difference, or don't settle until the
-   day actually ends.
+1. **Bailing a slots/roulette spin ate the stake.** The `[overlay]` effect cleared
+   the reel interval and reset `phase` to `'idle'`, which made the `settleSlots(true)`
+   guard (`if (slot.phase !== 'spin') return`) bail when `startSlots` called it on the
+   next visit — bet debited, `slot.final` discarded, nothing paid. A 7-7-7 plus the
+   whole progressive jackpot could vanish. The effect now *settles* instead of
+   resetting phase (`settleSlots` clears its own timer), `settleRoulette` got the same
+   treatment, and the unmount cleanup settles too.
+   *Guarded by:* checkup rows `slots-bail-settles` / `roulette-bail-settles`. They
+   assert on the casino **phase** from the `?debug` snapshot, not on money — the
+   stake is debited either way and most spins pay nothing, so the balance is
+   identical whether the bail settled or ate it. `'done'` = settled, `'idle'` = bug.
 
-3. **Home onsen is placed on the fridge's tile.** `HOME_ONSEN_TILE = { x: 13, y: 1 }`
-   (LittleApartmentGame.tsx:41); `maps.ts:67` has
-   `{ itemId: 'fridge', x: 13, y: 1, w: 1, h: 1, solid: true }`. The comment above the
-   constant claims the tile is clear of the futon, maneki and trophy shelf — it does
-   not account for the row-1 appliance slots. `mergeSave` (state.ts:354) auto-places
-   owned items at those slots for v1 saves, so a migrated save with a fridge that buys
-   the onsen gets both sprites on one solid tile, with the `home-onsen` interactable
-   sitting on the fridge. The `occ` guard at :8410 only blocks *future* placement.
+2. **Leaving the shore locked in the derby prize for the day.** `settleDerbyPrize`
+   stamped `storySeen['tournament-prize-<day>']` on the first settle and returned
+   `null` forever after, while `derbyScoreRef` kept climbing and the banner and
+   chalkboard kept advertising the next tier. Settling is now a **top-up**: save
+   fields `derbyPaidDay` / `derbyPaid` record what today's derby already paid and
+   only the difference to the newly earned tier is handed over, so Bronze-then-grind
+   -to-Grand-Marlin pays 200 then 2,000 (2,200 total, never double-paid). The
+   function returns `{ tier, paid }` so the toast reports *this* call's payout.
+   Both fields default to 0, which `mergeSave`'s spread over `newSave()` already
+   applies to old saves — no save version bump.
+   *Guarded by:* four cases in `tests/state.test.ts` (top-up, no double-pay, no
+   claw-back on a worse score, fresh start next derby day).
 
-4. **The ¥9,000 City Bicycle does nothing.** `'bicycle'` appears exactly once in the
-   whole game — its own definition at data.ts:152. `s.vehicles` is only ever read for
-   `'car'` (driving, `carPos`, Kojima) and `'boat'` (deep-sea/island access, coconut
-   errand gating). No movement-speed effect, no scene access, and it's explicitly
-   excluded from the vehicle achievement. *Fix:* wire it to player speed, or drop it
-   from `VEHICLES`.
+3. **The home onsen sat on the fridge's tile.** `HOME_ONSEN_TILE` was
+   `{ x: 13, y: 1 }` — exactly the fridge slot — so a save with a fridge drew both
+   sprites on one solid tile with the onsen interactable on the appliance. Moved to
+   `{ x: 12, y: 1 }`, and the constant moved out of `LittleApartmentGame.tsx` into
+   `maps.ts` beside `APARTMENT_SLOTS`, because the two living in different files is
+   how the clash went unnoticed. Row 1's free x values are 5, 7, 10 and 12.
+   *Guarded by:* `tests/maps.test.ts` (new) — the onsen tile must be floor in both
+   the small and expanded grids and must not collide with any furniture slot, the
+   maneki or the trophy shelf. It fails on the old `{ x: 13, y: 1 }`.
 
-5. **The "fully furnished" window line is unreachable.** LittleApartmentGame.tsx:3554
-   still tests `n < FURNITURE.length`, which became 24 when the 14 `optional: true`
-   decor pieces were appended to `FURNITURE`. Every other consumer was updated to
-   filter first — `allFurnished` (state.ts:832) and `coreFurniture` (:9023) both use
-   `FURNITURE.filter(f => !f.optional)`. So a player who furnishes the core set never
-   sees the payoff line. *Fix:* filter `!f.optional` here too.
+4. **The ¥9,000 City Bicycle did nothing** — it appeared exactly once in the game,
+   in its own `VEHICLES` entry. Removed, along with its unused `v-bicycle` atlas
+   tile and the now-unreachable Kojima dialog branch. Saves that already bought it
+   keep a harmless unused `'bicycle'` string in `s.vehicles`; every read of that
+   array tests for `'car'` or `'boat'` specifically. **This is a deliberate design
+   change, not just a fix** — the alternative was wiring it to player speed.
 
-Two more findings from the same review are already resolved, recorded so they aren't
-re-reported: the `useUiNav` key-auto-repeat hole (holding Space on the title walked
-focus onto DELETE SAVE and confirmed it) and the `gemini-portraits.mjs` roster pointing
-at the deleted `granny-soto.png` — both fixed in the 2026-09-11 public-prep commit. A
-sixth claim, that the tea blurb's "Pricey to start" contradicts its price, is **not a
-bug**: at ¥350 tea is the second-most-expensive seed (melon 400 > tea 350 > chili 160 >
-tomato 140 > sunflower 80).
+5. **The "fully furnished" window line was unreachable.** It tested
+   `n < FURNITURE.length`, which became 24 when the 14 `optional: true` decor pieces
+   were appended, so owning the core set never cleared the bar. Now gated on
+   `allFurnished(s)` — the same helper the granny line and the ending already use —
+   rather than a second count that could drift again.
+
+Two further findings from the same review were already resolved before it was
+written up, recorded so they aren't re-reported: the `useUiNav` key-auto-repeat hole
+(holding Space on the title walked focus onto DELETE SAVE and confirmed it) and the
+`gemini-portraits.mjs` roster pointing at the deleted `granny-soto.png` — both fixed
+in the 2026-09-11 public-prep commit. A sixth claim, that the tea blurb's "Pricey to
+start" contradicts its price, is **not a bug**: at ¥350 tea is the second-most-
+expensive seed (melon 400 > tea 350 > chili 160 > tomato 140 > sunflower 80).
 
 ## Audit leftovers (accepted, watch)
 - Max-luck seacave sift: 37% daily Astral Stone at caveLuck 5.

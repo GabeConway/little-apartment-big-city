@@ -28,7 +28,7 @@ Seven files, indexed in [kb/README.md](kb/README.md). Read before editing the ma
 - [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
 - [kb/testing.md](kb/testing.md) — the 3-command health check, Vitest setup, the Playwright playtest harness (`npm run playtest`), and the bug-hunting playbook.
 - [kb/conventions.md](kb/conventions.md) — coding conventions + dependency versions and security policy.
-- [kb/future-ideas.md](kb/future-ideas.md) — parked work, ideas backlog, sfx wishlist, **and the "Known bugs" list (verified, unfixed, with repro steps) — check it before hunting a bug.**
+- [kb/future-ideas.md](kb/future-ideas.md) — parked work, ideas backlog, sfx wishlist, **and the "Known bugs" list (verified, unfixed, with repro steps; empty right now) plus the record of fixed bugs and their guards — check it before hunting a bug.**
 
 ## Commands
 - `npm run dev` — Vite dev server in a browser (fast iteration only; not a ship target). No Rust needed.
