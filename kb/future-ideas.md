@@ -71,6 +71,42 @@ code review were all fixed on 2026-09-12 — see "Fixed on 2026-09-12" below for
 they were and what guards them now. Add a bug here only once it is *verified in the
 source*, with a repro; this file is the first place to check before hunting one.
 
+## Fixed on 2026-09-12 (second pass) — the derby left shops staffed by nobody
+
+**Reported by the owner:** "on fishing turney day when everyone is at the beach,
+for example at kojma motors you can still talk to the table or the fishing job."
+
+The 2026-09-11 town-event work (below, and `TOWN_EVENT_ATTENDEES` in state.ts)
+correctly pulls Kojima the mechanic out of the garage and stages him at the derby
+— `npcHiddenNow` stops drawing him and `atTownEventNow` stops him colliding. What
+it never covered was his **props**. The garage's two interactables,
+`shop-garage` (the Vehicles counter) and `job-dispatch` (the wall clipboard),
+dispatch straight off `target.id` with no idea whether anyone is behind them, so
+on a derby day you could buy a kei truck and take a delivery gig out of a visibly
+empty room. The in-person path was *already* guarded
+(`npc.id === 'mechanic' && scene.id === 'garage'`, added so the gig couldn't
+launch from the beach) — which is exactly why this looked fixed and wasn't.
+
+*Fix:* **`STAFFED_INTERACTABLES`** (LittleApartmentGame.tsx, beside
+`npcHiddenNow`) — a table of interactable id → `{ npc, line }`. One check ahead of
+the `switch (target.id)`: if that hotspot's staffer is `atTownEventNow`, show the
+line and return. Both garage hotspots bounce with a note saying where Kojima
+actually is.
+
+*Deliberately NOT listed:* the coin-op gachapon in the hall the `collector`
+wanders (it never needed him), and the shrine box. Granny and Charlie are derby
+attendees but staff nothing — they wander the city. Kojima is the only staffer
+the derby takes, which is why the copy can name the derby; reword if he ever
+joins a festival.
+
+*Guarded by:* three `checkup` rows. `derby-shuts-the-garage-counter` and
+`derby-shuts-the-dispatch-board` run on day 15 (a derby day: `day % 10 === 5`,
+10:00, inside the crowd window) and assert each hotspot bounces to a dialog
+rather than opening the shop or starting the drive.
+`garage-counter-open-on-a-normal-day` is the **control**, on day 14 — and it
+matters more than the other two: it is what catches a future gate that closes the
+garage on an ordinary day.
+
 ## Fixed on 2026-09-12 (was: the go-public audit's five known bugs)
 All five were live in v1.1.1 and are now fixed on DEV in one commit
 (`fix: clear the five verified bugs from the go-public audit`). Kept here so they

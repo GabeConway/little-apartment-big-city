@@ -1222,7 +1222,10 @@ const museum: SceneDef = {
     '#..............#',
     '#.p..p..p..p...#',
     '#..............#',
-    '#.p..p..p..p...#',
+    // The lone plinth at col 14 is the thirteenth display — the corrupted one
+    // (MUSEUM_SLOTS 'arti-corrupt'). It stands apart from the row of four on
+    // purpose; Bingus does not like to put it next to the others.
+    '#.p..p..p..p..p#',
     '#......cc......#',
     '#.rr...cc...rr.#',
     '#......cc......#',

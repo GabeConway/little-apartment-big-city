@@ -1700,6 +1700,20 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(8, 8, 1, 1);      // hottest seam
     ctx.fillStyle = '#e8f0f4'; ctx.fillRect(4, 12, 8, 1); ctx.fillStyle = '#9aa0a6'; ctx.fillRect(4, 13, 8, 1); // glass display base
   });
+  atlas['mus-arti-corrupt'] = tile(ctx => {                   // ████████.rec — the object IS the corruption
+    // Deliberately wrong, and the only piece in the gallery that is: a mass with
+    // a scanline missing outright, channel-split rows shoved off their own edges,
+    // and one pixel of something almost legible. Without its own sprite this slot
+    // falls back to the generic `t-pedestal-full` urn, which is a 5×3px speck and
+    // reads as a rendering bug rather than an exhibit.
+    ctx.fillStyle = '#16181d'; ctx.fillRect(4, 4, 8, 4); ctx.fillRect(4, 9, 8, 4);  // the mass — row 8 is simply not there
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(4, 4, 8, 1);      // top face
+    ctx.fillStyle = '#d05050'; ctx.fillRect(6, 6, 9, 1);      // red channel, shoved right past its own edge
+    ctx.fillStyle = '#50c8d0'; ctx.fillRect(1, 10, 9, 1);     // cyan channel, shoved left past its own edge
+    ctx.fillStyle = '#7a2ee0'; ctx.fillRect(4, 11, 5, 1);     // a row that belongs to some other object
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(9, 5, 1, 1);      // one pixel of something almost legible
+    ctx.fillStyle = '#b08a50'; ctx.fillRect(6, 13, 4, 1);     // stand
+  });
   // Museum exterior facade — neoclassical pale stone with seamless fluting,
   // so a row of these reads as one stately storefront amid grimy Downtown.
   atlas['t-museum-front'] = tile(ctx => {                      // dark stately stone, fits the neon street

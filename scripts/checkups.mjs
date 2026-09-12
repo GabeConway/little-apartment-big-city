@@ -294,4 +294,142 @@ export const CHECKS = [
     wait: 300,
     assert: "scene==='backrooms' && overlay==='dialog'",
   },
+
+  // ---- Derby day leaves nobody minding the shop -------------------------------
+  // Day 15 is a derby day (`day % 10 === 5`, never day 1) and 10:00 is inside the
+  // crowd window (derby packs up at 20:00). Kojima is a derby attendee, so the
+  // garage is empty — but its counter and job board used to serve you anyway.
+  // See STAFFED_INTERACTABLES, and the write-up in kb/future-ideas.md.
+  {
+    name: 'derby-shuts-the-garage-counter',
+    note: 'on a derby day the Vehicles counter bounces instead of opening the shop — Kojima is on the sand',
+    save: { scene: 'garage', day: 15, timeMin: 600, px: 88, py: 92, dir: 'up', money: 200000, storySeen: ['arrive'], visited: ['garage'] },
+    keys: 'e',
+    wait: 500,
+    assert: "overlay==='dialog' && (!overlayData || overlayData.shop===undefined)",
+  },
+  {
+    name: 'derby-shuts-the-dispatch-board',
+    note: 'on a derby day the delivery clipboard bounces instead of starting the run',
+    save: { scene: 'garage', day: 15, timeMin: 600, px: 152, py: 28, dir: 'up', money: 200000, storySeen: ['arrive'], visited: ['garage'] },
+    keys: 'e',
+    wait: 500,
+    assert: "overlay==='dialog' && drive.active===false",
+  },
+  {
+    // The CONTROL, and the more important of the two: it catches a future gate
+    // that closes the garage on an ordinary day.
+    name: 'garage-counter-open-on-a-normal-day',
+    note: 'day 14 is not a derby day — the Vehicles counter must still open',
+    save: { scene: 'garage', day: 14, timeMin: 600, px: 88, py: 92, dir: 'up', money: 200000, storySeen: ['arrive'], visited: ['garage'] },
+    keys: 'e',
+    wait: 500,
+    assert: "overlay==='shop' && overlayData.shop==='garage'",
+  },
+
+  // ---- The corrupted thirteenth museum curio ----------------------------------
+  // Only exists on a save that came back from ████████.EXE (save.corruptDone).
+  // See MUSEUM_SLOTS 'arti-corrupt' / MUSEUM_FINDS `gated: 'corruption'`.
+  {
+    name: 'corrupt-curio-absent-normally',
+    note: 'no corrupted curio on the apartment floor unless you went through ████████.EXE',
+    save: { scene: 'apartment', px: 40, py: 60, dir: 'up', storySeen: ['arrive'], visited: ['apartment'] },
+    keys: 'e',
+    wait: 400,
+    assert: 'save.collectibles.length===0',
+  },
+  {
+    name: 'corrupt-wake-sets-corrupt-done',
+    note: 'begin() consumes the one-shot corruptWake and leaves the permanent corruptDone behind',
+    save: { scene: 'city', px: 96, py: 224, corruptWake: true, storySeen: ['arrive'], visited: ['city'] },
+    wait: 400,
+    assert: "save.corruptWake===false && save.corruptDone===true && scene==='apartment'",
+  },
+  {
+    name: 'corrupt-curio-on-the-floor',
+    note: 'with corruptDone set, the curio is beside the bed at (3,3) and pockets with its own text',
+    save: { scene: 'apartment', px: 40, py: 60, dir: 'up', corruptDone: true, storySeen: ['arrive'], visited: ['apartment'] },
+    keys: 'e',
+    wait: 500,
+    assert: "save.collectibles.includes('arti-corrupt') && overlayData.speaker==='████████'",
+  },
+  {
+    name: 'corrupt-curio-donates-off-tally',
+    note: 'donating the 13th fills its corner plinth without moving the N-of-12 tally or paying the curator bonus',
+    save: { scene: 'museum', px: 216, py: 76, dir: 'up', money: 20000, corruptDone: true,
+      collectibles: ['arti-corrupt'], storySeen: ['arrive'], visited: ['museum'] },
+    keys: 'e',
+    wait: 500,
+    assert: "save.museum.donated.includes('arti-corrupt') && money===20000 && !save.gameAch.includes('curator')",
+  },
+  {
+    name: 'museum-completes-without-the-13th',
+    note: 'the core 12 still complete and pay ¥10,000 with the corrupted slot empty — it must never gate 100%',
+    save: { scene: 'museum', px: 168, py: 76, dir: 'up', money: 20000, collectibles: ['arti-meteor'],
+      storySeen: ['arrive'], visited: ['museum'],
+      museum: { donated: ['art-alley', 'art-madonna', 'art-bento', 'art-cat', 'arti-coin',
+        'arti-token', 'arti-onigiri', 'arti-rock', 'arti-lure', 'arti-shard', 'arti-capsule'] } },
+    keys: 'e',
+    wait: 500,
+    assert: "money===30000 && save.gameAch.includes('curator') && !save.museum.donated.includes('arti-corrupt')",
+  },
+  {
+    // Spoiler guard, PARTIAL. Without the optional-slot filter the Collection app
+    // advertises "0 of 13" plus a 13th ??? row on a brand-new save, giving away
+    // both that a hidden exhibit exists and that you are missing it.
+    // NOTE: the snapshot carries no panel TEXT (overlayData for a menu is just
+    // {tab, thread, unread}), so this row only proves the app still opens after
+    // the filter change — it cannot see the "of 12" itself. The count is covered
+    // by `museumDonatedCore` in tests/state.test.ts; the rendering was checked by
+    // eye (playtest shot --full). Tighten this row if the snapshot ever exposes
+    // panel contents.
+    // Distinct from `collection-app-opens` above (which seeds a held curio):
+    // this is the FRESH-save path, where every slot including the optional 13th
+    // is 'unfound' and the filter has to drop one. Names must be unique —
+    // `--only <name>` matches by name and a duplicate runs both.
+    name: 'collection-app-opens-on-a-fresh-save',
+    note: 'the Collection app still renders with no curios found at all (the optional-slot filter drops the 13th row)',
+    save: { scene: 'city', px: 96, py: 224, visited: ['city', 'museum'], metStores: ['museum'] },
+    click: 'PHONE,Collection',
+    wait: 400,
+    assert: "overlay==='menu' && overlayData.tab==='collection'",
+  },
+  {
+    // The corner plinth must not name what it wants — every other empty display
+    // does, and this one's name is the secret.
+    name: 'corner-plinth-keeps-its-mouth-shut',
+    note: 'the empty 13th plinth shows the no-brass-plate line, never the ████████.rec label',
+    save: { scene: 'museum', px: 216, py: 76, dir: 'up', storySeen: ['arrive'], visited: ['museum'] },
+    keys: 'e',
+    wait: 500,
+    assert: "overlay==='dialog' && overlayData.line.includes('far corner') && !overlayData.line.includes('.rec')",
+  },
+  {
+    // Ordering bug: complete the core 12 FIRST (curator paid), then donate the
+    // 13th. `museumComplete` is still true afterwards, so without the
+    // `!slot.optional` guard the ¥10,000 pays a second time and Bingus weeps
+    // over a museum he finished days ago. The other donate row seeds an
+    // incomplete gallery and cannot see this.
+    name: 'corrupt-curio-pays-no-second-bonus',
+    note: 'donating the 13th to an ALREADY-complete museum must not re-pay ¥10,000 or re-run the completion scene',
+    save: { scene: 'museum', px: 216, py: 76, dir: 'up', money: 20000, corruptDone: true,
+      collectibles: ['arti-corrupt'], gameAch: ['curator'], storySeen: ['arrive'], visited: ['museum'],
+      museum: { donated: ['art-alley', 'art-madonna', 'art-bento', 'art-cat', 'arti-coin', 'arti-token',
+        'arti-onigiri', 'arti-rock', 'arti-lure', 'arti-shard', 'arti-capsule', 'arti-meteor'] } },
+    keys: 'e',
+    wait: 500,
+    assert: "money===20000 && save.museum.donated.includes('arti-corrupt') && overlayData.line.includes('corner plinth')",
+  },
+  {
+    // Anyone who went through ████████.EXE before `corruptDone` existed has
+    // already spent the one-shot corruptWake, and corruptionAvailable refuses to
+    // run it twice — so without the mergeSave grandfather they could never reach
+    // the one piece of content written for them.
+    name: 'old-corrupted-save-still-gets-the-curio',
+    note: "a pre-existing save with 'corrupt-run' in storySeen is grandfathered into corruptDone on load",
+    save: { scene: 'apartment', px: 40, py: 60, dir: 'up', storySeen: ['arrive', 'corrupt-run'], visited: ['apartment'] },
+    keys: 'e',
+    wait: 500,
+    assert: "save.corruptDone===true && save.collectibles.includes('arti-corrupt')",
+  },
 ];

@@ -157,3 +157,38 @@ describe('loadSave — cookedLog field (default-safe)', () => {
     expect(loadSave()!.cookedLog).toEqual(['onigiri', 'ramen']);
   });
 });
+
+// ---- corruptDone (the corrupted 13th museum curio) ---------------------------
+// `corruptDone` is written by begin() when it consumes the one-shot `corruptWake`.
+// Saves that went through ████████.EXE before the field existed have already
+// spent that instruction, and `corruptionAvailable` refuses to run the sequence
+// twice ('corrupt-run' in storySeen — once, ever). Without a grandfather they
+// could never reach the curio, which is the one thing written for exactly them.
+describe('loadSave — corruptDone grandfather', () => {
+  it('defaults to false on a save that never met ████████.EXE', () => {
+    const blob = { ...newSave(), money: 400, day: 3 } as Record<string, unknown>;
+    delete blob.corruptDone;
+    seed(JSON.stringify(blob));
+    expect(loadSave()!.corruptDone).toBe(false);
+  });
+
+  it("grandfathers a pre-field save that has 'corrupt-run' in storySeen", () => {
+    const blob = { ...newSave(), storySeen: ['arrive', 'corrupt-run'] } as Record<string, unknown>;
+    delete blob.corruptDone;
+    seed(JSON.stringify(blob));
+    expect(loadSave()!.corruptDone).toBe(true);
+  });
+
+  it('leaves an explicit false alone (the run is mid-flight, not returned from)', () => {
+    // corruptWake still pending: the coin has flipped ('corrupt-run' stamped) but
+    // begin() has not executed the instruction yet. An explicitly-stored false
+    // must not be overwritten by the grandfather.
+    persistSave({ ...newSave(), storySeen: ['corrupt-run'], corruptWake: true, corruptDone: false });
+    expect(loadSave()!.corruptDone).toBe(false);
+  });
+
+  it('round-trips an existing true', () => {
+    persistSave({ ...newSave(), corruptDone: true });
+    expect(loadSave()!.corruptDone).toBe(true);
+  });
+});

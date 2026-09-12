@@ -50,7 +50,7 @@ import {
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS, GOSSIP,
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
-  itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, CROP_QUALITY, FORAGE, forageById,
+  itemKind, MUSEUM_SLOTS, MUSEUM_CORE, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, CROP_QUALITY, FORAGE, forageById,
   RECIPES, recipeById, INSTITUTE_RECIPES, GROCERIES, groceryById, BUFFS, FRIENDS, friendById, DECOR, decorById, MAX_HEARTS, HEART_POINTS,
   FORTUNES,
   keepsakeById,
@@ -69,7 +69,7 @@ import {
   clockLabel, nightT, morningT, COLLAPSE_MIN, routineTargetFor,
   placeItem, unplaceItem, unlockGameAch, itemFootprintW,
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey, lootVault,
-  shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
+  shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete, museumDonatedCore,
   jackpotFor, backroomOpen, BACKROOM_WINS,
   logWager, logPayout, casinoNet, casinoReturnPct,
   corruptionAvailable, runDeletion, isDeleted, COIN_PRIZE,
@@ -450,6 +450,22 @@ const DJ_SETLIST: { scene: string; label: string }[] = [
 ];
 const MUSIC_VOL = 0.35;
 const MUSIC_FADE_MS = 700;
+// Rain REPLACES the scene music outdoors, so anything that needs to know whether
+// the music will actually be HEARD has to ask exactly the question the draw loop
+// asks before it calls `syncRain`. Kept here as one predicate so the two can't
+// drift. Kiwami Island (and the bay you sail to reach it) sits outside the
+// weather front — it NEVER rains there; the island is the postcard escape.
+const rainStandsIn = (sceneId: string, s: GameSave): boolean =>
+  !!SCENES[sceneId]?.outdoor && sceneId !== 'island' && sceneId !== 'deepsea' && isRainyDay(s);
+
+// Sumikawa Shore gets a ONE-PLAY-PER-DAY theme. You park on that beach for long
+// fishing sessions, and `fishing.mp3` on repeat wore through fast. So: the day's
+// first arrival plays the theme once, unlooped, and the moment it ends (or the
+// moment you come back later that day, having burned the play) the shore falls
+// back to this plain looping surf bed. `save.shoreThemeDay` carries the burn, so
+// it survives leaving, re-entering, and a save/reload, and resets at the day flip.
+// Shore only — the island keeps its own looping theme.
+const SHORE_AMBIENCE = '/music/shore-ambience.mp3';
 // Rain ambience layered OVER the scene music on rainy days while outdoors.
 const RAIN_SRC = '/music/rain.mp3';
 const RAIN_VOL = 0.18; // halved from 0.36 (user: rain was too loud)
@@ -1282,6 +1298,19 @@ const npcHiddenNow = (s: GameSave, id: string): boolean =>
   || (id === 'old-man' && isDeleted(s, 'genji'))
   || (id === 'granny' && isDeleted(s, 'granny'));
 
+// Interactables that are really a person: the prop only works because whoever
+// runs it is standing there. When `npcHiddenNow` pulls that staffer out to the
+// derby or the festival, the prop has to go quiet too — otherwise the room reads
+// as empty while its counter happily takes your money. Keyed by interactable id
+// (see `interactables` in maps.ts). Coin-op and self-serve hotspots are not
+// listed on purpose; they never needed anyone behind them.
+// The copy names the derby because the derby is the only event that takes
+// Kojima (TOWN_EVENT_ATTENDEES in state.ts) — reword if he ever joins a festival.
+const STAFFED_INTERACTABLES: Record<string, { npc: string; line: string }> = {
+  'shop-garage': { npc: 'mechanic', line: 'The vehicle lot is roped off and the office light is out. A note taped to the register: "GONE FISHIN\' — back after the derby. — Kojima"' },
+  'job-dispatch': { npc: 'mechanic', line: 'The dispatch clipboard hangs empty, every run crossed out in one long diagonal stroke. Kojima has taken the day off for the derby; the kei truck stays parked.' },
+};
+
 // The sea cave's back wall hides the Hacker's hatch. The tile is in the grid
 // from day one, but it's sealed + overpainted with plain cave wall until The
 // Manager tells you who lives behind it (save.parisRevealed) — so the room is a
@@ -1732,14 +1761,25 @@ const LittleApartmentGame: React.FC = () => {
     currentTrackRef.current = null; // so the next playMusicFor starts clean
   }, []);
 
-  const playMusicFor = useCallback((sceneId: string) => {
+  const playMusicFor: (sceneId: string) => void = useCallback((sceneId: string) => {
     // honor a standing DJ request while in the club
     const djSrc = sceneId === 'nightclub' && djPickRef.current
       ? (SCENE_MUSIC[djPickRef.current] ?? DEFAULT_MUSIC)
       : null;
     // The home jukebox: at the apartment, play whatever track you've put on.
     const homePick = sceneId === 'apartment' ? saveRef.current.homeTrack : null;
-    const src = djSrc ?? (homePick ? (SCENE_MUSIC[homePick] ?? DEFAULT_MUSIC) : null) ?? SCENE_MUSIC[sceneId] ?? DEFAULT_MUSIC;
+    // The shore's one-play-a-day theme (see SHORE_AMBIENCE). Arriving burns the
+    // day's play, so leaving mid-track and coming back gets you the surf bed.
+    // The DJ spinning 'Sumikawa Shore' at the club is a different code path and
+    // still loops the full theme.
+    let shoreSrc: string | null = null;
+    let shoreOneShot = false;
+    if (sceneId === 'shore') {
+      const s = saveRef.current;
+      if (s.shoreThemeDay === s.day) shoreSrc = SHORE_AMBIENCE;
+      else shoreOneShot = true;
+    }
+    const src = djSrc ?? (homePick ? (SCENE_MUSIC[homePick] ?? DEFAULT_MUSIC) : null) ?? shoreSrc ?? SCENE_MUSIC[sceneId] ?? DEFAULT_MUSIC;
     const tracks = tracksRef.current;
     const prevSrc = currentTrackRef.current;
     // While rain stands in for the music, keep the scene track loaded but silent
@@ -1760,6 +1800,33 @@ const LittleApartmentGame: React.FC = () => {
       audio.volume = 0;
       tracks.set(src, audio);
     }
+    // The shore theme is the one track that doesn't loop: it plays through once
+    // and hands off to the surf bed. All three hooks are re-set every call
+    // because the element is shared with the club DJ, who does want it looping.
+    // The day's play is spent when the theme is actually HEARD, not when you
+    // walk in. Two hooks, because there are two ways to hear it:
+    //   `playing` — the ordinary case, and it also covers syncRain's resume,
+    //     which restarts the element without coming back through here. Armed
+    //     only when rain isn't about to duck the track: on a rainy day the draw
+    //     loop calls syncRain a frame or two AFTER this play() and fades the
+    //     theme straight back out, so arming it there would spend the whole
+    //     day's play on a couple hundred milliseconds nobody heard.
+    //   `ended`  — the backstop for exactly that rainy case. If the rain clears
+    //     mid-visit the theme swells in unburned, plays out in full, and only
+    //     then marks the day. Without this the handoff below would re-select the
+    //     still-unburned theme and loop it forever.
+    const burnShoreTheme = () => {
+      const sv = saveRef.current;
+      if (sv.shoreThemeDay !== sv.day) { sv.shoreThemeDay = sv.day; persistSave(sv); }
+    };
+    audio.loop = !shoreOneShot;
+    audio.onended = shoreOneShot
+      ? () => { burnShoreTheme(); if (currentTrackRef.current === src) playMusicFor('shore'); }
+      : null;
+    audio.onplaying = shoreOneShot && !rainStandsIn(sceneId, saveRef.current) ? burnShoreTheme : null;
+    // ...and it starts from the top each new day, not from wherever yesterday's
+    // visit left the playhead.
+    if (shoreOneShot) { try { audio.currentTime = 0; } catch { /* not seekable yet */ } }
     audio.muted = readMuted();
     currentTrackRef.current = src;
     if (vol > 0) audio.play().catch(() => { /* autoplay blocked or file missing */ });
@@ -2794,8 +2861,11 @@ const LittleApartmentGame: React.FC = () => {
   // swallows the conversation whenever you're carrying something he's after).
   const bingusTalk = () => {
     const s = saveRef.current;
-    const have = s.museum.donated.length;
-    const total = MUSEUM_SLOTS.length;
+    // Bingus counts his own gallery, not the corrupted corner plinth — he has
+    // pointedly not written that one down. Using the full list would keep him on
+    // "12 of 13, between acquisitions" forever on an ordinary save.
+    const have = museumDonatedCore(s);
+    const total = MUSEUM_CORE.length;
     const intro = have === 0
       ? 'AH! A visitor! Welcome, welcome, to the Kawamachi Museum! I am Bingus Doofelsmurt, curator, founder, and — at present — sole staff.'
       : 'Welcome BACK! The collection grows, doesn\'t it? Squint and you can almost feel it becoming important.';
@@ -3497,6 +3567,7 @@ const LittleApartmentGame: React.FC = () => {
     // Pocket a glinting museum curio you're standing on or facing.
     {
       const find = MUSEUM_FINDS.find(f => f.scene === scene.id
+        && (!f.gated || s.corruptDone)
         && !s.collectibles.includes(f.slot) && !s.museum.donated.includes(f.slot)
         && ((f.x === faced.x && f.y === faced.y) || (f.x === feet.x && f.y === feet.y)));
       if (find) {
@@ -3504,11 +3575,18 @@ const LittleApartmentGame: React.FC = () => {
         pocketCurio(s, find.slot, false);
         sfxCatch();
         persistSave(s); refreshHud();
-        showDialog([
+        // The corrupted one gets its own pickup: it is not a glint you half-
+        // remember leaving somewhere, it is a thing that was put on your floor.
+        showDialog(find.gated === 'corruption' ? [
+          'There is something on the floor beside the bed that was not there last night.',
+          'You pick it up. It has a weight, and edges, and you cannot afterwards describe either. Looking straight at it is like reading a word you know in a language you do not.',
+          slot.blurb,
+          'It is an object. It is the only thing ████████.EXE left behind. The Kawamachi Museum has a plinth in the far corner that nobody has ever been able to fill.',
+        ] : [
           `Something glints, half-forgotten. You pick it up: "${slot.label}".`,
           slot.blurb,
           'A curio if ever there was one. The Kawamachi Museum has an empty display just its size.',
-        ], 'A Curious Find');
+        ], find.gated === 'corruption' ? '████████' : 'A Curious Find');
         return;
       }
     }
@@ -4169,6 +4247,20 @@ const LittleApartmentGame: React.FC = () => {
       return;
     }
 
+    // Hotspots that only work because somebody is standing behind them. On a
+    // derby/festival day their staffer is staged at the event (atTownEventNow),
+    // so the sprite is gone from the room — but the counter kept serving and the
+    // job board kept dispatching, which is how you could buy a kei truck from an
+    // empty garage while Kojima was down on the sand. Bounce with a note that
+    // says where he actually is. (Talking to him in person was already guarded;
+    // this covers the props.) Unstaffed hotspots — the coin-op gachapon, the
+    // shrine box — are deliberately absent: they never needed anyone.
+    const away = STAFFED_INTERACTABLES[target.id];
+    if (away && atTownEventNow(s, away.npc)) {
+      showDialog([away.line]);
+      return;
+    }
+
     switch (target.id) {
       case 'window': {
         const n = s.owned.length;
@@ -4638,7 +4730,12 @@ const LittleApartmentGame: React.FC = () => {
           donateToMuseum(s, slot.id);
           s.collectibles = s.collectibles.filter(c => c !== slot.id);
           sfxCatch();
-          const done = museumComplete(s);
+          // Completion can only be CAUSED by a core piece. Without the
+          // `!slot.optional` half, finishing the core 12 first and donating the
+          // corrupted 13th afterwards re-runs `museumComplete` (still true),
+          // pays the ¥10,000 a SECOND time, and replaces the corner-plinth text
+          // with Bingus weeping over a museum he already finished.
+          const done = !slot.optional && museumComplete(s);
           if (done) { s.money += 10000; award('curator'); }
           persistSave(s); refreshHud();
           if (done) {
@@ -4648,12 +4745,25 @@ const LittleApartmentGame: React.FC = () => {
               '"It is complete. After all these years — the Kawamachi Museum is WHOLE." He presses a thick envelope into your hands. (+¥10,000)',
             ], 'Bingus');
           } else {
-            const n = s.museum.donated.length;
-            showDialog([
+            // The corrupted thirteenth is outside the gallery Bingus counts, so
+            // donating it can't move the tally — and he does not celebrate it.
+            showDialog(slot.optional ? [
+              `You set "${slot.label}" on the corner plinth. It does not so much sit there as stop moving.`,
+              'Bingus Doofelsmurt looks at it for a long moment, then writes nothing in his ledger and walks back to the front desk.',
+              '"...We will say it was always there," he says, to no one. "That is usually easiest."',
+            ] : [
               `You donate "${slot.label}". Bingus cradles it like a newborn.`,
-              `"Magnificent! ${n} of ${MUSEUM_SLOTS.length} displays filled. The collection grows!"`,
+              `"Magnificent! ${museumDonatedCore(s)} of ${MUSEUM_CORE.length} displays filled. The collection grows!"`,
             ], 'Bingus');
           }
+        } else if (slot.optional) {
+          // The corner plinth. Every other empty display names what it wants on a
+          // brass plate; this one can't, because naming it would give away a
+          // secret you may never trigger — and because nobody knows what it wants.
+          showDialog([
+            'A plinth on its own in the far corner. No brass plate, no placard, no rope.',
+            'The dust on it is disturbed in a rectangle, as though something had been set down here and then taken away again. Or as though something is going to be.',
+          ], 'Museum');
         } else {
           const what = slot.kind === 'art' ? 'frame' : 'pedestal';
           showDialog([
@@ -5874,7 +5984,8 @@ const LittleApartmentGame: React.FC = () => {
 
     // Hidden museum curios glint on the ground until pocketed.
     for (const f of MUSEUM_FINDS) {
-      if (f.scene !== scene.id || saveRef.current.collectibles.includes(f.slot) || saveRef.current.museum.donated.includes(f.slot)) continue;
+      if (f.scene !== scene.id || (f.gated && !saveRef.current.corruptDone)) continue;
+      if (saveRef.current.collectibles.includes(f.slot) || saveRef.current.museum.donated.includes(f.slot)) continue;
       const by = Math.round(Math.sin(t * 3 + f.x) * 1.2);
       ctx.globalAlpha = 0.7 + Math.sin(t * 5 + f.x) * 0.3;
       ctx.drawImage(atlas['t-relic'], f.x * TILE - cam.x, f.y * TILE - cam.y + by);
@@ -6565,10 +6676,9 @@ const LittleApartmentGame: React.FC = () => {
     // Rain: a looping ambient track over the scene music + slanted streaks, on
     // rainy days while you're anywhere outdoors (the shrine counts; interiors,
     // mines and the backrooms don't). `isRainyDay` is day-1-safe and seeded.
-    // Kiwami Island (and the bay you sail to reach it) sits outside the weather
-    // front — it NEVER rains there; the island is the postcard escape.
+    // See `rainStandsIn` for which scenes count.
     {
-      const raining = scene.outdoor && scene.id !== 'island' && scene.id !== 'deepsea' && isRainyDay(saveRef.current);
+      const raining = rainStandsIn(scene.id, saveRef.current);
       syncRain(raining);
       if (raining) {
         ctx.save();
@@ -7210,6 +7320,14 @@ const LittleApartmentGame: React.FC = () => {
       // the Paris seam reads as blank wall until The Manager tells you what came
       // through it (it never opens — pressing it is flavor either way)
       if (it?.id === 'paris-portal' && !saveRef.current.parisRevealed) label = npcT ? 'Talk' : undefined;
+      // Museum display prompts are the slot LABEL, and the corrupted 13th's label
+      // IS the secret ('████████.rec'). Walking past the corner plinth on a fresh
+      // save would print it in the E-prompt, ahead of every other gate. Show a
+      // neutral word until the piece is actually in play.
+      if (it?.id === 'museum-display' && label && MUSEUM_SLOTS.some(sl =>
+        sl.optional && sl.label === label
+        && !saveRef.current.museum.donated.includes(sl.id)
+        && !saveRef.current.collectibles.includes(sl.id))) label = 'Plinth';
       if (scene.id === 'mines') {
         const d = mineDownRef.current;
         const vc = mineChestRef.current;
@@ -7728,6 +7846,10 @@ const LittleApartmentGame: React.FC = () => {
     // the last thing it does is put you somewhere completely ordinary.
     if (s.corruptWake) {
       s.corruptWake = false;
+      // Permanent record that you came back from it. The one-shot instruction
+      // above is consumed here, so nothing else would remember it happened —
+      // and the corrupted museum curio on the floor is gated on this.
+      s.corruptDone = true;
       passNight(s);
       fulfillDeliveries(s);
       growGreenhouse(s);
@@ -8848,7 +8970,7 @@ const LittleApartmentGame: React.FC = () => {
       f.thanks,
       done
         ? 'And — that is the LAST one. The Kawamachi Museum is COMPLETE. Bingus presses a thick envelope into your hands. (+¥10,000)'
-        : `(${s.museum.donated.length}/${MUSEUM_SLOTS.length} displays filled.)`,
+        : `(${museumDonatedCore(s)}/${MUSEUM_CORE.length} displays filled.)`,
     ], 'Bingus Doofelsmurt');
   };
 
@@ -9777,7 +9899,10 @@ const LittleApartmentGame: React.FC = () => {
       const coreFurniture = FURNITURE.filter(f => !f.optional);
       const placedBase = coreFurniture.filter(f => Boolean(s.placed[f.id])).length;
       const fishCount = Object.values(s.fishLog).reduce((a, b) => a + b, 0);
-      const museumDone = s.museum.donated.length, museumTotal = MUSEUM_SLOTS.length;
+      // Core gallery only — same reason `coreFurniture` filters `optional` above.
+      // Counting the corrupted 13th here would park every normal save on "12/13,
+      // unchecked, forever" and leak the secret from the first donation.
+      const museumDone = museumDonatedCore(s), museumTotal = MUSEUM_CORE.length;
       // GOALS: concrete, trackable progress only (with a count/checkbox). No spelling
       // out *how* — that's discovery. Hand-holdy "go talk to X" lines were cut. There's
       // no ending: the real pull is everything still hidden out there, so the discovery
@@ -9902,15 +10027,23 @@ const LittleApartmentGame: React.FC = () => {
     // display, in your bag, or never seen — an unfound piece stays '???' so the
     // app tracks progress without spoiling where anything is.
     const collectionApp = (() => {
-      const rows = museumProgress(s);
-      const done = rows.filter(r => r.status === 'donated').length;
+      // The corrupted 13th display is a secret, so it is not in this list at all
+      // until you are actually holding it (or have donated it) — otherwise a
+      // brand-new save would advertise "0 of 13" with a thirteenth ??? row, which
+      // gives away both that a hidden exhibit exists and that you are missing it.
+      // The tally stays on Bingus's CORE gallery for the same reason the trophy
+      // does: the 13th must never read as progress you owe.
+      const rows = museumProgress(s).filter(r =>
+        !MUSEUM_SLOTS.find(m => m.id === r.slotId)?.optional || r.status !== 'unfound');
+      const total = MUSEUM_CORE.length;
+      const done = museumDonatedCore(s);
       const held = rows.filter(r => r.status === 'held').length;
       const ask = bingusNextAsk(s);
       return (
         <div className="px-3 py-2">
           <p className="text-sm text-[#ffd24a]/80 tracking-wide mb-1">THE KAWAMACHI MUSEUM</p>
           <p className="text-xs opacity-50 mb-2 leading-snug">
-            {done} of {rows.length} displays filled{held > 0 ? ` · ${held} in your bag` : ''}. Donate a piece at its own plinth or frame in the gallery.
+            {done} of {total} displays filled{held > 0 ? ` · ${held} in your bag` : ''}. Donate a piece at its own plinth or frame in the gallery.
           </p>
           {rows.map(({ slotId, status }) => {
             const sl = MUSEUM_SLOTS.find(m => m.id === slotId)!;
@@ -9939,7 +10072,7 @@ const LittleApartmentGame: React.FC = () => {
               <span className="text-[#ffd24a]/80 not-italic">The curator is asking for: </span>{ask.ask}
             </p>
           )}
-          {done >= rows.length && (
+          {done >= total && (
             <p className="text-xs text-[#ffd24a]/80 mt-3 leading-snug">Every plinth filled, every frame occupied. There is a plaque with your name on it.</p>
           )}
         </div>

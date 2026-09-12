@@ -19,6 +19,7 @@ router, no site chrome. Input: keyboard, touch, or game controller.
 - `src-tauri/` — Tauri v2 project (Rust). See [kb/build-targets.md](kb/build-targets.md).
 - `scripts/make-dmg.mjs` — builds the macOS dmg via `hdiutil` (see build-targets).
 - `scripts/record-demo.mjs` — records a gameplay showcase video locally (`demo/`, gitignored). See [kb/testing.md](kb/testing.md) "Recording a gameplay video".
+- `scripts/shore-audio-check.mjs` — regression check for the shore's one-play-a-day theme. Separate from the `checkup` battery because it spies on the `Audio` constructor; the `?debug` snapshot carries no audio state.
 - `scripts/gemini-portraits.mjs` — Gemini API art generator (portraits/logos/splash; needs `GEMINI_API_KEY`), plus canvas helpers `chroma-key-logo.mjs` / `fix-nameplates.mjs`. Usage + prompt lessons: [kb/art-direction.md](kb/art-direction.md) "Gemini API pipeline".
 
 ## Knowledge base (`kb/`)
@@ -26,7 +27,7 @@ Seven files, indexed in [kb/README.md](kb/README.md). Read before editing the ma
 - [kb/games.md](kb/games.md) — the game's full as-built reference (architecture, systems, hard rules, music/sfx) + the build-history appendix.
 - [kb/art-direction.md](kb/art-direction.md) — visual style law: refs (Tiny Tower/Stardew/Habbo), perspective, master palette, PNG asset pipeline. Read before generating art.
 - [kb/build-targets.md](kb/build-targets.md) — desktop/mobile build + release pipeline + toolchain prerequisites.
-- [kb/testing.md](kb/testing.md) — the 3-command health check, Vitest setup, the Playwright playtest harness (`npm run playtest`), and the bug-hunting playbook.
+- [kb/testing.md](kb/testing.md) — the 4-command health check, Vitest setup, the Playwright playtest harness (`npm run playtest`), and the bug-hunting playbook.
 - [kb/conventions.md](kb/conventions.md) — coding conventions + dependency versions and security policy.
 - [kb/future-ideas.md](kb/future-ideas.md) — parked work, ideas backlog, sfx wishlist, **and the "Known bugs" list (verified, unfixed, with repro steps; empty right now) plus the record of fixed bugs and their guards — check it before hunting a bug.**
 
@@ -36,6 +37,7 @@ Seven files, indexed in [kb/README.md](kb/README.md). Read before editing the ma
 - `npm test` — Vitest unit tests.
 - `npm run playtest -- <shot|state|drive|title|presets> [opts]` — drive the game in a headless browser (seed save, send input, read live state, screenshot). See [kb/testing.md](kb/testing.md).
 - `node scripts/record-demo.mjs [--only <beats>]` — record a gameplay demo video to `demo/` (needs ffmpeg).
+- `node scripts/shore-audio-check.mjs` — prove the shore's one-play-a-day theme still behaves (run if you touch `playMusicFor` / `syncRain` / the music tables).
 - `npm run desktop:dev` / `:build` (+ `desktop:build:mac` for .app+.dmg), `android:dev` / `:build`, `ios:dev` / `:build` — Tauri (needs Rust; see build-targets).
 - `./start-dev.sh [desktop|android|ios]` (mac/linux) · `start-dev.ps1`/`.cmd` (Windows).
 

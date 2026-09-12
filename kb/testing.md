@@ -3,15 +3,18 @@
 Everything this repo uses to show a change is correct: unit tests, the headless
 playtest harness, and the strategy for hunting bugs without a human at the keyboard.
 
-## The 3-command health check (run before AND after any change)
+## The 4-command health check (run before AND after any change)
 
 ```bash
 npx tsc --noEmit && npm test          # types + unit tests
 npm run playtest -- smoke --wait 450  # all 23 scenes render without errors
 npm run playtest -- checkup           # end-to-end mechanics battery (scripts/checkups.mjs)
+node scripts/shore-audio-check.mjs    # the shore's one-play-a-day theme (audio — see below)
 ```
 
-All three are exit-code checkable. If any fails after your change, the change did it.
+All four are exit-code checkable. If any fails after your change, the change did it.
+(Only run the audio check if you touched `playMusicFor` / `syncRain` / the music
+tables; it boots its own vite server and takes ~25s.)
 
 ## Unit tests (Vitest)
 
@@ -27,7 +30,7 @@ All three are exit-code checkable. If any fails after your change, the change di
 - `npm run test:watch` — watch mode while developing.
 
 ### Coverage (as built)
-`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers, town-event attendance windows), `maps.test.ts` (the apartment's fixed tiles — home onsen, maneki, trophy shelf — must not collide with `APARTMENT_SLOTS`/`RARE_SLOTS` and must be floor in both the small and expanded grids; this is the guard for the onsen-on-the-fridge bug). ~281 tests (incl. save-code round-trips, cat-gift seeding, mission predicates, weather-fish gating). Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see the bug-hunting playbook below).
+`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers, town-event attendance windows), `maps.test.ts` (the apartment's fixed tiles — home onsen, maneki, trophy shelf — must not collide with `APARTMENT_SLOTS`/`RARE_SLOTS` and must be floor in both the small and expanded grids; this is the guard for the onsen-on-the-fridge bug). ~293 tests (incl. save-code round-trips, cat-gift seeding, mission predicates, weather-fish gating, the optional 13th museum slot). Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see the bug-hunting playbook below).
 
 ### Where it runs
 - **CI on every PR + push to main**: `.github/workflows/ci.yml` (`check` job) runs `tsc --noEmit` → `npm test` → `npm run build` on ubuntu. Rust-free + fast; native bundling stays in `release.yml`.
@@ -244,15 +247,11 @@ How an agent (Claude/Opus session) hunts bugs in *Little Apartment, Big City*
 without a human at the keyboard. The harness mechanics are in the section above;
 this is the **strategy** on top.
 
-### The 3-command health check (run before AND after any change)
+### The health check
 
-```bash
-npx tsc --noEmit && npm test          # types + 200-ish unit tests
-npm run playtest -- smoke --wait 450  # all 23 scenes render without errors
-npm run playtest -- checkup           # end-to-end mechanics battery (scripts/checkups.mjs)
-```
-
-All three are exit-code checkable. If any fails after your change, the change did it.
+Same four commands as [the top of this file](#the-4-command-health-check-run-before-and-after-any-change)
+— run them before AND after the change. (This section used to carry its own copy,
+which drifted; there is one list now.)
 
 ### Layered testing — put each bug guard at the right layer
 
@@ -315,4 +314,4 @@ All three are exit-code checkable. If any fails after your change, the change di
 1. Reproduce with the smallest `--save`+`--keys`+`--assert` one-liner.
 2. Fix it.
 3. Encode the repro as a Vitest case (pure) or a `checkups.mjs` row (wired).
-4. Re-run the 3-command health check.
+4. Re-run the 4-command health check.

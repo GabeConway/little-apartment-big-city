@@ -7,7 +7,7 @@ import { mulberry32 } from './engine';
 import {
   FURNITURE, RARE_FURNITURE, PAWN_DISCOUNT, PAWN_STOCK_SIZE, BASE_MAX_ENERGY,
   SLEEP_RESTORE_FUTON, SKETCHY_DISCOUNT, GACHA_FIGURES, GAME_ACHIEVEMENTS,
-  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, CROPS, cropStage, CROP_QUALITY_MULT,
+  itemKind, MESSAGES, furnitureById, MUSEUM_SLOTS, MUSEUM_CORE, CROPS, cropStage, CROP_QUALITY_MULT,
   CROP_REQUESTS, NON_MANAGER_RARES, FORAGE, ERRANDS, STREET_EVENTS,
   RECIPES, recipeById, STARTER_RECIPES, GIFT_POINTS, HEART_POINTS, MAX_HEARTS,
   friendById, decorById, STARTER_DECOR, DEFAULT_DECOR,
@@ -94,6 +94,7 @@ export interface GameSave {
   sketchyDay: number;           // last day a deal was bought from the sketchy guy
   forageDay: number;            // day the current beach forage was seeded (0 = none); resets each morning
   foragedSpots: number[];       // indices of today's shore finds already grabbed
+  shoreThemeDay: number;        // day the shore theme had its one play (0 = none); the rest of that day the shore runs on surf ambience
   errandDay: number;            // last day the odd-jobs board errand was completed (0 = none); one per day
   caveDropDay: number;          // last day the island sea cave was searched for drops (0 = none); one per day
   deliveryDay: number;          // last day the Kojima Motors delivery race was run (0 = never); one per day
@@ -147,6 +148,7 @@ export interface GameSave {
   cheatsUsed: string[];             // cheat codes ever entered, first use only (the Hacker has read the log)
   deleted: string[];                // FRIENDS ids ████████.EXE removed from existence (see corruptionAvailable)
   corruptWake: boolean;             // ████████.EXE wrote this into the save before ejecting you; begin() executes it on the next boot
+  corruptDone: boolean;             // the above has been executed once — you came back. Permanent; gates the corrupted museum curio
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -305,6 +307,7 @@ export const newSave = (): GameSave => ({
   sketchyDay: 0,
   forageDay: 0,
   foragedSpots: [],
+  shoreThemeDay: 0,
   errandDay: 0,
   caveDropDay: 0,
   deliveryDay: 0,
@@ -357,6 +360,7 @@ export const newSave = (): GameSave => ({
   cheatsUsed: [],
   deleted: [],
   corruptWake: false,
+  corruptDone: false,
 });
 
 // Merge a parsed (possibly older / partial) save blob over fresh defaults and run
@@ -403,6 +407,15 @@ const mergeSave = (parsed: Partial<GameSave>): GameSave => {
       });
       s.greenhouse = fresh;
     }
+    // The corrupted 13th museum curio is gated on `corruptDone`, which `begin()`
+    // only writes when it consumes the one-shot `corruptWake`. Anyone who went
+    // through ████████.EXE before this field existed has already spent that
+    // instruction — and `corruptionAvailable` refuses to run it twice
+    // (`storySeen` 'corrupt-run' — once, ever). Without this they could never
+    // reach the one piece of content written for exactly them. 'corrupt-run' is
+    // stamped at the coin flip, which is the point of no return, so it is the
+    // honest marker of "this happened to you".
+    if (parsed.corruptDone === undefined && s.storySeen.includes('corrupt-run')) s.corruptDone = true;
     // Almanac: default-safe nested merge so older saves (and partial future ones) get both sets.
     s.almanac = { minerals: [], forage: [], ...s.almanac };
     return s;
@@ -884,8 +897,15 @@ export const donateToMuseum = (s: GameSave, slotId: string): boolean => {
   return true;
 };
 
+// "Complete" means Bingus's CORE gallery is full. The corrupted thirteenth
+// display is deliberately excluded: it only exists on a save that went through
+// ████████.EXE, so counting it would make 100% unreachable for everyone else —
+// and would retroactively un-complete a museum that was already finished.
 export const museumComplete = (s: GameSave): boolean =>
-  MUSEUM_SLOTS.every(sl => s.museum.donated.includes(sl.id));
+  MUSEUM_CORE.every(sl => s.museum.donated.includes(sl.id));
+// The N in "N of 12 displays filled" — core donations only, for the same reason.
+export const museumDonatedCore = (s: GameSave): number =>
+  MUSEUM_CORE.filter(sl => s.museum.donated.includes(sl.id)).length;
 
 // The Collection app's view of the gallery. `s.collectibles` had no UI anywhere,
 // so a curio in your pocket was invisible and there was no way to tell which

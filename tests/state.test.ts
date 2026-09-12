@@ -1627,3 +1627,75 @@ describe('museumProgress / museumSlotStatus', () => {
     expect(museumProgress(s).map(r => r.slotId)).toEqual(MUSEUM_SLOTS.map(sl => sl.id));
   });
 });
+
+import { MUSEUM_CORE, MUSEUM_FINDS } from '../src/game/data';
+import { museumComplete, museumDonatedCore } from '../src/game/state';
+import { APARTMENT_BIG_GRID } from '../src/game/maps';
+
+// ---- The corrupted thirteenth display ----------------------------------------
+// 'arti-corrupt' only exists on a save that went through ████████.EXE, so it is
+// `optional`: it must never be required for "the museum is complete", and it
+// must never move the N-of-12 tally. Getting this wrong would make 100%
+// unreachable on an ordinary save AND un-complete a museum already finished.
+describe('museumComplete / museumDonatedCore (the optional 13th slot)', () => {
+  const core = MUSEUM_SLOTS.filter(sl => !sl.optional);
+
+  it('has exactly one optional slot, and it is the corrupted one', () => {
+    const optional = MUSEUM_SLOTS.filter(sl => sl.optional);
+    expect(optional.map(sl => sl.id)).toEqual(['arti-corrupt']);
+    expect(MUSEUM_CORE.map(sl => sl.id)).toEqual(core.map(sl => sl.id));
+  });
+
+  it('completes on the core gallery alone, without the corrupted piece', () => {
+    const s = newSave();
+    expect(museumComplete(s)).toBe(false);
+    core.forEach(sl => s.museum.donated.push(sl.id));
+    expect(museumComplete(s)).toBe(true);
+    expect(s.museum.donated).not.toContain('arti-corrupt');
+  });
+
+  it('stays complete once the corrupted piece is added', () => {
+    const s = newSave();
+    core.forEach(sl => s.museum.donated.push(sl.id));
+    s.museum.donated.push('arti-corrupt');
+    expect(museumComplete(s)).toBe(true);
+  });
+
+  it('is not completed by the corrupted piece on its own', () => {
+    const s = newSave();
+    s.museum.donated.push('arti-corrupt');
+    expect(museumComplete(s)).toBe(false);
+  });
+
+  it('leaves the N-of-12 tally untouched when the corrupted piece is donated', () => {
+    const s = newSave();
+    s.museum.donated.push(core[0].id, core[1].id);
+    expect(museumDonatedCore(s)).toBe(2);
+    s.museum.donated.push('arti-corrupt');
+    expect(museumDonatedCore(s)).toBe(2);       // the tally must not tick
+    expect(museumDonatedCore(s)).toBeLessThanOrEqual(MUSEUM_CORE.length);
+  });
+
+  it('gates the corrupted curio behind corruptDone, and defaults it off', () => {
+    const s = newSave();
+    expect(s.corruptDone).toBe(false);
+    const find = MUSEUM_FINDS.find(f => f.slot === 'arti-corrupt');
+    expect(find).toBeDefined();
+    expect(find!.gated).toBe('corruption');
+    expect(find!.scene).toBe('apartment');
+    // Every other find is ungated — they're there from day one.
+    expect(MUSEUM_FINDS.filter(f => f.gated).map(f => f.slot)).toEqual(['arti-corrupt']);
+  });
+
+  it('puts the corrupted find on a tile that is floor in BOTH apartment grids', () => {
+    const find = MUSEUM_FINDS.find(f => f.slot === 'arti-corrupt')!;
+    // Knocking through to the next unit swaps the grid; the curio must survive it.
+    expect(SCENES.apartment.grid[find.y][find.x]).toBe('.');
+    expect(APARTMENT_BIG_GRID[find.y][find.x]).toBe('.');
+  });
+
+  it('stands the corrupted display on a real pedestal tile in the museum', () => {
+    const slot = MUSEUM_SLOTS.find(sl => sl.id === 'arti-corrupt')!;
+    expect(SCENES.museum.grid[slot.y][slot.x]).toBe('p');
+  });
+});

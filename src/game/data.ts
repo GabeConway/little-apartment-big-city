@@ -207,6 +207,10 @@ export interface MuseumSlot {
   accepts?: string;
   x: number; y: number;
   blurb: string;
+  // Outside Bingus's core gallery: it does not count toward "the museum is
+  // complete", and the "N of M displays filled" tally ignores it. Reserved for
+  // pieces you can only get by going somewhere the game does not ask you to go.
+  optional?: boolean;
 }
 export const MUSEUM_SLOTS: MuseumSlot[] = [
   // Wall art (the back wall, row 0)
@@ -235,7 +239,19 @@ export const MUSEUM_SLOTS: MuseumSlot[] = [
     blurb: 'Empty. The figure inside it has been missing for three years. Mr. Maeda wept.' },
   { id: 'arti-meteor', label: 'Meteorite (or Burnt Toast)', kind: 'artifact', x: 11, y: 4,
     blurb: 'Curatorial consensus has not been reached.' },
+  // The thirteenth display: the lone plinth in the far corner, and the only one
+  // that is `optional` — the museum completes without it. You cannot find this
+  // piece, earn it, or buy it. It is simply on your floor the morning after
+  // ████████.EXE is finished with you (see MUSEUM_FINDS below, and `corruptDone`).
+  // The object is corruption, so the object reads as corruption and so does its
+  // placard. Do not "fix" the blocks in the label or the blurb — they are the
+  // exhibit.
+  { id: 'arti-corrupt', label: '████████.rec', kind: 'artifact', optional: true, x: 14, y: 4,
+    blurb: 'PLACARD READ ERROR. The plate gives the object as "█████████", the provenance as "██/██/████, ████████████", and the medium as "░░░░░░". Bingus has had it re-engraved three times; it comes back like this every time. Visitors describe it as a chair, or a sound, or their own handwriting. No two agree. None of them are wrong.' },
 ];
+// Bingus's core gallery — the twelve the curator actually asks you for, and the
+// only ones "complete" and the N-of-M tally count. See MuseumSlot.optional.
+export const MUSEUM_CORE: MuseumSlot[] = MUSEUM_SLOTS.filter(sl => !sl.optional);
 
 // Where each museum collectible comes from. HIDDEN finds glint in a scene at a
 // fixed tile — walk onto/face it + E to pocket it (added to save.collectibles),
@@ -244,10 +260,17 @@ export const MUSEUM_SLOTS: MuseumSlot[] = [
 // collectible id === the MUSEUM_SLOTS id it fills.
 // Just TWO curios literally lie around to be stumbled on, in scenic out-of-the-way
 // spots (the rest are earned in unique ways — see below). Walk onto/face + E.
-export interface MuseumFind { slot: string; scene: string; x: number; y: number; }
+// `gated: 'corruption'` finds only exist once save.corruptDone is set — i.e. you
+// went through with ████████.EXE and the game restarted itself. Ungated finds
+// are there from day one.
+export interface MuseumFind { slot: string; scene: string; x: number; y: number; gated?: 'corruption'; }
 export const MUSEUM_FINDS: MuseumFind[] = [
   { slot: 'arti-rock', scene: 'island', x: 6, y: 4 },  // a perfectly ordinary rock in the island grass
   { slot: 'art-cat', scene: 'paris', x: 8, y: 8 },     // a stray's portrait propped on the Seine quay
+  // On the floor beside the bed ████████.EXE puts you back in — the one thing it
+  // left behind. Tile (3,3) is open floor in BOTH apartment grids (see
+  // APARTMENT_BIG_GRID), so it survives knocking through to the next unit.
+  { slot: 'arti-corrupt', scene: 'apartment', x: 3, y: 3, gated: 'corruption' },
 ];
 
 // Bingus's fetch-quest chain: bring the curator a specific kind of thing and he
