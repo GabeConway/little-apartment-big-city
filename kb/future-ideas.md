@@ -158,13 +158,22 @@ expensive seed (melon 400 > tea 350 > chili 160 > tomato 140 > sunflower 80).
   hand-patch them.
 
 ## The Hacker (fourth-wall character) — owner idea 2026-07-02
-**Partly BUILT 2026-09-12** — he now lives in the `hackerlab` "Server Closet"
-behind the sea-cave hatch (as a TERMINAL, not a person) and is the only way to Paris (see kb/games.md,
-2026-09-12 batch 2). Shipped: the terminal-takes-the-screen dialog, the hard
-fourth wall (real weekday + wall clock, `save.sessions`, `save.cheatsUsed`, "the
-one holding the controller"), the scanline tear, the CRT `tail -f world.log`
-read. Still parked: the unknown-sender phone thread, the mid-conversation HUD
-edit, the fake "SAVE CORRUPTED" prank, and the whole endgame arc below.
+**Largely BUILT 2026-09-12 (v1.3.0)** — he lives in the `hackerlab` "Server
+Closet" behind the sea-cave hatch, **as a TERMINAL rather than a person**, and is
+the only way to Paris (see kb/games.md, the 2026-09-12 casino + Hacker wave).
+Shipped: the terminal-takes-the-screen dialog with no narrator, the hard fourth
+wall (real weekday + wall clock, `save.sessions`, `save.cheatsUsed`, "the one
+holding the controller"), `tail -f world.log`, `ssh moon`, `set player.name`,
+and **████████.EXE** — which covers the fake-crash beat from the original spec
+(a cosmetic BSOD, not a save scare) and the "HUD edited mid-conversation" beat
+(the whole interface is stripped for the duration).
+
+Still parked from this section: the **unknown-sender phone thread**, and the
+endgame nameless-store arc below. Ideas raised and declined 2026-09-12 (kept
+because they are good, not because they are wrong): the terminal reading the
+player's REAL hardware (`navigator.userAgent`, window size); the ████████
+redaction eroding one character per refusal; corruption leaking one red line
+into other screens (the konbini kiosk, the ZamaZonk app) after the coin.
 
 A character who can "hack" the actual game and is aware of the USER playing it
 (not just the player-character). Cozy-creepy, not hostile.

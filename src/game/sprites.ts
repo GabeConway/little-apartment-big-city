@@ -2311,7 +2311,13 @@ const buildTiles = (atlas: Atlas) => {
 
   // Island
   atlas['t-zama-poster'] = tile(ctx => {                    // ZamaZonk billboard on a post (sand)
-    fill(ctx, '#e8d49a'); speckle(ctx, '#d8c48a', 41, 6); speckle(ctx, '#f0e0ae', 43, 3); // sandy ground
+    // Base MUST be the island's own sand — same fill, same speckle colours, same
+    // seeds as `t-sand` — because a legend tile REPLACES the floor it stands on.
+    // This baked its own lighter #e8d49a sand with different seeds and read as a
+    // pale square cut out of the beach. Same class of bug as the old island-sign
+    // / konbini-terminal mismatches; check it on any new prop that sits on sand.
+    fill(ctx, '#cdbb8e'); speckle(ctx, '#bda979', 19, 8); speckle(ctx, '#dccb9f', 23, 6);
+    ctx.fillStyle = '#4a3f36'; ctx.fillRect(5, 15, 7, 1);   // ground contact shadow (reads as planted)
     ctx.fillStyle = '#4a3120'; ctx.fillRect(7, 9, 2, 7);    // post
     ctx.fillStyle = '#5a3c24'; ctx.fillRect(7, 9, 1, 7);    // post lit edge
     ctx.fillStyle = '#120726'; ctx.fillRect(1, 0, 14, 9);   // dark board

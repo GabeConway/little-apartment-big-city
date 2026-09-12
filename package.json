@@ -1,7 +1,7 @@
 {
   "name": "little-apartment-big-city",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "type": "module",
   "description": "Little Apartment, Big City — standalone cross-platform build (web + Tauri desktop/mobile).",
   "scripts": {

@@ -145,6 +145,8 @@ export interface GameSave {
   casinoBest: number;               // biggest single payout ever taken off the house
   sessions: number;                 // times this save has been loaded (the Hacker counts them)
   cheatsUsed: string[];             // cheat codes ever entered, first use only (the Hacker has read the log)
+  deleted: string[];                // FRIENDS ids ████████.EXE removed from existence (see corruptionAvailable)
+  corruptWake: boolean;             // ████████.EXE wrote this into the save before ejecting you; begin() executes it on the next boot
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -353,6 +355,8 @@ export const newSave = (): GameSave => ({
   casinoBest: 0,
   sessions: 0,
   cheatsUsed: [],
+  deleted: [],
+  corruptWake: false,
 });
 
 // Merge a parsed (possibly older / partial) save blob over fresh defaults and run
@@ -1922,7 +1926,39 @@ export const friendHearts = (s: GameSave, id: string): number =>
 export const canGiftToday = (s: GameSave, id: string): boolean => (s.friends[id]?.giftDay ?? -1) !== s.day;
 export const metFriend = (s: GameSave, id: string): boolean => id in s.friends;
 // True once EVERY befriendable NPC is in your phone (drives the one-time capstone).
-export const allFriendsMet = (s: GameSave): boolean => FRIENDS.every(f => f.id in s.friends);
+// Anyone ████████.EXE removed never existed, so the town cannot be asked to
+// remember them — without this exemption a single coin flip would put 100%
+// completion permanently out of reach.
+export const allFriendsMet = (s: GameSave): boolean =>
+  FRIENDS.every(f => f.id in s.friends || s.deleted.includes(f.id));
+
+// ---- ████████.EXE ------------------------------------------------------------
+// The corrupted offering in the server closet. A coin: heads pays ¥250,000,
+// tails removes Granny Sato and Genji from existence — not kills, removes, as
+// though they were never written. Offered exactly once, and only to a save that
+// can survive it: both of them already befriended AND both of their gated
+// systems already banked (Genji is the ONLY source of canFish; Granny is the
+// only source of the greenhouse key). Without that gate the flip could brick
+// fishing and farming for the rest of the run. What it costs you is the people,
+// never the progression — see kb/games.md.
+export const DELETABLE = ['granny', 'genji'];
+export const COIN_PRIZE = 250000;
+export const isDeleted = (s: Pick<GameSave, 'deleted'>, id: string): boolean => s.deleted.includes(id);
+export const corruptionAvailable = (s: GameSave): boolean =>
+  s.storySeen.includes('moon-arrive')       // it only turns up after you have been up there
+  && !s.storySeen.includes('corrupt-run')   // once. ever.
+  && s.canFish && s.greenhouseUnlocked      // their systems are banked; only they can be lost
+  && DELETABLE.every(id => id in s.friends); // and you have to actually know them
+// Wipe them out of the save. Their unlocks (canFish / greenhouseUnlocked / the
+// rod tier) are deliberately left alone; the keepsake goes, because it is an
+// object in your bag that a person who never existed gave you.
+export const runDeletion = (s: GameSave): void => {
+  for (const id of DELETABLE) {
+    if (!s.deleted.includes(id)) s.deleted.push(id);
+    delete s.friends[id];
+  }
+  s.keepsakes = s.keepsakes.filter(k => k !== 'plums'); // Granny's jar of plums
+};
 // The warmest heart-tiered greeting line the friend has unlocked, or null below
 // the first threshold / for friends with no line table. Appended to a chat.
 export const friendFlavorLine = (s: GameSave, id: string): string | null => {

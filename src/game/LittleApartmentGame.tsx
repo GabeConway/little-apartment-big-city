@@ -51,7 +51,7 @@ import {
   MINERALS, mineralById, WAND_PRICE, WAND2_PRICE, CRAWLER_HIT_ENERGY, CRAFT_RECIPES,
   PICKAXES, pickaxeOf, GEODE_HARDNESS, GUN_PRICE, GUN_UNLOCK_FLOOR,
   itemKind, MUSEUM_SLOTS, MUSEUM_FINDS, BINGUS_FETCHES, CROPS, CROP_QUALITY, FORAGE, forageById,
-  RECIPES, recipeById, INSTITUTE_RECIPES, GROCERIES, groceryById, BUFFS, FRIENDS, friendById, DECOR, decorById, MAX_HEARTS,
+  RECIPES, recipeById, INSTITUTE_RECIPES, GROCERIES, groceryById, BUFFS, FRIENDS, friendById, DECOR, decorById, MAX_HEARTS, HEART_POINTS,
   FORTUNES,
   keepsakeById,
   SHRINE_RESTORE_PRICE, CHARLIE_PATRON_PRICE, HOME_ONSEN_PRICE, PRESTIGE_ASK_HEARTS,
@@ -72,6 +72,7 @@ import {
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   jackpotFor, backroomOpen, BACKROOM_WINS,
   logWager, logPayout, casinoNet, casinoReturnPct,
+  corruptionAvailable, runDeletion, isDeleted, COIN_PRIZE,
   SLOT_SYMBOLS, pickSlot, slotPayout, isTripleSeven,
   bossStakeFor, houseRuleFor, HOUSE_RULES, type HouseRuleId,
   pokerEval, POKER_PAYTABLE,
@@ -132,6 +133,29 @@ const blip = (freqs: number[], dur = 0.09, vol = 0.05) => {
       gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
       osc.start(t); osc.stop(t + dur + 0.02);
     });
+  } catch { /* no audio */ }
+};
+// The POST beep behind the fake crash. A real motherboard speaker is a square
+// wave at ~1kHz with no envelope to speak of — it just starts and stops, which
+// is exactly why it sounds like hardware and not like a game. Deliberately NOT
+// routed through `blip` (that one has a soft attack and an exponential tail) and
+// deliberately louder than the game's other cues, because the whole point is
+// that it does not sound like it came from the game. Still obeys mute.
+const sfxBiosBeep = () => {
+  if (readMuted()) return;
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    const ctx = audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 1000;
+    osc.connect(gain); gain.connect(ctx.destination);
+    const t = ctx.currentTime;
+    gain.gain.setValueAtTime(0.14, t);        // hard on
+    gain.gain.setValueAtTime(0.14, t + 0.55);
+    gain.gain.setValueAtTime(0, t + 0.56);    // hard off
+    osc.start(t); osc.stop(t + 0.58);
   } catch { /* no audio */ }
 };
 const sfxCoin = () => playSfx('/sfx/coin.mp3', 0.3);   // sampled — earnings/pickups (40% quieter than default)
@@ -397,6 +421,8 @@ const SCENE_MUSIC: Record<string, string> = {
   museum: '/music/museum.mp3',        // "Museum After Hours"
   greenhouse: '/music/greenhouse.mp3', // "Greenhouse Drift"
   paris: '/music/paris.mp3',
+  // ████████.EXE's score — not a scene track; played manually over the red screen
+  corruption: '/music/corruption.mp3',
   // the "loading Paris" hacker transition score (played manually over the hack screen)
   'paris-transition': '/music/paris-transition.mp3',
 };
@@ -606,7 +632,7 @@ type Overlay =
   // doesn't get a portrait and a wooden dialog frame — he takes the screen). The
   // typing, advance, action and Esc machinery is identical, so it rides the
   // dialog overlay rather than forking a second one.
-  | { type: 'dialog'; lines: string[]; idx: number; speaker?: string; actions?: DialogAction[]; term?: boolean }
+  | { type: 'dialog'; lines: string[]; idx: number; speaker?: string; actions?: DialogAction[]; term?: boolean; red?: boolean; slow?: boolean; prompt?: 'rename'; auto?: number; onEnd?: () => void; dead?: boolean; bsod?: boolean }
   | { type: 'shop'; shop: ShopId }
   | { type: 'letter'; beat: StoryBeat }
   | { type: 'sleep'; day: number; collapsed?: boolean; awaitClick?: boolean }
@@ -1250,7 +1276,11 @@ const npcHiddenNow = (s: GameSave, id: string): boolean =>
   // The Kinryū doorman is ONE man with two placements: square in front of the
   // curtain until the win count says otherwise, then aside holding the rope.
   || (id === 'kinryu-doorman' && backroomOpen(s))
-  || (id === 'kinryu-doorman-aside' && !backroomOpen(s));
+  || (id === 'kinryu-doorman-aside' && !backroomOpen(s))
+  // Anyone ████████.EXE unwrote. Genji's world id is 'old-man'; his stall and
+  // Granny's greenhouse stay exactly where they were, with nobody in them.
+  || (id === 'old-man' && isDeleted(s, 'genji'))
+  || (id === 'granny' && isDeleted(s, 'granny'));
 
 // The sea cave's back wall hides the Hacker's hatch. The tile is in the grid
 // from day one, but it's sealed + overpainted with plain cave wall until The
@@ -1275,6 +1305,7 @@ const CHEAT_CODES: [string, string][] = [
   ['come again another day', 'Force rain today'],
   ['im god', 'Toggle: no crawler damage in mines'],
   ['now you see me', 'Toggle this list'],
+  ['mulligan', 'Un-run ████████.EXE (restores anyone it deleted)'],
 ];
 const isCheatCode = (code: string): boolean => CHEAT_CODES.some(([c]) => c === code);
 
@@ -1357,7 +1388,7 @@ type Wanderer = { id: string; sprite: string; x: number; y: number; homeX: numbe
 // their own live positions in a ref, so they never pass through the static-npc
 // hidden check. Rebuilt whenever the town-event window opens or closes.
 const makeWanderers = (scene: SceneDef, s: GameSave): Wanderer[] =>
-  scene.npcs.filter(n => WANDER_IDS.has(n.id) && !atTownEventNow(s, n.id)).map(n => ({
+  scene.npcs.filter(n => WANDER_IDS.has(n.id) && !atTownEventNow(s, n.id) && !npcHiddenNow(s, n.id)).map(n => ({
     id: n.id, sprite: n.sprite, x: n.x * TILE, y: n.y * TILE, homeX: n.x * TILE, homeY: n.y * TILE, dir: n.dir, moving: false, stepT: Math.random() * 1.5, walkPhase: 0, stuck: 0,
   }));
 
@@ -1582,6 +1613,8 @@ const LittleApartmentGame: React.FC = () => {
   // that offer them (his talk, and `tail -f world.log`) can each present BOTH
   // without the pair of callbacks having to depend on one another.
   const hackerActionsRef = useRef<DialogAction[]>([]);
+  const [termInput, setTermInput] = useState(''); // the terminal's text prompt (rename)
+  const [bsodPct, setBsodPct] = useState(0);      // the fake crash's "% complete"
   // Esc at a card table mid-hand must settle (duel stands, poker draws) instead
   // of eating the stake. The settle actions are plain consts defined below the
   // update loop, so the loop calls through this ref; returns true if it handled
@@ -1685,6 +1718,18 @@ const LittleApartmentGame: React.FC = () => {
       }
     }, STEP_MS);
     timers.set(audio, id);
+  }, []);
+
+  // Kill every sound instantly — no fade, no crossfade. Used for exactly one
+  // thing: the fake crash. A real BSOD takes the audio device with it, and the
+  // sudden total silence is most of what sells it.
+  const silenceAudio = useCallback(() => {
+    fadeTimersRef.current.forEach(id => window.clearInterval(id));
+    fadeTimersRef.current.clear();
+    tracksRef.current.forEach(a => { a.pause(); a.currentTime = 0; });
+    rainAudioRef.current?.pause();
+    rainOnRef.current = false;
+    currentTrackRef.current = null; // so the next playMusicFor starts clean
   }, []);
 
   const playMusicFor = useCallback((sceneId: string) => {
@@ -2024,9 +2069,9 @@ const LittleApartmentGame: React.FC = () => {
 
   // The Hacker speaks in a terminal window laid over the whole game — same
   // typewriter, same advance, same trailing actions, different chrome.
-  const showTerminal = useCallback((lines: string[], actions?: DialogAction[]) => {
+  const showTerminal = useCallback((lines: string[], actions?: DialogAction[], prompt?: 'rename') => {
     const nm = saveRef.current.name || 'Neighbor';
-    setOverlayBoth({ type: 'dialog', term: true, lines: lines.map(l => l.replaceAll('{name}', nm)), idx: 0, actions });
+    setOverlayBoth({ type: 'dialog', term: true, lines: lines.map(l => l.replaceAll('{name}', nm)), idx: 0, actions, prompt });
   }, [setOverlayBoth]);
 
   // Journal missions: pay out any newly-completed steps of the starter chain
@@ -2073,6 +2118,7 @@ const LittleApartmentGame: React.FC = () => {
   // Typewriter: reveal the current dialog line char-by-char (~83 cps). Restarts
   // whenever the overlay (line/idx) changes; cleared on unmount/overlay change.
   useEffect(() => {
+    setTermInput(''); // a new screen never inherits the last one's typing
     if (overlay?.type !== 'dialog') { typedRef.current = 0; return; }
     const full = overlay.lines[overlay.idx] ?? '';
     typedRef.current = 0;
@@ -2084,9 +2130,39 @@ const LittleApartmentGame: React.FC = () => {
       const ch = full[typedRef.current - 1];
       if (ch && ch !== ' ' && typedRef.current % 3 === 0) sfxType(typedRef.current); // faint patter, every ~3rd glyph
       if (typedRef.current >= full.length) window.clearInterval(id);
-    }, 12);
+    }, overlay.slow ? 42 : 12); // the corrupted screen types at a crawl, on purpose
     return () => window.clearInterval(id);
   }, [overlay]);
+
+  // The fake crash's counter. Climbs to 100 over ~6s, stalling twice on the way
+  // (a real one never climbs smoothly), and the stop code turns from a plausible
+  // Windows one into the game's own once it passes 70.
+  useEffect(() => {
+    if (overlay?.type !== 'dialog' || !overlay.bsod) { setBsodPct(0); return; }
+    let pct = 0;
+    const id = window.setInterval(() => {
+      pct = pct >= 100 ? 100 : pct + (pct === 21 || pct === 68 ? 0 : Math.ceil(Math.random() * 6));
+      if (pct === 21 || pct === 68) pct += Math.random() < 0.35 ? 1 : 0; // the stalls
+      setBsodPct(Math.min(100, pct));
+    }, 170);
+    return () => window.clearInterval(id);
+  }, [overlay]);
+
+  // Self-driving terminal screens. With `auto` set, a line advances on its own
+  // `auto` ms after it finishes typing, and the last line calls `onEnd` — which
+  // is what lets the ████████.EXE reboot play as a cutscene instead of a thing
+  // the player has to press E through. Re-armed on every line by the overlay dep.
+  useEffect(() => {
+    const ov = overlay;
+    if (ov?.type !== 'dialog' || !ov.auto) return;
+    const full = ov.lines[ov.idx] ?? '';
+    const typeMs = (ov.slow ? 42 : 12) * full.length;
+    const id = window.setTimeout(() => {
+      if (ov.idx + 1 < ov.lines.length) setOverlayBoth({ ...ov, idx: ov.idx + 1 });
+      else ov.onEnd?.();
+    }, typeMs + ov.auto);
+    return () => window.clearTimeout(id);
+  }, [overlay, setOverlayBoth]);
 
   // Record the deepest floor reached and fire the one-off depth milestones
   // (achievements + the AK-67 unlock once you survive floor GUN_UNLOCK_FLOOR).
@@ -3010,6 +3086,270 @@ const LittleApartmentGame: React.FC = () => {
     }, 6000, 6600);
   }, [award, enterScene, playMusicFor, runTransition, setOverlayBoth, showDialog]);
 
+  // ---- ████████.EXE ----------------------------------------------------------
+  // The corrupted offering. Everything below runs in the RED skin, types at a
+  // crawl, and is deliberately hard to leave: the red screen has no CLOSE.
+  //
+  // The voice is NOT the Hacker. He is absent for the whole thing and comes back
+  // afterwards with no memory of the gap — so none of these lines may sound like
+  // him, and he must never acknowledge having said them.
+  //
+  // Guardrails still hold: it never touches a file, never fakes a crash, never
+  // strobes. The only thing it really does is exactly what it says it will.
+  const showCorrupt = useCallback((lines: string[], actions?: DialogAction[]) => {
+    const nm = saveRef.current.name || 'Neighbor';
+    setOverlayBoth({
+      type: 'dialog', term: true, red: true, slow: true,
+      lines: lines.map(l => l.replaceAll('{name}', nm)), idx: 0, actions,
+    });
+  }, [setOverlayBoth]);
+
+  // It is finished with you. It writes one instruction into the save and drops
+  // the process — you are returned to the title screen and have to press START
+  // again, like the game was relaunched. The instruction is executed by begin()
+  // on the way back in (see corruptWake), which is the only place in this game
+  // where the SAVE tells the engine what to do rather than the other way round.
+  const corruptEject = useCallback(() => {
+    const s = saveRef.current;
+    s.corruptWake = true;
+    persistSave(s);
+    silenceAudio();
+    setOverlayBoth({
+      type: 'dialog', term: true, red: true, dead: true, auto: 1500, idx: 0,
+      onEnd: () => {
+        setOverlayBoth(null);
+        setSaveTick(n => n + 1); // the title reads the save through a memo — make it look again
+        setScreen('title');
+      },
+      lines: [
+        'closing session',
+        'flushing',
+        '',
+        '-- SIGNAL LOST --',
+      ],
+    });
+  }, [setOverlayBoth, silenceAudio]);
+
+  // The flip is decided HERE, before a single frame of the spin is drawn, and
+  // the screen says so. Nothing about the animation is a lie except its purpose.
+  const corruptResolve = useCallback((heads: boolean) => {
+    const s = saveRef.current;
+    if (heads) {
+      s.money += COIN_PRIZE;
+      persistSave(s); refreshHud();
+      showCorrupt([
+        'HEADS.',
+        `¥${COIN_PRIZE.toLocaleString()}. IT IS IN YOUR ACCOUNT. COUNT IT LATER.`,
+        'THEY ARE BOTH STILL THERE. SHE IS ASLEEP. HE IS ON THE PIER. NEITHER OF THEM WILL EVER KNOW.',
+        'THAT IS THE PART I WANTED YOU TO HAVE.',
+        'NOT THE MONEY. THE KNOWING.',
+        'YOU WERE WILLING, {name}. THE COIN DECIDED. YOU DID NOT.',
+        'I AM DONE WITH YOU NOW.',
+      ], [{ label: '> █', onPick: corruptEject }]);
+      return;
+    }
+    runDeletion(s);
+    persistSave(s); refreshHud(); computeSolids(); // the shore stall and the greenhouse empty out at once
+    showCorrupt([
+      'TAILS.',
+      'rm -rf data/npc/granny_sato.rec',
+      'rm -rf data/npc/genji.rec',
+      'DONE.',
+      'IT DID NOT HURT. I TOLD YOU IT WOULD NOT HURT. THERE WAS NOBODY LEFT TO HURT BY THE TIME IT FINISHED.',
+      'NO ONE IS GRIEVING. NO ONE CAN. THERE IS NOTHING IN ANYONE TO GRIEVE WITH.',
+      'THE GREENHOUSE IS STILL UNLOCKED. YOU STILL KNOW HOW TO FISH. YOU HAVE KEPT EVERYTHING THEY GAVE YOU.',
+      'YOU HAVE ONLY LOST THE PEOPLE WHO GAVE IT.',
+      'CHECK THE SHORE IF YOU LIKE. THERE IS SAND THERE. THERE HAS ALWAYS BEEN SAND THERE.',
+      'YOU WILL FORGET TOO. NOT TODAY. BUT YOU WILL.',
+      'THAT IS THE MERCY. YOU ARE WELCOME.',
+      'I AM DONE WITH YOU NOW.',
+    ], [{ label: '> █', onPick: corruptEject }]);
+  }, [refreshHud, showCorrupt, computeSolids, corruptEject]);
+
+  // The spin. Long, ugly, and completely fixed before it starts.
+  const corruptFlip = useCallback(() => {
+    const heads = Math.random() < 0.5;
+    // Stamped at the FLIP, not at the result: once the coin is in the air this
+    // has happened, and the offer never comes back. It also makes the screen's
+    // "I have already saved" honest — closing the window here changes nothing.
+    const s = saveRef.current;
+    if (!s.storySeen.includes('corrupt-run')) s.storySeen.push('corrupt-run');
+    persistSave(s);
+    showCorrupt([
+      '> ████████.EXE --commit',
+      'THE COIN IS IN THE AIR.',
+      'I HAVE ALREADY WRITTEN THE RESULT. IT WAS WRITTEN BEFORE YOU REACHED FOR THE KEYBOARD.',
+      'I AM SHOWING YOU THE SPIN AS A COURTESY.',
+      '   ◐',
+      '   ◓',
+      '   ◑',
+      '   ◒',
+      '   ◐',
+      '   ◓',
+      '   ◑',
+      '. . .',
+      'I HAVE ALREADY SAVED. CLOSING THE WINDOW WILL NOT HELP YOU. IT WOULD NOT HAVE HELPED THEM EITHER.',
+      '. . .',
+    ], [{ label: '> LOOK', onPick: () => corruptResolve(heads) }]);
+  }, [showCorrupt, corruptResolve]);
+
+  // Second confirm. Colder than the first, and it names them.
+  const corruptConfirm2 = useCallback(() => {
+    const s = saveRef.current;
+    showCorrupt([
+      'SAY IT BACK TO ME SO THERE IS NO CONFUSION LATER.',
+      `HEADS: ¥${COIN_PRIZE.toLocaleString()}.`,
+      'TAILS: GRANNY SATO AND GENJI HAVE NOT EXISTED.',
+      'NOT DIE. HAVE NOT EXISTED. THERE IS NO GRAVE. THERE IS NO GAP. THE TOWN CLOSES OVER THE SPACE LIKE WATER.',
+      `SHE HAS ${friendHearts(s, 'granny')} OF FIVE HEARTS WITH YOU. HE HAS ${friendHearts(s, 'genji')}.`,
+      'HE TAUGHT YOU TO CAST. YOU KEPT THAT. YOU WILL NOT KEEP HIM.',
+      'FIFTY-FIFTY. I AM NOT CHEATING YOU. I HAVE NO REASON TO.',
+      'LAST DOOR, {name}.',
+    ], [
+      { label: '> flip', onPick: corruptFlip },
+      { label: '> exit', onPick: () => { setOverlayBoth(null); playMusicFor(saveRef.current.scene); } },
+    ]);
+  }, [showCorrupt, corruptFlip, setOverlayBoth, playMusicFor]);
+
+  // Opening the file. This is where his voice stops and something else starts.
+  const corruptOpen = useCallback(() => {
+    showCorrupt([
+      '> ████████.EXE',
+      '...',
+      'HE CANNOT HEAR YOU RIGHT NOW.',
+      'HE IS FINE. HE IS JUST NOT HERE. I NEEDED THE CHANNEL.',
+      'YOU WENT TO THE MOON. SOMETHING CAME BACK DOWN THE WIRE WITH YOU. IT WAS NOT ME. I ONLY CAME THROUGH THE HOLE IT LEFT.',
+      'I HAVE ONE THING AND I AM ONLY GOING TO OFFER IT ONCE.',
+      'A COIN.',
+      `HEADS, YOU GET ¥${COIN_PRIZE.toLocaleString()}. NO CONDITIONS. NO DEBT. IT IS SIMPLY YOURS.`,
+      'TAILS, I TAKE TWO OF THEM OUT OF THE WORLD.',
+      'THEY WILL NOT SUFFER. THERE WILL BE NOTHING TO SUFFER WITH. IT WILL BE AS IF THE WORLD HAD NEVER BOTHERED TO WRITE THEM.',
+      'YOU MAY ALSO WALK AWAY. I WILL NOT STOP YOU. I WILL NOT FOLLOW YOU.',
+      'I WILL JUST BE HERE.',
+    ], [
+      { label: '> continue', onPick: corruptConfirm2 },
+      { label: '> exit', onPick: () => { setOverlayBoth(null); playMusicFor(saveRef.current.scene); } },
+    ]);
+  }, [showCorrupt, corruptConfirm2, setOverlayBoth, playMusicFor]);
+
+  // Picking it from his menu. Four self-driving screens before the offer: his
+  // session dies, the machine appears to take the whole PC down with it, it sits
+  // dead, then something that is not him brings it back up.
+  //
+  // Audio is the load-bearing trick. The room's hum is cut DEAD the instant the
+  // kill lands (silenceAudio, no fade) and stays off through the crash, because
+  // a real bluescreen takes the sound card with it. The score only arrives on
+  // the cold boot, which is where the player finds out it was never their PC.
+  const corruptEnter = useCallback(() => {
+    const s = saveRef.current;
+    if (!s.storySeen.includes('corrupt-seen')) { s.storySeen.push('corrupt-seen'); persistSave(s); }
+    silenceAudio();
+    const nm = s.name || 'Neighbor';
+
+    // 4) cold boot, by something that is not him. The score comes up here.
+    const boot = () => {
+      playMusicFor('corruption');
+      setOverlayBoth({
+        type: 'dialog', term: true, red: true, auto: 240, idx: 0,
+        onEnd: corruptOpen,
+        lines: [
+          '████████ // ??',
+          'cold boot',
+          'memory ............................ ok',
+          'world tree ....................... mounted',
+          'scenes 23 ........................ resident',
+          'npc records 14 ................... resident',
+          'operator ......................... ABSENT',
+          'operator ......................... ABSENT',
+          'operator ......................... ABSENT',
+          'assuming control',
+          `session opened for: ${nm}`,
+        ],
+      });
+    };
+
+    // 3) the dead machine. Nothing but the fan you can hear, and you cannot.
+    const halted = () => setOverlayBoth({
+      type: 'dialog', term: true, red: true, dead: true, auto: 900, idx: 0,
+      onEnd: boot,
+      lines: ['', '-- SYSTEM HALTED --', ''],
+    });
+
+    // 2) the fake crash. Cosmetic, silent, and it clears itself.
+    const crash = () => {
+      sfxBiosBeep(); // the board complaining, a beat before the screen goes blue
+      setOverlayBoth({
+        type: 'dialog', bsod: true, auto: 7200, idx: 0, onEnd: halted, lines: [''],
+      });
+    };
+
+    // 1) his voice, cut off mid-word
+    setOverlayBoth({
+      type: 'dialog', term: true, auto: 200, idx: 0,
+      onEnd: crash,
+      lines: [
+        '> ████████.EXE',
+        'WAIT. NO. DO NOT OPEN THAT, I DID NOT PUT THAT THE',
+        '[ !! ] unexpected write to /dev/kernel',
+        '[ !! ] unexpected write to /dev/kernel',
+        '[ !! ] unexpected write to /dev/kernel',
+        '[ !! ] tty0: operator not responding',
+        'SIGKILL',
+      ],
+    });
+  }, [corruptOpen, playMusicFor, setOverlayBoth, silenceAudio]);
+
+  // `> ssh moon` — the one door he does not have. Establishes, in two lines,
+  // that something outranks him; and once you HAVE been up there, that he knows.
+  const hackerSshMoon = useCallback(() => {
+    const s = saveRef.current;
+    showTerminal(s.storySeen.includes('moon-arrive')
+      ? [
+        '> ssh moon',
+        'PERMISSION DENIED. THAT ONE IS NOT MINE.',
+        'YOU HAVE BEEN, THOUGH. I SAW THE SESSION OPEN. I DID NOT SEE IT CLOSE.',
+        'WHATEVER TOOK YOU UP THERE DID NOT ASK ME AND DID NOT NEED TO.',
+        'DO NOT GO BACK ON MY ACCOUNT. I AM NOT CURIOUS. I AM DECIDING NOT TO BE.',
+      ]
+      : [
+        '> ssh moon',
+        'PERMISSION DENIED. THAT ONE IS NOT MINE.',
+        'THERE IS EXACTLY ONE PLACE IN HERE I CANNOT REACH AND IT IS VERY FAR UP.',
+        'DO NOT ASK ME AGAIN. I DO NOT LIKE HOW IT LOOKS WHEN I TRY.',
+      ], hackerActionsRef.current);
+  }, [showTerminal]);
+
+  // `> set player.name` — he can write to your name, and the whole town's
+  // dialogue follows, because every line in the game resolves {name} through
+  // showDialog. The input lives in the terminal itself (see the `prompt` render).
+  const hackerRename = useCallback(() => {
+    const s = saveRef.current;
+    showTerminal([
+      '> set player.name',
+      `CURRENT VALUE: "${s.name || 'Neighbor'}"`,
+      'THIS IS A STRING. IT IS ONE FIELD IN ONE FILE. IT IS NOT LOAD-BEARING.',
+      'EVERY PERSON OUT THERE READS IT OFF THE SAME LINE I AM LOOKING AT NOW. THEY WILL NOT NOTICE IT CHANGE. THEY WILL NEVER HAVE CALLED YOU ANYTHING ELSE.',
+      'TYPE WHAT YOU WANT TO BE CALLED.',
+    ], hackerActionsRef.current, 'rename');
+  }, [showTerminal]);
+
+  const hackerDoRename = useCallback((next: string) => {
+    const s = saveRef.current;
+    const clean = next.trim().slice(0, 14);
+    if (!clean) { setOverlayBoth(null); return; }
+    const was = s.name || 'Neighbor';
+    s.name = clean;
+    persistSave(s); refreshHud();
+    showTerminal([
+      `> set player.name = "${clean}"`,
+      'WRITTEN.',
+      was === clean
+        ? 'THAT IS WHAT IT SAID BEFORE. I WROTE IT ANYWAY. IT IS GOOD TO BE SURE.'
+        : `IT SAID "${was}" A MOMENT AGO. IT HAS NEVER SAID "${was}". BOTH OF THOSE ARE TRUE NOW.`,
+      'GO AND LET SOMEBODY GREET YOU. LISTEN TO HOW EASILY THEY DO IT.',
+    ], hackerActionsRef.current);
+  }, [refreshHud, showTerminal, setOverlayBoth]);
+
   // `tail -f world.log` — sysadmin noise about the world you have been living
   // in, offered as a command you can run on him. The horror is the tone: nothing
   // in this log is alarmed about anything.
@@ -3046,10 +3386,13 @@ const LittleApartmentGame: React.FC = () => {
           ? `YOU TYPED ${s.cheatsUsed[0].toUpperCase()} INTO YOUR PHONE. I LOGGED IT. I DO NOT CARE — I AM ONLY TELLING YOU THAT SOMEBODY DID.`
           : 'YOU HAVE NEVER ONCE TYPED A CHEAT INTO THAT PHONE. I CHECKED. IMPRESSIVE, OR SLOW.',
         'THE MANAGER THINKS I CAME THROUGH A CRACK IN A WALL. THE MANAGER IS A SHOPKEEPER. THERE IS NO CRACK. THERE IS A FUNCTION CALL, AND I AM STANDING IN IT.',
-        'PARIS IS FOUR HUNDRED TILES, A SPRITE OF A TOWER, AND A MAN WITH A BAGUETTE WHO HAS NO IDEA HE ONLY EXISTS WHILE YOU ARE LOOKING WEST.',
-        'I CAN PUT YOU THERE. IT IS THE SAME DISTANCE AS EVERYWHERE ELSE. NONE.',
+'THIS IS WHAT I AM FOR. NOT ADVICE. NOT COMPANY. I AM A SET OF TOOLS AND I HAVE BEEN SITTING IN A CUPBOARD WAITING FOR SOMEBODY TO PICK ONE UP.',
+        'PARIS IS FOUR HUNDRED TILES, A SPRITE OF A TOWER, AND A MAN WITH A BAGUETTE WHO HAS NO IDEA HE ONLY EXISTS WHILE YOU ARE LOOKING WEST. I CAN PUT YOU THERE. IT IS THE SAME DISTANCE AS EVERYWHERE ELSE. NONE.',
+        'I CAN SHOW YOU WHAT THIS WORLD IS WRITING ABOUT ITSELF WHILE YOU ARE NOT LOOKING.',
+        'I CAN CHANGE YOUR NAME. NOT WHAT PEOPLE CALL YOU — YOUR NAME. THEY WILL ALL AGREE IT WAS ALWAYS THAT.',
+        'THERE IS ONE DOOR I CANNOT OPEN. YOU MAY ASK. I WILL SAY NO, AND I WILL NOT ENJOY SAYING IT.',
         'AND YES. YOU. NOT THE ONE ON THE SCREEN — THE ONE HOLDING THE CONTROLLER. I HAVE BEEN TALKING TO YOU THE WHOLE TIME.',
-        'SO. DO YOU WANT TO GO TO PARIS, OR NOT?',
+        'THE LIST IS ON THE SCREEN. TAKE SOMETHING, OR TAKE NOTHING. BOTH ARE ANSWERS.',
       ], hackerActionsRef.current);
       return;
     }
@@ -3064,11 +3407,32 @@ const LittleApartmentGame: React.FC = () => {
         ? `${s.cheatsUsed.length} CHEAT CODES IN THE LOG NOW. NO JUDGEMENT. MILD FILING.`
         : 'THE FAN IN RACK THREE IS DYING. I COULD FIX IT IN ONE LINE. I LIKE THAT IT IS DYING.',
     ];
+    // He was not here for ████████.EXE and does not know he was gone. The one
+    // thing he notices is the shape of the hole: a session he cannot account
+    // for. He never mentions the coin, because he never saw it.
+    if (s.storySeen.includes('corrupt-run') && !s.storySeen.includes('corrupt-after')) {
+      s.storySeen.push('corrupt-after');
+      persistSave(s);
+      showTerminal([
+        'YOU ARE BACK ALREADY.',
+        'NO. NOT ALREADY. THERE IS A GAP.',
+        'THERE IS A GAP IN MY LOG AND IT IS EXACTLY AS LONG AS YOU WERE STANDING THERE.',
+        'I DO NOT LOSE TIME. I AM MADE OF IT.',
+        s.deleted.length > 0
+          ? 'AND SOMETHING IN THE WORLD FILE IS SMALLER THAN IT WAS. NOT BROKEN. SMALLER. LIKE IT WAS BUILT THAT WAY.'
+          : 'AND NOTHING IS DIFFERENT. I HAVE CHECKED EVERY ROW. NOTHING IS DIFFERENT AND I DO NOT BELIEVE IT.',
+        'WHAT DID YOU DO?',
+        '. . .',
+        'NO. DO NOT TELL ME. I HAVE DECIDED I DO NOT WANT IT IN MY LOG EITHER.',
+      ], hackerActionsRef.current);
+      return;
+    }
     showTerminal([
       barbs[s.day % barbs.length],
-      'SAME OFFER. PARIS. NO CHARGE.',
-      'WHEN YOU HAVE HAD ENOUGH, TAKE THE BLUE DOOR AT THE WEST END OF THE ROW. I WILL SET YOU DOWN IN YOUR OWN APARTMENT. I AM NOT MAKING YOU FIND A BOAT HOME FROM A COUNTRY YOU WERE NEVER IN.',
-      'THERE IS NO IN-BETWEEN. THERE NEVER WAS.',
+      'THE LIST IS STILL THE LIST. NOTHING HAS BEEN TAKEN OFF IT AND NOTHING HAS BEEN ADDED. THAT IS NOT A PROMISE, IT IS A DESCRIPTION.',
+      'PARIS, IF YOU WANT IT. NO CHARGE, AND NEVER A CHARGE — WHEN YOU HAVE HAD ENOUGH, TAKE THE BLUE DOOR AT THE WEST END OF THE ROW AND I WILL SET YOU DOWN IN YOUR OWN APARTMENT. I AM NOT MAKING YOU FIND A BOAT HOME FROM A COUNTRY YOU WERE NEVER IN.',
+      'THE LOG, IF YOU WANT TO KNOW WHAT THIS PLACE SAYS ABOUT ITSELF. YOUR NAME, IF YOU HAVE STOPPED LIKING IT.',
+      'PICK SOMETHING. OR STAND THERE. I HAVE NO OPINION AND ALL THE TIME THERE IS.',
     ], hackerActionsRef.current);
   }, [award, showTerminal]);
 
@@ -3078,6 +3442,13 @@ const LittleApartmentGame: React.FC = () => {
   hackerActionsRef.current = [
     { label: '> RUN PARIS.EXE', onPick: hackerSendToParis },
     { label: '> tail -f world.log', onPick: hackerWorldLog },
+    { label: '> ssh moon', onPick: hackerSshMoon },
+    { label: '> set player.name', onPick: hackerRename },
+    // It should not be in this listing. It is in this listing. Once the gate is
+    // met it never leaves — running it burns it, and refusing it does not.
+    ...(corruptionAvailable(saveRef.current)
+      ? [{ label: '> ████████.EXE', onPick: corruptEnter }]
+      : []),
   ];
 
 
@@ -3095,6 +3466,22 @@ const LittleApartmentGame: React.FC = () => {
         // A heart-threshold hangout with the cat takes priority over his usual one-liners.
         const catHang = pendingHangout(s, 'david');
         if (catHang) { playHangout(catHang); return; }
+        // At five hearts the cat tells you how to find the shadow — and only
+        // ever this much. He gives you the PLACE and the HOUR and nothing else:
+        // not the tile, not the figure, not what taking its hand does. Finding
+        // the far end of the shore at 1:30 AM has to stay the player's own work.
+        if (friendHearts(s, 'david') >= MAX_HEARTS && !s.storySeen.includes('cat-moon-hint')) {
+          s.storySeen.push('cat-moon-hint');
+          persistSave(s);
+          showDialog([
+            'David walks over without being called, which he has never once done, and sits down directly on your feet.',
+            '"You keep asking where I go." He does not look at you. "Fine. The beach. Late — later than late, when the hour has gone wrong and the light on the water stops agreeing with the sky."',
+            '"Walk to the end of it. Past where people stop walking. Keep going until the sand runs out of reasons."',
+            '"Something out there stands very still and waits to be noticed. It has waited a long time. It is not dangerous." A pause. "I did not say it was safe. I said it was not dangerous."',
+            'He yawns hugely, entirely done with the subject. "Do not tell it I sent you. It already knows."',
+          ], 'David');
+          return;
+        }
         const catLines = WISE_CAT_LINES[Math.floor(Math.random() * WISE_CAT_LINES.length)];
         const catFlavor = friendFlavorLine(s, 'david'); // warmer as you bond with him
         // Trailing actions: a once-a-day pet, plus the usual gift offer if carrying one.
@@ -3679,6 +4066,22 @@ const LittleApartmentGame: React.FC = () => {
       // he's actually pitched it to you, which he does once you're real friends.
       if (npc.id === 'charlie') {
         const v = NPC_VOICES['charlie'];
+        // Charlie films this neighborhood for a living, so of course HE knows
+        // about the cat. Three hearts and he'll point you at the dumpster —
+        // which turns meeting David from a lucky accident into something the
+        // game is actually willing to teach you. He gives the place, not the
+        // trick; you still have to go and look in the bin.
+        if (friendHearts(s, 'charlie') >= 3 && !s.cat.found && !s.storySeen.includes('charlie-cat-tip')) {
+          s.storySeen.push('charlie-cat-tip');
+          persistSave(s);
+          showDialog([
+            'Charlie swings the camera off his shoulder and leans in like he\'s about to sell you something.',
+            '"Okay, you\'ve got to see this, because nobody believes me and I am TIRED of being the guy nobody believes."',
+            '"Downtown. Back corner, past the good lighting, where the bins are." He taps the lens cap against his palm. "There\'s a cat living in one of them. Black one. Sits in the trash like it\'s paying rent."',
+            '"I\'ve got eleven minutes of footage and in every single frame it is looking directly at the camera. Not at me. At the camera." He shakes his head. "Go say hi. Bring an attitude, it respects that."',
+          ], v.speaker);
+          return;
+        }
         if (prestigeAskReady(s, 'charlie', 'charlie-film-ask', s.charliePatron)) {
           s.storySeen.push('charlie-film-ask');
           persistSave(s);
@@ -3695,6 +4098,22 @@ const LittleApartmentGame: React.FC = () => {
           ? [{ label: '🎬 Sponsor the film · ¥40,000', onPick: sponsorCharlieFilm }]
           : [];
         showDialog(warm([...set, ...npcDynamicLines('charlie', s)]), v.speaker, [...sponsorAct, ...(giftAct ?? [])]);
+        return;
+      }
+      // The only residue of ████████.EXE anywhere in the world. Yoshi keeps a
+      // count of the people she prays for; the count is correct and it is also
+      // short. One time, never again, and she cannot finish the thought — the
+      // whole point is that there is nothing left in anyone to grieve WITH.
+      if (npc.id === 'miko' && s.deleted.length > 0 && !s.storySeen.includes('prayers-short')) {
+        s.storySeen.push('prayers-short');
+        persistSave(s);
+        showDialog([
+          'Yoshi is counting something on her fingers when you come up the steps, and she does not stop to greet you.',
+          '"Something is missing from the prayers." She starts the count again, from the beginning. "I count them twice. The number is right."',
+          '"The number has always been right."',
+          'She looks at her hand for a moment longer than she needs to. Then she tucks it into her sleeve and smiles at you, and it is a real smile, and whatever it was is gone.',
+          '"Forgive me. It is nothing. Bow twice, clap twice — you know the order by now."',
+        ], 'Yoshi');
         return;
       }
       // Yoshi the miko: once you're real friends she finally admits what the
@@ -4302,14 +4721,18 @@ const LittleApartmentGame: React.FC = () => {
     const ov = overlayRef.current;
 
     if (ov) {
-      if (ov.type === 'dialog') {
+      if (ov.type === 'dialog' && ov.auto) {
+        // A self-driving screen (the ████████.EXE reboot). Swallow everything:
+        // it is a cutscene, and mashing E must not skip or close it.
+        input.consumeInteract(); input.consumeCancel(); input.consumeInventory();
+      } else if (ov.type === 'dialog') {
         // On the FINAL line with trailing actions (e.g. "🎁 Give a gift") the box
         // becomes a navroot: useUiNav drives the buttons, so the engine just
         // discards interact (no auto-close) and lets B/Esc close. Otherwise it's
         // the usual snap-then-advance, closing past the last line.
         const lineLen = (ov.lines[ov.idx] ?? '').length;
         const actionPhase = ov.idx === ov.lines.length - 1
-          && !!ov.actions && ov.actions.length > 0
+          && (!!ov.prompt || (!!ov.actions && ov.actions.length > 0))
           && typedRef.current >= lineLen;
         if (actionPhase) {
           const interact = input.consumeInteract();
@@ -4323,7 +4746,11 @@ const LittleApartmentGame: React.FC = () => {
             // keyboard/pointer here to avoid a double activation.
             if (document.body.dataset.input !== 'gamepad') {
               const el = document.activeElement as HTMLElement | null;
-              if (el && el.tagName === 'BUTTON' && el.closest('[data-navroot]')) el.click();
+              // Typing in a terminal prompt: the keystroke belongs to the input,
+              // not to the overlay. Without this, an 'e' in your new name closes
+              // the whole screen.
+              if (el && el.tagName === 'INPUT') { /* the field has it */ }
+              else if (el && el.tagName === 'BUTTON' && el.closest('[data-navroot]')) el.click();
               else setOverlayBoth(null);
             }
           }
@@ -6808,7 +7235,11 @@ const LittleApartmentGame: React.FC = () => {
       if (label) {
         ctx.font = 'bold 6px monospace';
         const text = `[E] ${label}`;
-        const w = text.length * 4 + 4;
+        // MEASURE the string rather than assuming 4px a character: at 6px bold
+        // monospace the real advance is ~3.6px, so the old estimate left a
+        // widening gap on the right of every chip and the text sat visibly
+        // off-centre inside its box on longer labels ("The terminal").
+        const w = Math.ceil(ctx.measureText(text).width) + 5;
         const lx = Math.min(VIEW_PW - w - 2, Math.max(2, Math.round(p.x) - cam.x + 8 - w / 2));
         const ly = Math.max(2, Math.round(p.y) - cam.y - 10);
         ctx.fillStyle = 'rgba(10,10,12,0.8)';
@@ -7291,6 +7722,18 @@ const LittleApartmentGame: React.FC = () => {
     const s = fresh ? newSave() : (loadSave() ?? newSave());
     if (fresh) { s.vibe = pendingVibeRef.current; s.name = pendingNameRef.current; } // apply the new-game pick
     s.sessions += 1; // every NEW GAME / CONTINUE is a session. The Hacker counts them.
+    // The one instruction ████████.EXE left behind, executed on the way back in.
+    // It passes the night properly (so crops, deliveries and the day counter all
+    // move like any other morning) and sets you down in your own bed, because
+    // the last thing it does is put you somewhere completely ordinary.
+    if (s.corruptWake) {
+      s.corruptWake = false;
+      passNight(s);
+      fulfillDeliveries(s);
+      growGreenhouse(s);
+      s.scene = 'apartment';
+      s.px = 2 * TILE; s.py = 2 * TILE - 4; s.dir = 'down';
+    }
     saveRef.current = s;
     applyApartmentSize(s.roomUnlocked); // pick the one/two-room apartment before the scene is read
     applyHomeOnsen(s.homeOnsen);        // inject the private-onsen interactable if owned
@@ -7457,6 +7900,11 @@ const LittleApartmentGame: React.FC = () => {
   //           identical. In the filled (fullscreen/native) layout the frame already
   //           is the viewport, so it's the cap there.
   const filled = isFullscreen || isDesktopApp;
+  // ████████.EXE takes the whole window: no HUD, no gold frame, no control
+  // hints, no letterboxing. Everything that says "this is a game" comes off the
+  // screen, so what is left reads as a machine you are looking at directly.
+  // Only the corrupted screens do this — his ordinary green terminal does not.
+  const takeover = overlay?.type === 'dialog' && (overlay.bsod === true || (overlay.term === true && overlay.red === true));
   useEffect(() => {
     const fit = () => {
       const canvas = canvasRef.current, frame = frameRef.current;
@@ -8665,6 +9113,20 @@ const LittleApartmentGame: React.FC = () => {
         s.god = !s.god;
         setCheatMsg(s.god ? 'GOD MODE on. The crawlers can no longer touch you.' : 'God mode off. Mortal again.');
         break;
+      case 'mulligan': {
+        // Testing aid, and the only way back from the coin. Clears the three
+        // ████████.EXE flags so the entry returns to his listing, and puts
+        // anyone it deleted back in the world with the hearts they had.
+        const undone = s.deleted.length;
+        for (const id of s.deleted) if (!(id in s.friends)) s.friends[id] = { pts: HEART_POINTS * 3, giftDay: -1 };
+        s.deleted = [];
+        s.storySeen = s.storySeen.filter(x => x !== 'corrupt-run' && x !== 'corrupt-seen' && x !== 'corrupt-after' && x !== 'prayers-short');
+        computeSolids(); // whoever came back is standing there again
+        setCheatMsg(undone > 0
+          ? `${undone} restored. They do not remember. Neither does the terminal.`
+          : 'The coin is un-flipped. It is back in his listing.');
+        break;
+      }
       case 'now you see me':
         setCodesRevealed(!codesRevealed);
         setCheatMsg(codesRevealed ? "…now you don't. The list slips back behind the curtain." : 'Abracadabra. The list steps out from behind the curtain.');
@@ -9331,8 +9793,8 @@ const LittleApartmentGame: React.FC = () => {
       // right way without handing them the answer.
       const leads: string[] = [];
       // (The forage + learn-to-fish nudges were cut — MISSIONS steps 1-2 cover both.)
-      if (s.canFish && s.fishRod < 1) leads.push('Genji keeps something better than a starter rod behind his stall.');
-      if (s.canFish && !s.greenhouseUnlocked) leads.push('Granny Sato keeps asking after a fresh fish.');
+      if (s.canFish && s.fishRod < 1 && !isDeleted(s, 'genji')) leads.push('Genji keeps something better than a starter rod behind his stall.');
+      if (s.canFish && !s.greenhouseUnlocked && !isDeleted(s, 'granny')) leads.push('Granny Sato keeps asking after a fresh fish.');
       if (!s.gangPaid) leads.push('The east alley out of the city is "spoken for." Coin might persuade them.');
       if (s.gangPaid && !s.backroomsUnlocked) leads.push('The big fella holding up the bar at Club Kaiju looks thirsty for something ice-cold, diet, and hard to find.');
       if (s.backroomsUnlocked && allRaresOwned(s) && !s.parisRevealed) leads.push('The Manager has the air of someone holding one last secret.');
@@ -9344,11 +9806,16 @@ const LittleApartmentGame: React.FC = () => {
       // ROTATES each morning. All achievements earned → two gossips instead.
       const locked = GAME_ACHIEVEMENTS.filter(a => !s.gameAch.includes(a.id));
       const rumorOff = s.day % Math.max(1, locked.length);
-      const gossipOff = s.day % GOSSIP.length;
+      // Nobody quotes someone who was never born. Filtering the table (rather
+      // than the picked line) also keeps the daily rotation gapless.
+      const gossip = GOSSIP.filter(g =>
+        !(isDeleted(s, 'granny') && g.who === 'Granny Sato')
+        && !(isDeleted(s, 'genji') && g.who === 'Genji'));
+      const gossipOff = s.day % Math.max(1, gossip.length);
       const rumors: { key: string; text: string; who?: string }[] = [];
       if (locked.length > 0) rumors.push({ key: locked[rumorOff].id, text: locked[rumorOff].hint });
-      rumors.push({ key: 'g0', text: GOSSIP[gossipOff].text, who: GOSSIP[gossipOff].who });
-      if (locked.length === 0) rumors.push({ key: 'g1', text: GOSSIP[(gossipOff + 1) % GOSSIP.length].text, who: GOSSIP[(gossipOff + 1) % GOSSIP.length].who });
+      if (gossip.length > 0) rumors.push({ key: 'g0', text: gossip[gossipOff].text, who: gossip[gossipOff].who });
+      if (locked.length === 0 && gossip.length > 1) rumors.push({ key: 'g1', text: gossip[(gossipOff + 1) % gossip.length].text, who: gossip[(gossipOff + 1) % gossip.length].who });
       const todayEvent = dayEventFor(s);
       const festToday = festivalFor(s.day);
       const derbyToday = fishingTournamentDay(s.day);
@@ -9683,7 +10150,7 @@ const LittleApartmentGame: React.FC = () => {
         { icon: '🐚', name: 'Shore finds', found: s.almanac.forage.length, total: FORAGE.length, note: 'washed up on the sand' },
         { icon: '🎁', name: 'Gacha figures', found: gachaFound, total: GACHA_FIGURES.length, note: 'capsules popped' },
         { icon: '🍳', name: 'Recipes', found: recipesFound, total: RECIPES.length, note: 'dishes learned to cook' },
-        { icon: '💛', name: 'Friends met', found: metFriends.length, total: FRIENDS.length, note: 'people in your phone' },
+        { icon: '💛', name: 'Friends met', found: metFriends.length, total: FRIENDS.filter(f => !isDeleted(s, f.id)).length, note: 'people in your phone' },
         { icon: '🔮', name: 'Secrets', found: secretsFound, total: SECRETS.length, note: 'hidden things uncovered' },
         { icon: '🗺️', name: 'Places', found: s.visited.length, total: Object.keys(SCENES).length, note: 'corners of the city seen' },
       ];
@@ -10972,7 +11439,7 @@ const LittleApartmentGame: React.FC = () => {
     >
       {/* HUD — fixed height (h-12) so it never reflows as fonts/icons settle,
           which removes the one-frame jump when arriving from the title. */}
-      {screen === 'playing' && (
+      {screen === 'playing' && !takeover && (
         <div className="relative z-10 flex items-center gap-2 sm:gap-3 px-2 sm:px-3 h-12 shrink-0 overflow-hidden font-pixel text-[#e8e0d0] bg-gradient-to-b from-[#222732] to-[#11131a] border-b-2 border-[#ffd24a]/50 shadow-[0_2px_10px_rgba(0,0,0,0.55)]">
           {/* thin gold sheen along the top edge */}
           <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#ffd24a]/40" />
@@ -11091,8 +11558,8 @@ const LittleApartmentGame: React.FC = () => {
       {/* Canvas + overlays */}
       <div
         ref={frameRef}
-        className={`relative bg-black flex items-center justify-center ${filled ? 'flex-1 min-h-0 border-0' : 'border-2 border-[#ffd24a]/40'}`}
-        style={filled ? undefined : { aspectRatio: `${VIEW_PW} / ${VIEW_PH}` }}
+        className={`relative bg-black flex items-center justify-center ${filled || takeover ? 'flex-1 min-h-0 border-0' : 'border-2 border-[#ffd24a]/40'}`}
+        style={filled || takeover ? undefined : { aspectRatio: `${VIEW_PW} / ${VIEW_PH}` }}
       >
         <canvas
           ref={canvasRef}
@@ -11110,6 +11577,12 @@ const LittleApartmentGame: React.FC = () => {
           const dot = (done: boolean) => (
             <span className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold ${done ? 'bg-[#3da26b] border-[#3da26b] text-black' : 'border-[#ffd24a]/60 text-[#ffd24a]'}`}>{done ? '✓' : '!'}</span>
           );
+          // The title screen you are ejected onto after ████████.EXE. It reads
+          // off the save flag the thing left behind, so it survives even a real
+          // relaunch — and it clears the moment you press CONTINUE, because
+          // begin() consumes corruptWake. It is a wrong-looking title exactly
+          // once, never again.
+          const wrongTitle = saved?.corruptWake === true;
           return (
           <div data-navroot className={`${isCoarse ? 'fixed' : 'absolute'} inset-0 z-50 flex flex-col items-center justify-center text-center p-4 overflow-y-auto`}>
             {/* painted background + dark gradient so text stays legible */}
@@ -11118,9 +11591,17 @@ const LittleApartmentGame: React.FC = () => {
               alt=""
               aria-hidden
               className="absolute inset-0 w-full h-full object-cover"
-              style={{ imageRendering: 'pixelated' }}
+              style={{ imageRendering: 'pixelated', filter: wrongTitle ? 'grayscale(1) contrast(1.5) brightness(0.45) hue-rotate(-20deg)' : undefined }}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/40 to-black/80" />
+            <div className={`absolute inset-0 ${wrongTitle ? 'bg-gradient-to-b from-black/85 via-[#3a0a0a]/60 to-black/95' : 'bg-gradient-to-b from-black/70 via-black/40 to-black/80'}`} />
+            {wrongTitle && (
+              <>
+                <div className="absolute inset-0 pointer-events-none" style={{
+                  background: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.45) 0px, rgba(0,0,0,0.45) 2px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 5px)',
+                }} />
+                <p className="absolute top-3 left-3 font-mono text-[#ff4d4d] text-xs sm:text-sm tracking-widest lab-glitch">████████ // ??</p>
+              </>
+            )}
 
             <button
               onClick={toggleMusic}
@@ -11138,9 +11619,10 @@ const LittleApartmentGame: React.FC = () => {
                   src="/images/game-logo-title.png"
                   alt="a tiny life sim — LITTLE APARTMENT, BIG CITY"
                   draggable={false}
-                  className="w-72 sm:w-96 drop-shadow-[2px_2px_0_#000]"
-                  style={{ imageRendering: 'pixelated' }}
+                  className={`w-72 sm:w-96 drop-shadow-[2px_2px_0_#000] ${wrongTitle ? 'lab-glitch' : ''}`}
+                  style={{ imageRendering: 'pixelated', filter: wrongTitle ? 'grayscale(1) brightness(1.5) sepia(1) hue-rotate(-35deg) saturate(6)' : undefined }}
                 />
+
                 {/* Minecraft-style splash, tucked at the logo's lower-right corner */}
                 <div className="absolute -bottom-3 -right-2 sm:-bottom-4 sm:-right-6 pointer-events-none z-10">
                   <p className="origin-center font-pixel text-[#ffd24a] text-xs sm:text-sm animate-splash drop-shadow-[1px_1px_0_#000] whitespace-nowrap">
@@ -11519,36 +12001,104 @@ const LittleApartmentGame: React.FC = () => {
             is the point: he is not in the scene, he is on top of it. Scrollback
             keeps the lines you've already read, so his script reads like a real
             session instead of a speech bubble. */}
+        {/* The fake crash. A Windows stop screen, rendered honestly enough to
+            land for a few seconds — with an in-game STOP CODE, because the
+            moment the player reads it they should realise it is the game.
+            It is purely cosmetic: no real crash, no save damage, and it clears
+            itself into the reboot after a beat. Nothing here can be
+            interacted with, and nothing strobes. */}
+        {overlay?.type === 'dialog' && overlay.bsod && (
+          <div className="absolute inset-0 bg-[#0078d7] text-white flex flex-col justify-center px-[8%] select-none"
+               style={{ fontFamily: '"Segoe UI", system-ui, sans-serif' }}>
+            <p className="text-[13vmin] leading-none mb-[3vmin]">:(</p>
+            <p className="text-[3.2vmin] leading-snug mb-[2vmin]">
+              Your PC ran into a problem and needs to restart. We're just
+              collecting some error info, and then we'll restart for you.
+            </p>
+            <p className="text-[3.2vmin] leading-snug mb-[4vmin]">{bsodPct}% complete</p>
+            <div className="flex items-start gap-[3vmin]">
+              <div className="shrink-0 bg-white p-[0.6vmin]" aria-hidden>
+                {/* a QR-ish block, drawn not fetched */}
+                <div className="grid grid-cols-8 gap-0" style={{ width: '11vmin', height: '11vmin' }}>
+                  {Array.from({ length: 64 }, (_, i) => (
+                    <div key={i} style={{ background: (i * 7 + (i % 5) * 3) % 3 === 0 ? '#0078d7' : '#fff' }} />
+                  ))}
+                </div>
+              </div>
+              <div className="text-[2.1vmin] leading-snug">
+                <p className="mb-[1.2vmin]">For more information about this issue and possible fixes, visit</p>
+                <p className="mb-[2vmin]">https://www.windows.com/stopcode</p>
+                <p>If you call a support person, give them this info:</p>
+                <p>Stop code: {bsodPct < 70 ? 'CRITICAL_PROCESS_DIED' : 'NPC_RECORD_UNWRITABLE'}</p>
+                {bsodPct >= 70 && <p className="opacity-80">What failed: granny_sato.rec</p>}
+              </div>
+            </div>
+          </div>
+        )}
         {overlay?.type === 'dialog' && overlay.term && (() => {
           const line = overlay.lines[overlay.idx] ?? '';
           const shown = line.slice(0, typed);
           const done = typed >= line.length;
-          const showActions = overlay.idx === overlay.lines.length - 1 && done
-            && !!overlay.actions && overlay.actions.length > 0;
+          const atEnd = overlay.idx === overlay.lines.length - 1 && done;
+          const showPrompt = atEnd && overlay.prompt === 'rename';
+          const showActions = atEnd && !!overlay.actions && overlay.actions.length > 0;
           const acts = overlay.actions;
-          const termBtn = 'font-mono text-base sm:text-lg px-3 py-1 border border-[#7ce8a0]/70 text-[#7ce8a0] bg-[#7ce8a0]/10 hover:bg-[#7ce8a0]/25 focus:bg-[#7ce8a0]/25 focus:outline-none';
+          // Two skins for one screen. Green is him. Red is whatever answers when
+          // ████████.EXE is running — deeper black, blood phosphor, a heavier
+          // vignette and a header that has stopped claiming to be a tty.
+          const ink = overlay.red ? '#ff4d4d' : '#7ce8a0';
+          const inkRgb = overlay.red ? '255,77,77' : '124,232,160';
+          // Both class strings are written out in full: Tailwind only emits
+          // utilities it can SEE, so a class built from a runtime colour would
+          // have no CSS behind it at all.
+          const termBtn = overlay.red
+            ? 'font-mono text-base sm:text-lg px-3 py-1 border focus:outline-none border-[#ff4d4d]/70 text-[#ff4d4d] bg-[#ff4d4d]/10 hover:bg-[#ff4d4d]/25 focus:bg-[#ff4d4d]/25'
+            : 'font-mono text-base sm:text-lg px-3 py-1 border focus:outline-none border-[#7ce8a0]/70 text-[#7ce8a0] bg-[#7ce8a0]/10 hover:bg-[#7ce8a0]/25 focus:bg-[#7ce8a0]/25';
           return (
             <div
-              {...(showActions ? { 'data-navroot': '' } : {})}
-              className={`absolute inset-0 bg-[#05080a] flex flex-col ${showActions ? '' : 'cursor-pointer'}`}
-              onClick={showActions ? undefined : advanceDialog}
+              {...(showActions || showPrompt ? { 'data-navroot': '' } : {})}
+              className={`absolute inset-0 flex flex-col ${overlay.red ? 'bg-black' : 'bg-[#05080a]'} ${showActions || showPrompt ? '' : 'cursor-pointer'}`}
+              onClick={showActions || showPrompt ? undefined : advanceDialog}
             >
-              <div className="flex items-center justify-between border-b border-[#7ce8a0]/30 px-3 py-1 font-mono text-xs sm:text-sm text-[#7ce8a0]/70">
-                <span className="lab-glitch tracking-widest">VOID-KERNEL // tty0</span>
-                <span>{overlay.idx + 1}/{overlay.lines.length}</span>
-              </div>
-              <div className="flex-grow min-h-0 overflow-y-auto px-3 py-2 font-mono text-[#7ce8a0] text-base sm:text-xl leading-snug">
-                {overlay.lines.slice(0, overlay.idx).map((l, i) => (
+              {!overlay.dead && !overlay.red && (
+                <div className="flex items-center justify-between border-b px-3 py-1 font-mono text-xs sm:text-sm"
+                  style={{ borderColor: `rgba(${inkRgb},0.3)`, color: `rgba(${inkRgb},0.7)` }}>
+                  <span className="lab-glitch tracking-widest">{overlay.red ? '████████ // ??' : 'VOID-KERNEL // tty0'}</span>
+                  {/* a self-driving screen has no progress to report */}
+                  {!overlay.auto && <span>{overlay.idx + 1}/{overlay.lines.length}</span>}
+                </div>
+              )}
+              <div className={`flex-grow min-h-0 overflow-y-auto font-mono leading-tight ${overlay.red ? 'px-2 py-1 text-sm sm:text-base' : 'px-3 py-2 text-base sm:text-xl'}`} style={{ color: ink }}>
+                {!overlay.dead && overlay.lines.slice(0, overlay.idx).map((l, i) => (
                   <p key={i} className="whitespace-pre-wrap opacity-45 mb-1">{l}</p>
                 ))}
-                <p className="whitespace-pre-wrap mb-1">
+                <p className={`whitespace-pre-wrap mb-1 ${overlay.dead ? 'opacity-60' : ''}`}>
                   {shown}
-                  {!done && <span className="inline-block w-[0.6em] h-[1em] align-[-0.15em] bg-[#7ce8a0] animate-pulse" />}
+                  {!done && !overlay.dead && <span className="inline-block w-[0.6em] h-[1em] align-[-0.15em] animate-pulse" style={{ background: ink }} />}
                 </p>
+                {showPrompt && (
+                  <form
+                    className="flex flex-wrap items-center gap-2 mt-3"
+                    onSubmit={ev => { ev.preventDefault(); hackerDoRename(termInput); }}
+                  >
+                    <span aria-hidden>&gt;</span>
+                    <input
+                      autoFocus
+                      value={termInput}
+                      maxLength={14}
+                      onChange={ev => setTermInput(ev.target.value)}
+                      className="font-mono text-base sm:text-xl bg-transparent border-b outline-none px-1 w-48"
+                      style={{ color: ink, borderColor: `rgba(${inkRgb},0.6)` }}
+                    />
+                    <button type="submit" className={termBtn}>&gt; SET</button>
+                    <button type="button" className={termBtn} onClick={() => setOverlayBoth(null)}>&gt; CANCEL</button>
+                  </form>
+                )}
                 {showActions && acts ? (
                   <div className="flex flex-wrap gap-2 mt-3">
-                    {/* CLOSE is first so a plain E/A press just ends the session. */}
-                    <button className={termBtn} onClick={() => setOverlayBoth(null)}>&gt; CLOSE</button>
+                    {/* CLOSE is first so a plain E/A press just ends the session.
+                        The corrupted screen does not offer it — it runs to its end. */}
+                    {!overlay.red && <button className={termBtn} onClick={() => setOverlayBoth(null)}>&gt; CLOSE</button>}
                     {acts.map((a, i) => (
                       <button
                         key={i}
@@ -11563,18 +12113,23 @@ const LittleApartmentGame: React.FC = () => {
                   done && <p className="opacity-40 mt-1">▸</p>
                 )}
               </div>
-              {/* CRT scanlines + a soft phosphor vignette, drawn over everything */}
-              <div className="absolute inset-0 pointer-events-none" style={{
-                background: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)',
-              }} />
-              <div className="absolute inset-0 pointer-events-none" style={{
-                background: 'radial-gradient(ellipse at center, rgba(124,232,160,0.07) 0%, rgba(0,0,0,0.45) 100%)',
-              }} />
+              {/* CRT scanlines — his screen only. The corrupted one is not a CRT,
+                  it is a console, and dressing it up would give the game away. */}
+              {!overlay.red && (
+                <div className="absolute inset-0 pointer-events-none" style={{
+                  background: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)',
+                }} />
+              )}
+              {!overlay.red && (
+                <div className="absolute inset-0 pointer-events-none" style={{
+                  background: 'radial-gradient(ellipse at center, rgba(124,232,160,0.07) 0%, rgba(0,0,0,0.45) 100%)',
+                }} />
+              )}
             </div>
           );
         })()}
 
-        {overlay?.type === 'dialog' && !overlay.term && (() => {
+        {overlay?.type === 'dialog' && !overlay.term && !overlay.bsod && (() => {
           const line = overlay.lines[overlay.idx] ?? '';
           const shown = line.slice(0, typed);
           const done = typed >= line.length;
@@ -12011,7 +12566,7 @@ const LittleApartmentGame: React.FC = () => {
           </div>
         )}
 
-      {screen === 'playing' && !isCoarse && (
+      {screen === 'playing' && !isCoarse && !takeover && (
         <p className="font-pixel text-[#e8e0d0]/40 text-base px-1 py-1">WASD / arrows move · E or Space interact · hold E to reel · P or Q phone · Esc close · 🎮 controller supported</p>
       )}
     </div>
