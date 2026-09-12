@@ -1561,22 +1561,36 @@ const LittleApartmentGame: React.FC = () => {
   // Resetting phase to 'idle' here instead threw the stake away: the settle guard
   // bails on `phase !== 'spin'`, so the later call from startSlots/startRoulette
   // found nothing to do and the bet — up to a 7-7-7 plus the whole progressive
-  // jackpot — was simply gone. Both settles are silent (no win/lose sfx offscreen).
+  // jackpot — was simply gone. The settles run SILENT (the win/lose sfx would fire
+  // over a panel you already closed), so a payout is announced with a toast
+  // instead: walking out on a 7-7-7 still drains the progressive pot and reseeds
+  // it, and that must never happen with no feedback at all.
   useEffect(() => {
     const { slot, roul } = casinoRef.current;
     const onSlots = overlay?.type === 'shop' && overlay.shop === 'slots';
-    if (!onSlots && slot.timer != null) settleSlots(true);
+    if (!onSlots && slot.timer != null) {
+      settleSlots(true);
+      if (slot.win > 0) showToast(`🎰 +¥${slot.win.toLocaleString()}`, 'The reels landed after you walked away — paid out in full.');
+    }
     const onRoul = overlay?.type === 'shop' && overlay.shop === 'roulette';
-    if (!onRoul && roul.timer != null) settleRoulette(true);
+    if (!onRoul && roul.timer != null) {
+      settleRoulette(true);
+      if (roul.win > 0) showToast(`🎲 +¥${roul.win.toLocaleString()}`, `The wheel landed on ${roul.result} after you walked away — paid out in full.`);
+    }
+    // deps stay [overlay]: showToast is a stable useCallback declared further down,
+    // and naming it here would be a use-before-declaration in the deps array.
   }, [overlay]);
   useEffect(() => () => {
-    // Same on teardown: settle first so a spin still in flight pays into the
-    // persisted save, then make sure no interval outlives the component.
+    // Same on teardown: settle so a spin still in flight pays into the persisted
+    // save (settleSlots/settleRoulette clear their own intervals on the first
+    // line, so there is nothing left to clear here). No toast — the tree is
+    // going away; the money is already in localStorage via persistSave.
     const { slot, roul } = casinoRef.current;
     if (slot.timer != null) settleSlots(true);
     if (roul.timer != null) settleRoulette(true);
-    if (slot.timer != null) window.clearInterval(slot.timer);
-    if (roul.timer != null) window.clearInterval(roul.timer);
+    // settleSlots -> award() can arm the achievement-toast timer; don't let it
+    // outlive the component and setState into a torn-down tree.
+    if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
   }, []);
   const [isCoarse] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
   const [isPortrait, setIsPortrait] = useState(() => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches);

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { HOME_ONSEN_TILE } from '../src/game/maps';
 import {
   newSave, freshDayLog, maxEnergy, energyCost, sleep, clockLabel, nightT,
   buyFurniture, shrineLuck, gachaComplete, pawnStockFor, sketchyOfferFor,
@@ -226,6 +227,53 @@ describe('homeSoak', () => {
     expect(homeSoak(s)).toBe(false);        // already soaked today
     sleep(s);
     expect(homeSoak(s)).toBe(true);          // a new day, soak again
+  });
+
+  // apartmentOccupied only reserves the onsen tile once homeOnsen is true, so
+  // arranging furniture onto it BEFORE the purchase is legal. Buying then has to
+  // clear the tile, or the tub lands on top of the furniture.
+  it('boxes up furniture sitting on the onsen tile when the onsen is bought', () => {
+    const s = newSave();
+    s.money = 999999;
+    s.owned.push('lamp');
+    placeItem(s, 'lamp', HOME_ONSEN_TILE.x, HOME_ONSEN_TILE.y);
+    expect(buyHomeOnsen(s)).toBe(true);
+    expect(s.placed['lamp']).toBeUndefined();  // unplaced...
+    expect(s.owned).toContain('lamp');         // ...but still owned, so it can be re-placed
+  });
+
+  it('evicts a WIDE item that only overlaps the onsen tile with its second half', () => {
+    const s = newSave();
+    s.money = 999999;
+    s.owned.push('bed');
+    expect(itemFootprintW('bed')).toBe(2);
+    placeItem(s, 'bed', HOME_ONSEN_TILE.x - 1, HOME_ONSEN_TILE.y);
+    buyHomeOnsen(s);
+    expect(s.placed['bed']).toBeUndefined();
+  });
+
+  it('leaves furniture that merely sits next to the onsen alone', () => {
+    const s = newSave();
+    s.money = 999999;
+    s.owned.push('lamp', 'tv');
+    placeItem(s, 'lamp', HOME_ONSEN_TILE.x + 1, HOME_ONSEN_TILE.y);
+    placeItem(s, 'tv', HOME_ONSEN_TILE.x, HOME_ONSEN_TILE.y + 1);
+    buyHomeOnsen(s);
+    expect(s.placed['lamp']).toBeDefined();
+    expect(s.placed['tv']).toBeDefined();
+  });
+
+  it('repairs an already-broken save on load, not just at purchase time', () => {
+    // The tub is drawn from a constant, not from the save, so a save arranged
+    // before the tile moved could hold furniture where the onsen now sits.
+    // importSaveCode shares mergeSave with loadSave, so this covers both.
+    const broken = newSave();
+    broken.homeOnsen = true;
+    broken.owned.push('lamp');
+    broken.placed['lamp'] = { x: HOME_ONSEN_TILE.x, y: HOME_ONSEN_TILE.y };
+    const loaded = importSaveCode(exportSaveCode(broken))!;
+    expect(loaded.placed['lamp']).toBeUndefined();
+    expect(loaded.owned).toContain('lamp');
   });
 });
 

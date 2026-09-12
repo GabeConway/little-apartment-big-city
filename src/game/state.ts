@@ -22,7 +22,7 @@ import type { HangoutScene, HomeVisit } from './data';
 import type { CropRequest } from './data';
 import type { Errand, StreetEvent } from './data';
 import type { PhoneMessage, MsgCtx, Furniture } from './data';
-import { APARTMENT_SLOTS, RARE_SLOTS, SCENES } from './maps';
+import { APARTMENT_SLOTS, RARE_SLOTS, SCENES, HOME_ONSEN_TILE } from './maps';
 
 export const WAKE_MIN = 7 * 60;       // days start at 7:00 AM
 export const COLLAPSE_MIN = 26 * 60;  // 2:00 AM — you fade out and wake up at home
@@ -367,6 +367,10 @@ const mergeSave = (parsed: Partial<GameSave>): GameSave => {
     if (!s.canFish && (s.fishInv.length > 0 || Object.keys(s.fishLog).length > 0)) {
       s.canFish = true; // grandfather in anyone who already learned
     }
+    // Repair saves arranged before HOME_ONSEN_TILE moved off the fridge slot: the
+    // tub is drawn from a constant, not from the save, so a save holding furniture
+    // on today's onsen tile would render both on one solid tile. Box the item up.
+    if (s.homeOnsen) clearHomeOnsenTile(s);
     if (!parsed.today) s.today = freshDayLog(s.money); // old saves: baseline today's tally
     if (parsed.jukeboxUnlocked === undefined && s.homeTrack) s.jukeboxUnlocked = true; // grandfather jukebox users
     // Greenhouse 2.0 migration: old saves stored {sprinklerOn, plots:[{stage}]}.
@@ -1059,10 +1063,31 @@ export const sponsorCharlie = (s: GameSave): boolean => {
 };
 
 // Install a private hot spring at the apartment (unlocks homeSoak).
+// Box up anything arranged onto the onsen's fixed tile. apartmentOccupied only
+// reserves that tile once `homeOnsen` is true, so free placement onto it is legal
+// right up until the purchase — without this, buying the onsen drops the tub on
+// top of the furniture: two sprites on one solid tile, with the injected
+// `home-onsen` interactable shadowing the item's own. Evicted items stay OWNED
+// (only `placed` is cleared), so they go back to storage and can be re-placed.
+// Footprint-aware: a 'wide' item at x-1 still covers the onsen tile.
+export const clearHomeOnsenTile = (s: GameSave): string[] => {
+  const evicted: string[] = [];
+  for (const id of Object.keys(s.placed)) {
+    const p = s.placed[id];
+    if (p.y !== HOME_ONSEN_TILE.y) continue;
+    if (HOME_ONSEN_TILE.x >= p.x && HOME_ONSEN_TILE.x < p.x + itemFootprintW(id)) {
+      delete s.placed[id];
+      evicted.push(id);
+    }
+  }
+  return evicted;
+};
+
 export const buyHomeOnsen = (s: GameSave): boolean => {
   if (s.homeOnsen || s.money < HOME_ONSEN_PRICE) return false;
   s.money -= HOME_ONSEN_PRICE;
   s.homeOnsen = true;
+  clearHomeOnsenTile(s);
   return true;
 };
 

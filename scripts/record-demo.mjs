@@ -242,7 +242,9 @@ function makeApi(page, frames, cuts, on, off) {
       beat = { name, music, rect, from: frames.length };
       on();
     },
-    end() { off(); beat.to = frames.length; if (beat.to > beat.from + 2) cuts.push(beat); beat = null; },
+    // Guarded like markSong(): an end() with no matching begin() (or a double end(),
+    // easy to introduce when adding a beat) must not abort a finished recording.
+    end() { off(); if (!beat) return; beat.to = frames.length; if (beat.to > beat.from + 2) cuts.push(beat); beat = null; },
     // Mark the frame the karaoke song actually starts, for audio alignment.
     markSong() { if (beat) beat.songAt = frames.length; },
 
@@ -586,11 +588,17 @@ async function autoKaraoke(api, page) {
       setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true })), 70);
     };
     let i = 0;
+    const t0 = performance.now();
     await new Promise((done) => {
       const tick = () => {
         const k = window.__lab.snapshot().karaoke;
         if (!k.active) return done();
         if (k.done) return done();
+        // Bail like autoFish does. Without this, a song that never advances
+        // (blocked autoplay, stalled audio element) leaves k.active true
+        // forever, and the node side blocks on this promise while the
+        // screencast keeps writing frames into demo/.work.
+        if (performance.now() - t0 > 180000) return done();
         // Aim a hair early: the game samples the key on its next update tick.
         while (i < notes.length && k.t >= notes[i].t - 0.012) { tap(notes[i].dir); i++; }
         requestAnimationFrame(tick);
