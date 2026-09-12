@@ -44,7 +44,7 @@ const applyHomeOnsen = (present: boolean) => {
   else if (!present && has) SCENES.apartment.interactables = list.filter(it => it.id !== 'home-onsen');
 };
 import {
-  FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, vehicleById, KONBINI_FOOD,
+  FISH, FURNITURE, RARE_FURNITURE, VEHICLES, furnitureById, findFurniture, vehicleById, KONBINI_FOOD,
   fishById, rollFish, DEEP_FISH, TROPICAL_FISH, CAST_COST, SHIFT_COST, SHIFT_PAY, STORY_BEATS,
   RODS, rodInfo,
   GACHA_PRICE, GACHA_FIGURES, SKETCHY_BREAK_CHANCE, GAME_ACHIEVEMENTS, GOSSIP,
@@ -1574,12 +1574,17 @@ const LittleApartmentGame: React.FC = () => {
     // this exists for. So the payout QUEUES behind whatever spoke, one toast
     // lifetime later, and both are seen. toastSeqRef catches every banner source,
     // not just achievements.
+    const seqBefore = toastSeqRef.current;
     const announcePayout = (title: string, desc: string) => {
       const spoke = toastSeqRef.current !== seqBefore;
       if (!spoke) { showToast(title, desc); return; }
-      queuedToastsRef.current.push(window.setTimeout(() => showToast(title, desc), TOAST_MS));
+      // The timeout drops its own id, so the queue can't grow for the session.
+      const id = window.setTimeout(() => {
+        queuedToastsRef.current = queuedToastsRef.current.filter(q => q !== id);
+        showToast(title, desc);
+      }, TOAST_MS);
+      queuedToastsRef.current.push(id);
     };
-    const seqBefore = toastSeqRef.current;
     const onSlots = overlay?.type === 'shop' && overlay.shop === 'slots';
     if (!onSlots && slot.timer != null) {
       settleSlots(true);
@@ -2582,13 +2587,11 @@ const LittleApartmentGame: React.FC = () => {
     computeSolids();
     sfxBuy(); persistSave(s); refreshHud();
     setOverlayBoth(null);
-    // furnitureById ends in a non-null assertion, so an id that has been dropped
-    // from the data tables would throw here - AFTER the money is spent and the
-    // item already unplaced (the removed bicycle is precedent for ids outliving
-    // their table entry). Look the name up defensively; an unknown id just goes
-    // unmentioned rather than taking the whole purchase down with it.
+    // findFurniture, not furnitureById: this runs AFTER the money is spent and the
+    // item already unplaced, so a dropped id must not throw past React and take
+    // the explaining dialog with it. An unknown id just goes unmentioned.
     const names = inTheWay
-      .map(id => (FURNITURE.find(f => f.id === id) ?? RARE_FURNITURE.find(f => f.id === id))?.name)
+      .map(id => findFurniture(id)?.name)
       .filter((n): n is string => Boolean(n));
     showDialog([
       'The landlord sends a single thumbs-up, then a flurry of activity: a plumber, a delivery of hinoki planking, the smell of cedar and hot mineral water.',
@@ -8380,6 +8383,12 @@ const LittleApartmentGame: React.FC = () => {
   const quitToMenu = useCallback(() => {
     settleDerby(saveRef.current); // an open derby run settles into the save instead of vanishing with the refs
     persistSave(saveRef.current);
+    // The toast renders outside the `playing` gate, so a banner still queued or
+    // on screen would follow the player onto the title. Drop both.
+    queuedToastsRef.current.forEach(window.clearTimeout);
+    queuedToastsRef.current = [];
+    if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
+    setAchToast(null);
     setPlacingItem(null);
     setOverlayBoth(null);
     fishModeRef.current = null;

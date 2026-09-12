@@ -36,7 +36,36 @@ See kb/games.md Casino section + the four 07-02 "Recent changes" batches. Left:
   the faced tile).
 
 ## Known bugs
-**The list is currently empty.** The five defects found by the 2026-09-11 go-public
+
+1. **One toast slot, so simultaneous banners eat each other.** `achToast` is a
+   single `useState` slot written by both `award()` and `showToast()`
+   (LittleApartmentGame.tsx:1888 / :1896), and whoever speaks last wins. A
+   first-ever triple-seven runs `award('jackpot')` -> `award('high-roller')` ->
+   `countCasinoWin()`'s backroom-unlock `showToast` inside one `settleSlots`
+   (:7549, :7456), so two of those three banners are overwritten within the same
+   tick and the player only ever sees the last. **Pre-existing and not specific to
+   the walk-away path** - the identical sequence runs with `silent = false` when
+   you stay at the machine. Found by the 2026-09-12 review passes.
+   *Fix:* route `award` and `showToast` through the same queue
+   `announcePayout` already uses (`toastSeqRef` is the right primitive; it ticks
+   on every banner). Deliberately NOT done in that batch: it changes toast
+   behaviour everywhere in the game, so rapid-fire banners during normal play
+   would start queueing instead of replacing, and that wants its own playtest.
+
+2. **`allFurnitureById` throws on an id that has left the data tables.** It ends
+   in a non-null assertion (data.ts:150), and several callers read ids straight
+   out of the save: `fulfillDeliveries` (state.ts) does
+   `ids.map(id => furnitureById(id).name)` on wake off `s.orders`, and the
+   Arrange/storage lists do the same over `s.owned`/`s.placed`. A stale id would
+   throw during the day rollover and effectively brick that save. Latent today -
+   no furniture id has ever been removed (the deleted bicycle was a *vehicle*, a
+   separate array) - but the sharp edge is real.
+   *Fix:* decide per caller. `findFurniture()` (data.ts) is the honest lookup and
+   returns `undefined`; the purchase dialog already uses it.
+
+*(The five bugs from the 2026-09-11 go-public audit are all fixed - see below.)*
+
+**The audit's list is empty.** The five defects found by the 2026-09-11 go-public
 code review were all fixed on 2026-09-12 — see "Fixed on 2026-09-12" below for what
 they were and what guards them now. Add a bug here only once it is *verified in the
 source*, with a repro; this file is the first place to check before hunting one.

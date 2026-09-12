@@ -141,8 +141,15 @@ export const CROP_REQUESTS: CropRequest[] = [
   { id: 'melon-gift', crop: 'melon', count: 3, reward: 3200, flavor: 'Someone important has a birthday. Someone important loves melon. Do the math.' },
 ];
 
-export const allFurnitureById = (id: string): Furniture =>
-  (FURNITURE.find(f => f.id === id) ?? RARE_FURNITURE.find(f => f.id === id))!;
+// The honest lookup: an id that is not in either table returns undefined. Use
+// this anywhere the id came out of a SAVE and might outlive its table entry.
+export const findFurniture = (id: string): Furniture | undefined =>
+  FURNITURE.find(f => f.id === id) ?? RARE_FURNITURE.find(f => f.id === id);
+
+// The asserting lookup, for ids that are known-good by construction. Callers
+// reading straight off s.owned / s.placed / s.orders would throw here on a
+// dropped id - see kb/future-ideas.md.
+export const allFurnitureById = (id: string): Furniture => findFurniture(id)!;
 
 export const furnitureById = (id: string): Furniture => allFurnitureById(id);
 
