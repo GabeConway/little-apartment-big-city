@@ -49,6 +49,7 @@ const SCENE_SPAWN = {
   mines: { px: 32, py: 32 },
   island: { px: 80, py: 112 },
   seacave: { px: 80, py: 80 },
+  hackerlab: { px: 80, py: 112 }, // the Hacker's server closet, just inside the door (5,7)
   deepsea: { px: 128, py: 128 },
   paris: { px: 128, py: 160 },
   moon: { px: 144, py: 92 },   // shadow-figure arrival tile (9,6)
@@ -65,7 +66,8 @@ const SCENE_EXTRA = {
   backroom: { gangPaid: true, casinoWins: 30 },
   paris: { backroomsUnlocked: true, parisRevealed: true },
   island: { vehicles: ['boat'] },
-  seacave: { vehicles: ['boat'] },
+  seacave: { vehicles: ['boat'], parisRevealed: true },   // so the hatch is cut into the back wall
+  hackerlab: { vehicles: ['boat'], parisRevealed: true },
   deepsea: { vehicles: ['boat'] },
 };
 
@@ -109,7 +111,13 @@ function parseArgs(argv) {
 
 // ---- dev server ---------------------------------------------------------------
 function startServer() {
-  const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort', '--clearScreen', 'false'], {
+  // Run vite's bin with this same node rather than going through `npx`. On
+  // Windows `npx` is npx.cmd, which CreateProcess can't spawn directly (ENOENT),
+  // and routing around that with shell:true leaves vite as a grandchild of
+  // cmd.exe — killing the shell then orphans it holding the port, so the next
+  // run dies on --strictPort. Spawning node directly makes the kill land.
+  const viteBin = resolve(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
+  const proc = spawn(process.execPath, [viteBin, '--port', String(PORT), '--strictPort', '--clearScreen', 'false'], {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env },
   });
   return new Promise((res, rej) => {

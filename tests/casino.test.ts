@@ -2,7 +2,10 @@
 // jackpotFor is pure and seeded, so the slots panel, the lobby button and the
 // morning bulletin can all derive the same pot — pin that determinism here.
 import { describe, it, expect } from 'vitest';
-import { newSave, jackpotFor, backroomOpen, JACKPOT_BASE, JACKPOT_CAP, BACKROOM_WINS } from '../src/game/state';
+import {
+  newSave, jackpotFor, backroomOpen, JACKPOT_BASE, JACKPOT_CAP, BACKROOM_WINS,
+  logWager, logPayout, casinoNet, casinoReturnPct,
+} from '../src/game/state';
 
 describe('progressive jackpot (jackpotFor)', () => {
   it('starts at the base and is deterministic', () => {
@@ -59,5 +62,54 @@ describe('the backroom gate', () => {
     expect(backroomOpen(s)).toBe(false);
     s.casinoWins = BACKROOM_WINS;
     expect(backroomOpen(s)).toBe(true);
+  });
+});
+
+describe('the house ledger', () => {
+  it('starts empty and reports no return until something is staked', () => {
+    const s = newSave();
+    expect(s.casinoWagered).toBe(0);
+    expect(s.casinoReturned).toBe(0);
+    expect(s.casinoBest).toBe(0);
+    expect(casinoNet(s)).toBe(0);
+    expect(casinoReturnPct(s)).toBeNull(); // no divide-by-nothing, and no 0% libel
+  });
+
+  it('tracks net across a losing session', () => {
+    const s = newSave();
+    for (let i = 0; i < 4; i++) logWager(s, 1000);
+    logPayout(s, 1500);
+    expect(s.casinoWagered).toBe(4000);
+    expect(s.casinoReturned).toBe(1500);
+    expect(casinoNet(s)).toBe(-2500);
+    expect(casinoReturnPct(s)).toBeCloseTo(37.5, 5);
+  });
+
+  it('nets a returned stake to zero, so a push never reads as profit', () => {
+    const s = newSave();
+    logWager(s, 500);
+    logPayout(s, 500); // a slots pair / a blackjack push: the stake comes straight back
+    expect(casinoNet(s)).toBe(0);
+    expect(casinoReturnPct(s)).toBe(100);
+  });
+
+  it('remembers the biggest single payout, not the latest', () => {
+    const s = newSave();
+    logPayout(s, 8000);
+    logPayout(s, 1200);
+    expect(s.casinoBest).toBe(8000);
+    logPayout(s, 50000);
+    expect(s.casinoBest).toBe(50000);
+  });
+
+  it('ignores zero and negative movements on both sides', () => {
+    const s = newSave();
+    logWager(s, 0);
+    logWager(s, -100);
+    logPayout(s, 0);
+    logPayout(s, -100);
+    expect(s.casinoWagered).toBe(0);
+    expect(s.casinoReturned).toBe(0);
+    expect(s.casinoBest).toBe(0);
   });
 });

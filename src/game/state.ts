@@ -140,6 +140,11 @@ export interface GameSave {
   bossDuelLosses: number;           // times TOWZAWA has lost the duel — his gracious line quiets down
   bossDuelPlayed: number;           // total duel hands dealt — Towzawa keeps the ledger, and quotes it
   duelRulesWon: string[];           // HouseRuleId's you've beaten the boss duel under (drives 'read-the-placard')
+  casinoWagered: number;            // lifetime yen staked across all five games (drives the lobby ledger)
+  casinoReturned: number;           // lifetime yen paid back, GROSS (stake included) — net = returned - wagered
+  casinoBest: number;               // biggest single payout ever taken off the house
+  sessions: number;                 // times this save has been loaded (the Hacker counts them)
+  cheatsUsed: string[];             // cheat codes ever entered, first use only (the Hacker has read the log)
 }
 
 // ---- Skills (fishing / mining / farming) -------------------------------------
@@ -343,6 +348,11 @@ export const newSave = (): GameSave => ({
   bossDuelLosses: 0,
   bossDuelPlayed: 0,
   duelRulesWon: [],
+  casinoWagered: 0,
+  casinoReturned: 0,
+  casinoBest: 0,
+  sessions: 0,
+  cheatsUsed: [],
 });
 
 // Merge a parsed (possibly older / partial) save blob over fresh defaults and run
@@ -913,6 +923,28 @@ export const jackpotFor = (s: Pick<GameSave, 'day' | 'jackpotDay'>): number => {
   jackpotMemo = { day: s.day, jackpotDay: s.jackpotDay, pot };
   return pot;
 };
+// ---- The house ledger --------------------------------------------------------
+// Every stake and every credit, tallied for life, so the lobby can show the
+// player the number the house has always known. `returned` is GROSS — a credit
+// includes the stake back — so net profit is simply returned - wagered, and a
+// game that hands your stake straight back (a slots pair, a blackjack push)
+// moves both sides by the same amount and nets zero, exactly as it should.
+// Called at the bet site and the payout site of all five games.
+export const logWager = (s: GameSave, bet: number): void => {
+  if (bet > 0) s.casinoWagered += bet;
+};
+export const logPayout = (s: GameSave, credit: number): void => {
+  if (credit <= 0) return;
+  s.casinoReturned += credit;
+  if (credit > s.casinoBest) s.casinoBest = credit;
+};
+export const casinoNet = (s: Pick<GameSave, 'casinoWagered' | 'casinoReturned'>): number =>
+  s.casinoReturned - s.casinoWagered;
+// Your realised return as a percentage of everything you've ever staked (100 =
+// dead even). Null until you've actually bet something — no dividing by nothing.
+export const casinoReturnPct = (s: Pick<GameSave, 'casinoWagered' | 'casinoReturned'>): number | null =>
+  s.casinoWagered > 0 ? (s.casinoReturned / s.casinoWagered) * 100 : null;
+
 // Lifetime winning bets that part the velvet curtain at the back of the hall.
 // Raised 15 → 30 (2026-07-02, owner call): the backroom is a real grind to earn.
 export const BACKROOM_WINS = 30;
@@ -939,6 +971,50 @@ export const HOUSE_RULES: HouseRule[] = [
 // Seed multiplier 48271 — unique among the mulberry32 sites (checked 2026-07-02).
 export const houseRuleFor = (day: number): HouseRule =>
   HOUSE_RULES[Math.floor(mulberry32(day * 48271 + 7)() * HOUSE_RULES.length)];
+
+// ---- Slots (main casino floor) -------------------------------------------------
+// Three reels of weighted symbols, drawn from one flat pool. Pure + unit-tested
+// (the UI, the reel animation and the progressive pot live in the monolith) so
+// the pay table's RTP can be enumerated over all 14³ outcomes in a test rather
+// than guessed at. Index → emoji, rarity ascending.
+export const SLOT_SYMBOLS = ['\u{1F352}', '\u{1F514}', '\u{1F34B}', '⭐', '\u{1F48E}', '7️⃣']; // 🍒 🔔 🍋 ⭐ 💎 7️⃣
+export const SLOT_POOL = [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]; // weighted draw pool
+export const pickSlot = (): number => SLOT_POOL[Math.floor(Math.random() * SLOT_POOL.length)];
+export const SLOT_SEVEN = 5; // index of 7️⃣ — the top line AND the progressive trigger
+export const isTripleSeven = (reels: number[]): boolean => reels.every(n => n === SLOT_SEVEN);
+// Tuned to a deliberate ~103% RTP (1.0299) over the full 14³ outcome space — the
+// Kinryū slots are the one table in the game the player is SUPPOSED to beat, but
+// only just: +¥57 expected on a ¥2,500 pull, pocket change against a day's
+// fishing. It pays that way because a pair lands on 47.2% of spins, so the pair
+// row carries all the leverage: it returns the STAKE and nothing more (a wash,
+// not a win — settleSlots won't count it toward casinoWins), and the
+// three-of-a-kind rows carry the profit. Paying a pair 2× instead is worth +94
+// points of RTP on its own and turns the machine into a money printer that makes
+// every other way of earning in the game pointless. Don't. `tests/slots.test.ts`
+// enumerates every outcome and pins the RTP band.
+// Returns the GROSS credit in yen for a settled spin (the bet is already debited).
+export const slotPayout = (reels: number[], bet: number): number => {
+  const [a, b, c] = reels;
+  if (a === b && b === c) {
+    if (a === SLOT_SEVEN) return bet * 110; // 7️⃣ top line (plus the progressive pot)
+    if (a === 4) return bet * 48;   // 💎
+    if (a === 3) return bet * 24;   // ⭐
+    return bet * 10;                // any other three-of-a-kind
+  }
+  if (a === b || b === c || a === c) return bet; // any pair — your stake back, nothing more
+  return 0;
+};
+// Exact return-to-player of the pay table, enumerated over every reel combination
+// (no sampling). 1.0 = the house breaks even with you. Used by the test that
+// guards the band, and cheap enough to call anywhere.
+export const slotRTP = (): number => {
+  let total = 0, n = 0;
+  for (const a of SLOT_POOL) for (const b of SLOT_POOL) for (const c of SLOT_POOL) {
+    total += slotPayout([a, b, c], 1);
+    n++;
+  }
+  return total / n;
+};
 
 // ---- Video poker (Jacks or Better, main casino floor) --------------------------
 // Pure 5-card evaluator vs a fixed pay table — the machine UI lives in the

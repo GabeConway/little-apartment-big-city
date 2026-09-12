@@ -1779,6 +1779,140 @@ const buildTiles = (atlas: Atlas) => {
     ctx.fillStyle = '#8a96a0'; ctx.fillRect(6, 10, 5, 2);                                                      // dust swallowing the lower half
     ctx.fillStyle = '#ffd24a'; ctx.fillRect(11, 9, 1, 1); ctx.fillRect(12, 11, 1, 1); ctx.fillRect(13, 13, 1, 1); // chain links trailing into the soil
   });
+  // ---- The Hacker's lab (through the hatch at the back of the island sea cave) ----
+  // A server closet somebody fitted into a volcanic crack. Read order, darkest to
+  // lightest: near-black wall, black racks, cool steel floor — so the room has
+  // three clear values instead of one grey mush, and the only saturated colour in
+  // it is the phosphor green of the LEDs. That green is the same `#7ce8a0` the
+  // ZamaZonk terminal and the PARIS.EXE load screen already speak in. Racks are
+  // TWO tiles tall (top + body) like a real cabinet, with a front plinth and a
+  // thrown floor shadow so they read as furniture rather than floor decals; the
+  // hackerlab draw block lays the LED and CRT glow pools over the top.
+  const labFloorBase = (ctx: CanvasRenderingContext2D) => {    // shared, so props sit ON the floor instead of on a colour box
+    fill(ctx, '#3a4250');
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(0, 0, 16, 1); ctx.fillRect(0, 0, 1, 16);   // panel seam (upper-left)
+    ctx.fillStyle = '#4a5568'; ctx.fillRect(1, 1, 15, 1); ctx.fillRect(1, 1, 1, 15);   // lit seam lip
+  };
+  atlas['t-lab-floor'] = tile(ctx => {                         // raised data-center floor panel
+    labFloorBase(ctx);
+    ctx.fillStyle = '#2c3038';                                 // ventilation perforations
+    for (let y = 5; y < 14; y += 4) for (let x = 5; x < 14; x += 4) ctx.fillRect(x, y, 2, 2);
+    ctx.fillStyle = '#222831'; for (let y = 5; y < 14; y += 4) for (let x = 5; x < 14; x += 4) ctx.fillRect(x + 1, y + 1, 1, 1);
+    speckle(ctx, '#434d5e', 53, 5);
+  });
+  atlas['t-lab-cable'] = tile(ctx => {                         // walkable: recessed floor channel, cable loom inside it
+    // Deliberately quiet. A first pass ran a bright loom with gold cable ties
+    // across the room and read as a dashed yellow rope — the loudest thing in a
+    // room whose only accent is supposed to be the LEDs. This is a CHANNEL: it
+    // reads as depth in the floor, and the cables in it are near-neutral.
+    labFloorBase(ctx);
+    ctx.fillStyle = '#2c3038';                                 // perforations still show either side of the channel
+    for (let x = 5; x < 14; x += 4) { ctx.fillRect(x, 1, 2, 2); ctx.fillRect(x, 13, 2, 2); }
+    ctx.fillStyle = '#222831'; ctx.fillRect(0, 5, 16, 6);      // channel cut into the raised floor
+    ctx.fillStyle = '#1d2026'; ctx.fillRect(0, 5, 16, 1);      // near lip, in shadow
+    ctx.fillStyle = '#4a5568'; ctx.fillRect(0, 10, 16, 1);     // far lip catches the light
+    ctx.fillStyle = '#16181d'; ctx.fillRect(0, 7, 16, 2);      // the bundle itself
+    ctx.fillStyle = '#343d4a'; ctx.fillRect(0, 7, 16, 1);      // one strand's lit top
+    ctx.fillStyle = '#2e5e8e'; ctx.fillRect(0, 9, 16, 1);      // a single muted blue jacket in the loom
+  });
+  atlas['t-lab-wall'] = tile(ctx => {                          // SOLID: cut rock behind a black service panel
+    fill(ctx, '#16181d');
+    ctx.fillStyle = '#1d1826'; ctx.fillRect(0, 0, 16, 3);      // rock showing above the panel
+    speckle(ctx, '#2a2430', 59, 5);
+    ctx.fillStyle = '#222831'; ctx.fillRect(0, 3, 16, 10);     // panel face
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(0, 3, 16, 1);      // lit top edge
+    // Seams run VERTICALLY: the wall tiles down the side columns as well as
+    // across the back, and a horizontal band here striped the whole room.
+    ctx.fillStyle = '#1d2026'; ctx.fillRect(0, 4, 1, 9);
+    ctx.fillStyle = '#343d4a'; ctx.fillRect(1, 4, 1, 9);       // seam lit lip
+    ctx.fillStyle = '#343d4a'; ctx.fillRect(4, 5, 1, 1); ctx.fillRect(12, 10, 1, 1); // panel rivets
+    ctx.fillStyle = '#16181d'; ctx.fillRect(0, 13, 16, 3);     // deep shadow at the foot
+  });
+  atlas['t-lab-rack-top'] = tile(ctx => {                      // SOLID: upper half of a 2-tile cabinet
+    labFloorBase(ctx);
+    ctx.fillStyle = '#16181d'; ctx.fillRect(1, 0, 14, 16);     // cabinet body
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(1, 0, 14, 1); ctx.fillRect(1, 0, 1, 16); // lit upper-left edges
+    ctx.fillStyle = '#0f1116'; ctx.fillRect(14, 1, 1, 15);     // right-hand shadow edge
+    ctx.fillStyle = '#222831'; for (let y = 2; y < 15; y += 4) ctx.fillRect(2, y, 12, 3);  // blade servers, stacked
+    ctx.fillStyle = '#343d4a'; for (let y = 2; y < 15; y += 4) ctx.fillRect(2, y, 12, 1);  // blade top lip
+    ctx.fillStyle = '#3a4250'; for (let y = 3; y < 15; y += 4) ctx.fillRect(9, y, 4, 1);   // drive-bay handles
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(3, 3, 1, 1); ctx.fillRect(3, 11, 1, 1);        // link LEDs
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(3, 7, 1, 1);       // one amber — something is retrying
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(5, 3, 1, 1); ctx.fillRect(5, 11, 1, 1);        // activity LEDs
+  });
+  atlas['t-lab-rack'] = tile(ctx => {                          // SOLID: lower half + the plinth that makes it read as furniture
+    labFloorBase(ctx);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 13, 16, 3);   // floor shadow
+    ctx.fillStyle = '#16181d'; ctx.fillRect(1, 0, 14, 13);     // cabinet body continues
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(1, 0, 1, 13);      // lit left edge
+    ctx.fillStyle = '#0f1116'; ctx.fillRect(14, 0, 1, 13);     // right-hand shadow edge
+    ctx.fillStyle = '#222831'; for (let y = 1; y < 10; y += 4) ctx.fillRect(2, y, 12, 3);
+    ctx.fillStyle = '#343d4a'; for (let y = 1; y < 10; y += 4) ctx.fillRect(2, y, 12, 1);
+    ctx.fillStyle = '#3a4250'; for (let y = 2; y < 10; y += 4) ctx.fillRect(9, y, 4, 1);   // drive-bay handles
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(3, 2, 1, 1); ctx.fillRect(3, 6, 1, 1);         // link LEDs
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(5, 6, 1, 1);
+    ctx.fillStyle = '#222831'; ctx.fillRect(2, 10, 12, 3);     // vented plinth
+    ctx.fillStyle = '#16181d'; for (let x = 3; x < 14; x += 2) ctx.fillRect(x, 11, 1, 1);
+  });
+  // THE terminal — there is nobody in this room; the machine is the character.
+  // Built two tiles tall so it reads as a standing kiosk you walk up to, the same
+  // silhouette language as the konbini's courier terminal (`t-terminal`) and the
+  // rack cabinets beside it. Top = hooded CRT, bottom = pedestal + keyboard tray.
+  atlas['t-lab-term-top'] = tile(ctx => {                      // SOLID: the screen half
+    labFloorBase(ctx);
+    ctx.fillStyle = '#16181d'; ctx.fillRect(1, 2, 14, 14);     // monitor shell
+    ctx.fillStyle = '#343d4a'; ctx.fillRect(1, 2, 14, 1); ctx.fillRect(1, 2, 1, 14);  // shell lit edges (upper-left)
+    ctx.fillStyle = '#0f1116'; ctx.fillRect(14, 3, 1, 13);     // shell shadow edge
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(12, 3, 1, 1);      // "online" LED, same tell as the konbini kiosk
+    ctx.fillStyle = '#0a1410'; ctx.fillRect(3, 4, 10, 11);     // glass
+    ctx.fillStyle = '#1d6b56'; ctx.fillRect(3, 4, 10, 1);      // top glow band
+    ctx.fillStyle = '#7ce8a0';                                 // phosphor text, ragged like real output
+    ctx.fillRect(4, 6, 7, 1); ctx.fillRect(4, 9, 5, 1); ctx.fillRect(4, 12, 8, 1);
+    ctx.fillStyle = '#4a8f66'; ctx.fillRect(4, 7, 4, 1); ctx.fillRect(4, 10, 7, 1); ctx.fillRect(4, 13, 3, 1); // dimmer scrollback
+    ctx.fillStyle = '#0e3830'; ctx.fillRect(3, 5, 10, 1); ctx.fillRect(3, 8, 10, 1); ctx.fillRect(3, 11, 10, 1); // scanlines
+    ctx.fillStyle = '#e8f0f4'; ctx.fillRect(8, 13, 1, 1);      // the cursor, waiting
+  });
+  atlas['t-lab-term'] = tile(ctx => {                          // SOLID: pedestal + keyboard tray
+    labFloorBase(ctx);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 13, 16, 3);   // floor shadow
+    ctx.fillStyle = '#16181d'; ctx.fillRect(1, 0, 14, 4);      // the shell continues down
+    ctx.fillStyle = '#0f1116'; ctx.fillRect(14, 0, 1, 4);
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(2, 4, 12, 3);      // keyboard tray
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(2, 4, 12, 1);      // tray lit edge
+    ctx.fillStyle = '#222831'; for (let x = 3; x < 14; x += 2) ctx.fillRect(x, 5, 1, 1); // key row
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(6, 7, 4, 6);       // brushed pedestal post
+    ctx.fillStyle = '#4a5568'; ctx.fillRect(6, 7, 1, 6);       // post highlight
+    ctx.fillStyle = '#1d2026'; ctx.fillRect(9, 7, 1, 6);       // post shade
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 12, 8, 1);      // splayed foot
+    ctx.fillStyle = '#16181d'; ctx.fillRect(4, 13, 8, 1);      // foot shadow
+  });
+  atlas['t-lab-door'] = tile(ctx => {                          // walkable: the hatch back out to the sea cave
+    labFloorBase(ctx);
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(1, 0, 14, 15);     // steel frame
+    ctx.fillStyle = '#4a5568'; ctx.fillRect(1, 0, 14, 1); ctx.fillRect(1, 0, 1, 15);  // frame lit edges
+    ctx.fillStyle = '#0f1116'; ctx.fillRect(14, 1, 1, 14);
+    ctx.fillStyle = '#1d1826'; ctx.fillRect(3, 1, 10, 13);     // the dark of the cave beyond
+    ctx.fillStyle = '#2a2430'; ctx.fillRect(3, 1, 10, 2);      // rock lintel catching the room light
+    ctx.fillStyle = '#453d4e'; ctx.fillRect(3, 12, 10, 2);     // cave floor showing through
+    ctx.fillStyle = '#3a3344'; ctx.fillRect(5, 12, 3, 1);
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(13, 7, 1, 2);      // maglock, green = open
+  });
+  atlas['t-lab-hatch'] = tile(ctx => {                         // the cave side: a steel hatch cut into volcanic rock
+    fill(ctx, '#2a2430');                                      // cave wall base
+    ctx.fillStyle = '#3a3344'; ctx.fillRect(1, 1, 4, 4); ctx.fillRect(11, 10, 4, 4);  // rock facets carry through
+    ctx.fillStyle = '#473e54'; ctx.fillRect(1, 1, 4, 1); ctx.fillRect(11, 10, 4, 1);  // facet top highlights
+    speckle(ctx, '#4a4256', 41, 5);
+    ctx.fillStyle = '#16181d'; ctx.fillRect(2, 1, 12, 14);     // recess cut into the rock
+    ctx.fillStyle = '#2c3038'; ctx.fillRect(3, 2, 10, 12);     // steel door
+    ctx.fillStyle = '#4a5568'; ctx.fillRect(3, 2, 10, 1); ctx.fillRect(3, 2, 1, 11);  // lit edges (upper-left)
+    ctx.fillStyle = '#1d2026'; ctx.fillRect(12, 3, 1, 11);     // shadow edge
+    ctx.fillStyle = '#222831'; ctx.fillRect(4, 5, 8, 1); ctx.fillRect(4, 10, 8, 1);   // reinforcing ribs
+    ctx.fillStyle = '#3a4250'; ctx.fillRect(4, 4, 8, 1); ctx.fillRect(4, 9, 8, 1);    // rib highlights
+    ctx.fillStyle = '#16181d'; ctx.fillRect(9, 7, 3, 2);       // handle plate
+    ctx.fillStyle = '#6e7682'; ctx.fillRect(9, 7, 3, 1);
+    ctx.fillStyle = '#7ce8a0'; ctx.fillRect(5, 13, 6, 1);      // green light bleeding under the door
+    ctx.fillStyle = '#7ce8e0'; ctx.fillRect(7, 13, 2, 1);
+  });
   atlas['t-hole'] = tile(ctx => {
     fill(ctx, '#8a7e46'); // backrooms carpet around it
     ctx.fillStyle = '#16121d'; ctx.fillRect(2, 3, 12, 11);

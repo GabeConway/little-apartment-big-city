@@ -7,7 +7,7 @@ playtest harness, and the strategy for hunting bugs without a human at the keybo
 
 ```bash
 npx tsc --noEmit && npm test          # types + unit tests
-npm run playtest -- smoke --wait 450  # all 22 scenes render without errors
+npm run playtest -- smoke --wait 450  # all 23 scenes render without errors
 npm run playtest -- checkup           # end-to-end mechanics battery (scripts/checkups.mjs)
 ```
 
@@ -27,7 +27,7 @@ All three are exit-code checkable. If any fails after your change, the change di
 - `npm run test:watch` — watch mode while developing.
 
 ### Coverage (as built)
-`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers, town-event attendance windows), `maps.test.ts` (the apartment's fixed tiles — home onsen, maneki, trophy shelf — must not collide with `APARTMENT_SLOTS`/`RARE_SLOTS` and must be floor in both the small and expanded grids; this is the guard for the onsen-on-the-fridge bug). ~257 tests (incl. save-code round-trips, cat-gift seeding, mission predicates, weather-fish gating). Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see the bug-hunting playbook below).
+`engine.ts` (collision/camera/input/PRNG), `state.ts` (save defaults, energy, clock, night ramp, shop/placement/luck/gacha — deterministic via `mulberry32`), `fishing.ts` (reel minigame; `Math.random` stubbed with `vi.spyOn` for determinism), `save-migration.ts` cases, `calendar.test.ts` (festival rotation, fishing-derby cadence + non-collision, tournament tiers, town-event attendance windows), `maps.test.ts` (the apartment's fixed tiles — home onsen, maneki, trophy shelf — must not collide with `APARTMENT_SLOTS`/`RARE_SLOTS` and must be floor in both the small and expanded grids; this is the guard for the onsen-on-the-fridge bug). ~281 tests (incl. save-code round-trips, cat-gift seeding, mission predicates, weather-fish gating). Add file under `tests/` per new pure module. End-to-end mechanics live in the playtest `checkup` battery instead (see the bug-hunting playbook below).
 
 ### Where it runs
 - **CI on every PR + push to main**: `.github/workflows/ci.yml` (`check` job) runs `tsc --noEmit` → `npm test` → `npm run build` on ubuntu. Rust-free + fast; native bundling stays in `release.yml`.
@@ -81,11 +81,17 @@ and `fishing` — `{active:false}` when you're not fishing, else `{phase}` for
 
 ### Commands
 - `shot` (default) — enter game, run inputs, screenshot, print snapshot.
+> **`shot` captures the `<canvas>` only.** Every DOM overlay — dialogs, shop
+> panels, the phone, the Hacker's terminal — is **absent unless you pass
+> `--full`**. If a panel you just wired looks like it "doesn't render", check that
+> first: the `state`/`--assert` snapshot will happily report the overlay as open
+> while the picture shows an empty room.
+
 - `drive` — alias of `shot`; reads better when point is movement.
 - `state` — same flow, **no** screenshot; print snapshot only.
 - `title` — stay on title screen (don't click start). Pair with `--click`.
 - `presets` — list built-in save presets.
-- `smoke` — **sweep every scene** for runtime errors. Teleports into all 20 maps
+- `smoke` — **sweep every scene** for runtime errors. Teleports into all 23 maps
   (or a `--scene a,b,c` subset), dismisses the arrival overlay, waits, and reports
   `{ok, total, failed, scenes:[{scene, landed, overlay, errs[]}]}` as JSON. **Exit 1
   if any scene errors or fails to load** — one command CI-checks that nothing crashes
@@ -113,7 +119,7 @@ and `fishing` — `{active:false}` when you're not fishing, else `{phase}` for
 | `--key-delay <ms>` | gap between `--keys` presses (default 140). |
 | `--click "TEXT"` | click first button whose label contains TEXT (menus, panels, shops). Runs **after** `--keys`, so press E to open a menu then click its button; polls ~2s for the button to mount. **Comma = click SEQUENCE** (`"A,B"` clicks A then B) — a label containing a comma (e.g. `¥6,000`) breaks; match a comma-free substring (`¥6`). |
 | `--keep-overlay` | don't auto-dismiss arrival story letter (cleared by default so it can't eat input). |
-| `--scene <a,b,c>` | (`smoke` only) limit the sweep to these scenes; omit to sweep all 20. |
+| `--scene <a,b,c>` | (`smoke` only) limit the sweep to these scenes; omit to sweep all 23. |
 | `--only <a,b>` | (`checkup` only) run just these named checks from `scripts/checkups.mjs`. |
 | `--scale <auto\|1..6>` | seed `lab-scale` (DISPLAY option). |
 | `--wait <ms>` | settle time before snapshot/screenshot. |
@@ -242,7 +248,7 @@ this is the **strategy** on top.
 
 ```bash
 npx tsc --noEmit && npm test          # types + 200-ish unit tests
-npm run playtest -- smoke --wait 450  # all 22 scenes render without errors
+npm run playtest -- smoke --wait 450  # all 23 scenes render without errors
 npm run playtest -- checkup           # end-to-end mechanics battery (scripts/checkups.mjs)
 ```
 

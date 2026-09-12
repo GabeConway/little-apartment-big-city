@@ -253,4 +253,45 @@ export const CHECKS = [
     wait: 900,
     assert: "overlay===null && casino.roulPhase==='done' && money===20000-casino.roulBet+casino.roulWin",
   },
+  // --- The Hacker: the sea-cave hatch, the closet, the ride to Paris ----------
+  // The hatch tile is baked into the seacave grid from day one but is sealed (and
+  // overpainted with cave wall) until The Manager names the man behind it, so the
+  // pair of rows below guard BOTH halves of that: a dead end before, a door after.
+  {
+    name: 'seacave-hatch-sealed',
+    note: 'before The Manager names the Hacker, the back of the sea cave is solid rock',
+    save: { scene: 'seacave', px: 80, py: 16, dir: 'up', vehicles: ['boat'], parisRevealed: false, visited: ['seacave'] },
+    hold: ['ArrowUp:900'],
+    assert: "scene==='seacave'",
+  },
+  {
+    name: 'seacave-hatch-opens',
+    note: 'once parisRevealed is set the hatch is a real door into the server closet',
+    save: { scene: 'seacave', px: 80, py: 16, dir: 'up', vehicles: ['boat'], parisRevealed: true, visited: ['seacave'] },
+    hold: ['ArrowUp:900'],
+    assert: "scene==='hackerlab'",
+  },
+  {
+    name: 'hacker-talks-in-a-terminal',
+    note: 'the server-closet TERMINAL is the Hacker — walking up to the screen opens his term dialog and logs the meeting',
+    save: { scene: 'hackerlab', px: 80, py: 96, dir: 'up', parisRevealed: true, visited: ['hackerlab'] },
+    keys: 'e',
+    wait: 400,
+    assert: "overlay==='dialog' && save.storySeen.includes('hacker-met')",
+  },
+  {
+    name: 'paris-door-goes-home',
+    note: 'the blue door at the west end of the Paris row sets you down in your own apartment',
+    save: { scene: 'paris', px: 48, py: 128, dir: 'up', parisRevealed: true, storySeen: ['paris-intro'], visited: ['paris'] },
+    hold: ['ArrowUp:900'],
+    assert: "scene==='apartment'",
+  },
+  {
+    name: 'backrooms-seam-is-sealed',
+    note: 'the old Paris seam never opens any more — it is a scar, not a door',
+    save: { scene: 'backrooms', px: 128, py: 16, dir: 'up', backroomsUnlocked: true, wand: true, parisRevealed: true, visited: ['backrooms'] },
+    keys: 'e',
+    wait: 300,
+    assert: "scene==='backrooms' && overlay==='dialog'",
+  },
 ];

@@ -7,7 +7,8 @@ The whole 2026-07-02 casino wave is DONE (jackpot, backroom @30 wins, doorman,
 boss duel w/ house rules, video poker, Shinzo Towzawa rival buildout + ledger
 talk + first-loss taunt text, tea-ceremony capstone → `hanafuda` keepsake).
 See kb/games.md Casino section + the four 07-02 "Recent changes" batches. Left:
-- **Comp tiers** off lifetime wagered (new `save.casinoWagered` field): free
+- **Comp tiers** off lifetime wagered (`save.casinoWagered` now EXISTS — added
+  2026-09-12 for the lobby ledger, so this is the tier table + rewards only): free
   lounge tea/soda → members-only accessory (visible on player) → gold card in
   the phone. Silver-lining for losing; fits the luxury-sink economy. (Owner
   ranked this #2 of the brainstorm.)
@@ -157,6 +158,14 @@ expensive seed (melon 400 > tea 350 > chili 160 > tomato 140 > sunflower 80).
   hand-patch them.
 
 ## The Hacker (fourth-wall character) — owner idea 2026-07-02
+**Partly BUILT 2026-09-12** — he now lives in the `hackerlab` "Server Closet"
+behind the sea-cave hatch (as a TERMINAL, not a person) and is the only way to Paris (see kb/games.md,
+2026-09-12 batch 2). Shipped: the terminal-takes-the-screen dialog, the hard
+fourth wall (real weekday + wall clock, `save.sessions`, `save.cheatsUsed`, "the
+one holding the controller"), the scanline tear, the CRT `tail -f world.log`
+read. Still parked: the unknown-sender phone thread, the mid-conversation HUD
+edit, the fake "SAVE CORRUPTED" prank, and the whole endgame arc below.
+
 A character who can "hack" the actual game and is aware of the USER playing it
 (not just the player-character). Cozy-creepy, not hostile.
 - **Fiction hooks already shipped**: the ZamaZonk VOID-KERNEL terminal + "LOADING

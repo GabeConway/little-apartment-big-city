@@ -898,9 +898,14 @@ const seacave: SceneDef = {
     '.': T('t-cave-floor'),        // reused from the mines
     'x': T('t-cave-exit-l'),       // daylight crack, left half — walkable, warps back to the island
     'X': T('t-cave-exit-r'),       // daylight crack, right half (the pair reads as ONE opening)
+    // The Hacker's hatch. Walkable in the grid, but it does not EXIST until The
+    // Manager makes it exist: until save.parisRevealed, computeSolids seals the
+    // tile and the seacave draw block paints plain cave wall over it, so the
+    // player walks past bare rock. (See LAB_HATCH in the monolith.)
+    'h': T('t-lab-hatch'),
   },
   grid: [
-    '############',
+    '#####h######',
     '#..........#',
     '#...####...#',
     '#...#..#...#',
@@ -912,6 +917,7 @@ const seacave: SceneDef = {
   warps: [
     { x: 5, y: 6, to: 'island', tx: 15, ty: 3, dir: 'down' },
     { x: 6, y: 6, to: 'island', tx: 15, ty: 3, dir: 'down' },
+    { x: 5, y: 0, to: 'hackerlab', tx: 5, ty: 7, dir: 'up' },
   ],
   interactables: [
     { id: 'seacave-niche', x: 5, y: 2, label: 'A niche in the rock' },
@@ -921,6 +927,53 @@ const seacave: SceneDef = {
   // npcHiddenNow keeps him out of the cave otherwise — and forever once you've met
   // him, by which point he's a regular at Club Kaiju instead.
   npcs: [{ id: 'bigfoot-cave', x: 2, y: 4, sprite: 'npc-bigfoot', dir: 'right' }],
+};
+
+// ---- The Hacker's lab (through the hatch at the back of the sea cave) -----------------
+// A server closet wedged into a volcanic crack: eight racks and one terminal.
+// There is deliberately NOBODY in here — no NPC, no sprite. The Hacker IS the
+// terminal, and he talks to you off the screen (the same "walk up to a kiosk"
+// shape as the konbini's courier terminal). Tiny on purpose: it should feel like
+// a cupboard someone runs the world out of. Only reachable once The Manager has
+// told you he's here (the hatch is sealed rock until then), so nothing in here
+// needs its own gate.
+
+const hackerlab: SceneDef = {
+  id: 'hackerlab',
+  name: 'Server Closet',
+  legend: {
+    '#': T('t-lab-wall', true),
+    '.': T('t-lab-floor'),
+    'T': T('t-lab-rack-top', true), // racks are TWO tiles tall: T over R
+    'R': T('t-lab-rack', true),
+    'S': T('t-lab-term-top', true), // the terminal, likewise: S over C
+    'C': T('t-lab-term', true),
+    'c': T('t-lab-cable'),          // walkable floor panel with the cable loom run over it
+    'D': T('t-lab-door'),           // walkable — back down the hatch into the cave
+  },
+  // Row 3 is a cable channel running wall to wall under the back rack bank —
+  // it's what stops the floor reading as one endlessly repeated panel.
+  grid: [
+    '###########',
+    '#TT#TTT#TT#',
+    '#RR#RRR#RR#',
+    '#ccccccccc#',
+    '#T...S...T#',
+    '#R...C...R#',
+    '#.........#',
+    '#.........#',
+    '#####D#####',
+  ],
+  warps: [
+    { x: 5, y: 8, to: 'seacave', tx: 5, ty: 1, dir: 'down' },
+  ],
+  // Both halves of the terminal answer, so walking up to it from the front (5,6)
+  // or brushing the screen from the side both talk to him.
+  interactables: [
+    { id: 'hacker-term', x: 5, y: 5, label: 'The terminal' },
+    { id: 'hacker-term', x: 5, y: 4, label: 'The terminal' },
+  ],
+  npcs: [],
 };
 
 // ---- Open water (take the skiff out from the shore) -----------------------------------
@@ -1127,9 +1180,14 @@ const paris: SceneDef = {
     'wwwwwwwwwwwwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwwwwwwwwwwwww',
   ],
+  // The door at the west end of the storefront row is the way home, and the
+  // Hacker means HOME — he drops you in your own apartment, not back in his
+  // closet (it used to lead to the backrooms, when the seam was the way in).
+  // Tile (2,2) is the same one the 'country roads' cheat uses, so it's walkable
+  // in both the one- and two-room apartment layouts.
   warps: [
-    { x: 2, y: 7, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
-    { x: 3, y: 7, to: 'backrooms', tx: 8, ty: 2, dir: 'down' },
+    { x: 2, y: 7, to: 'apartment', tx: 2, ty: 2, dir: 'down' },
+    { x: 3, y: 7, to: 'apartment', tx: 2, ty: 2, dir: 'down' },
   ],
   interactables: [
     { id: 'seine', x: 0, y: 10, w: 26, h: 2, label: 'The Seine' },
@@ -1181,5 +1239,5 @@ const museum: SceneDef = {
 };
 
 export const SCENES: Record<string, SceneDef> = {
-  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, deepsea, casino, backroom, paris, moon, museum,
+  apartment, city, denden, konbini, pawn, shore, badtown, nightclub, garage, gacha, backrooms, mines, shrine, greenhouse, island, seacave, hackerlab, deepsea, casino, backroom, paris, moon, museum,
 };

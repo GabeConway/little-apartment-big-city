@@ -71,6 +71,8 @@ import {
   mineLayoutFor, mineChallengeFor, enterMineStreak, crackGeode, minedKey, lootVault,
   shrineLuck, syncMessages, unreadCount, donateToMuseum, museumComplete,
   jackpotFor, backroomOpen, BACKROOM_WINS,
+  logWager, logPayout, casinoNet, casinoReturnPct,
+  SLOT_SYMBOLS, pickSlot, slotPayout, isTripleSeven,
   bossStakeFor, houseRuleFor, HOUSE_RULES, type HouseRuleId,
   pokerEval, POKER_PAYTABLE,
   restoreShrine, sponsorCharlie, buyHomeOnsen, furnitureOnOnsenTile, homeSoak,
@@ -386,6 +388,7 @@ const SCENE_MUSIC: Record<string, string> = {
   backrooms: '/music/backrooms.mp3',
   mines: '/music/mines.mp3',
   seacave: '/music/mines.mp3',   // reuse the cave theme for the island's hidden sea cave
+  hackerlab: '/music/server-room.mp3', // real machine-room tone — eight racks and a dying fan
   moon: '/music/moon.mp3',       // the moon, outside time (user-supplied "on da mooon")
   gacha: '/music/gacha.mp3',
   island: '/music/island.mp3',
@@ -416,6 +419,7 @@ const DJ_SETLIST: { scene: string; label: string }[] = [
   { scene: 'seacave', label: 'a cave the island forgot' },
   { scene: 'gacha', label: 'Gacha Gacha hall' },
   { scene: 'backrooms', label: 'the yellow hum (???)' },
+  { scene: 'hackerlab', label: 'eight racks and a fan (???)' },
   { scene: 'paris', label: 'un café à Paris' },
 ];
 const MUSIC_VOL = 0.35;
@@ -505,24 +509,8 @@ interface BlackjackState {
 const freshBlackjack = (): BlackjackState =>
   ({ bet: 1000, deck: [], player: [], dealer: [], phase: 'bet', hideHole: true, result: '', payout: 0 });
 
-// Slots: 3 reels of weighted symbols. Index → emoji + rarity (lower = commoner).
-const SLOT_SYMBOLS = ['\u{1F352}', '\u{1F514}', '\u{1F34B}', '⭐', '\u{1F48E}', '7️⃣']; // 🍒 🔔 🍋 ⭐ 💎 7️⃣
-const SLOT_POOL = [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]; // weighted draw pool
-const pickSlot = () => SLOT_POOL[Math.floor(Math.random() * SLOT_POOL.length)];
-// Payout in yen for a settled spin (bet already debited; this is the credit).
-const SLOT_SEVEN = 5; // index of 7️⃣ in SLOT_SYMBOLS — the 50× line AND the progressive trigger
-const isTripleSeven = (reels: number[]): boolean => reels.every(n => n === SLOT_SEVEN);
-const slotPayout = (reels: number[], bet: number): number => {
-  const [a, b, c] = reels;
-  if (a === b && b === c) {
-    if (a === SLOT_SEVEN) return bet * 50; // 7️⃣ jackpot
-    if (a === 4) return bet * 20;   // 💎
-    if (a === 3) return bet * 10;   // ⭐
-    return bet * 5;                 // any other three-of-a-kind
-  }
-  if (a === b || b === c || a === c) return bet * 2; // any pair — small
-  return 0;
-};
+// Slots: the reel maths (symbols, weights, pay table) live in state.ts so the
+// RTP can be enumerated in a unit test; only the live reel/animation state is here.
 type SlotPhase = 'idle' | 'spin' | 'done';
 interface SlotState {
   bet: number; reels: number[]; final: number[]; stopped: boolean[];
@@ -614,7 +602,11 @@ interface DayRecap {
 type DialogAction = { label: string; onPick: () => void; disabled?: boolean; why?: string };
 
 type Overlay =
-  | { type: 'dialog'; lines: string[]; idx: number; speaker?: string; actions?: DialogAction[] }
+  // `term` swaps the speech box for a full-screen terminal window (the Hacker
+  // doesn't get a portrait and a wooden dialog frame — he takes the screen). The
+  // typing, advance, action and Esc machinery is identical, so it rides the
+  // dialog overlay rather than forking a second one.
+  | { type: 'dialog'; lines: string[]; idx: number; speaker?: string; actions?: DialogAction[]; term?: boolean }
   | { type: 'shop'; shop: ShopId }
   | { type: 'letter'; beat: StoryBeat }
   | { type: 'sleep'; day: number; collapsed?: boolean; awaitClick?: boolean }
@@ -1260,6 +1252,43 @@ const npcHiddenNow = (s: GameSave, id: string): boolean =>
   || (id === 'kinryu-doorman' && backroomOpen(s))
   || (id === 'kinryu-doorman-aside' && !backroomOpen(s));
 
+// The sea cave's back wall hides the Hacker's hatch. The tile is in the grid
+// from day one, but it's sealed + overpainted with plain cave wall until The
+// Manager tells you who lives behind it (save.parisRevealed) — so the room is a
+// dead end right up until the moment it isn't. Kept here so computeSolids, the
+// seacave draw block and the reveal all read the same coordinates.
+const LAB_HATCH = { x: 5, y: 0 };
+
+// Every cheat code the phone accepts, with the blurb the (hidden) list shows.
+// One table so applyCheat's log and the Cheats app can't drift apart — the
+// Hacker quotes save.cheatsUsed back at you, and it must only ever hold codes
+// that actually did something.
+const CHEAT_CODES: [string, string][] = [
+  ['motherlode', '+¥50,000'],
+  ['redbull', 'Refill energy'],
+  ['rocks', '+10 of every mineral'],
+  ['gimmegimme', 'Unlock all base furniture'],
+  ['country roads', 'Teleport home'],
+  ['sunrise', 'Time → 7:00 AM'],
+  ['nightfall', 'Time → 10:00 PM'],
+  ['midnight', 'Time → 1:30 AM'],
+  ['come again another day', 'Force rain today'],
+  ['im god', 'Toggle: no crawler damage in mines'],
+  ['now you see me', 'Toggle this list'],
+];
+const isCheatCode = (code: string): boolean => CHEAT_CODES.some(([c]) => c === code);
+
+// ---- The Hacker -------------------------------------------------------------
+// The one character who is not talking to your character. He reads the wall
+// clock in the room you are actually sitting in, counts how many times you have
+// opened this save, and has been through the cheat log. Guardrails (kb/
+// future-ideas.md): he never touches the real save, never fakes a crash, never
+// strobes. He is cozy-creepy, and he is friendly — he just isn't fooled.
+// Both read the clock at CALL time, so a session left running overnight still
+// gets the right answer out of him.
+const realWeekday = (): string => new Date().toLocaleDateString('en-US', { weekday: 'long' });
+const realClockText = (): string => new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
 // ---- Bingus museum fetch-quest helpers --------------------------------------
 const bingusHasKind = (s: GameSave, kind: BingusFetch['kind']): boolean =>
   kind === 'peepis' ? s.peepis > 0 :
@@ -1549,6 +1578,10 @@ const LittleApartmentGame: React.FC = () => {
   const [hud, setHud] = useState<Hud>({ money: 0, day: 1, time: '', energy: 0, max: 100, sceneName: '', fish: 0, ownedCount: 0, late: false, unread: 0, event: null, buff: null, weather: null });
   const [shopTick, setShopTick] = useState(0); // re-render shop lists after purchases
   const casinoRef = useRef<CasinoState>({ bj: freshBlackjack(), slot: freshSlots(), roul: freshRoulette(), poker: freshPoker(), duel: freshDuel(0) }); // live casino game state
+  // The commands the Hacker's terminal accepts. Held in a ref so the two screens
+  // that offer them (his talk, and `tail -f world.log`) can each present BOTH
+  // without the pair of callbacks having to depend on one another.
+  const hackerActionsRef = useRef<DialogAction[]>([]);
   // Esc at a card table mid-hand must settle (duel stands, poker draws) instead
   // of eating the stake. The settle actions are plain consts defined below the
   // update loop, so the loop calls through this ref; returns true if it handled
@@ -1589,7 +1622,10 @@ const LittleApartmentGame: React.FC = () => {
     if (!onSlots && slot.timer != null) {
       settleSlots(true);
       // slotPayout is gross, and the slots panel prints it gross too - match it.
-      if (slot.win > 0) announcePayout(`🎰 +¥${slot.win.toLocaleString()}`, 'The reels landed after you walked away — paid out in full.');
+      // A pair returns exactly the stake, which is a WASH: announcing it as a
+      // payout would read as free money for a spin that won nothing. The credit
+      // is still applied above either way - this only decides what to say.
+      if (slot.win > slot.bet) announcePayout(`🎰 +¥${slot.win.toLocaleString()}`, 'The reels landed after you walked away — paid out in full.');
     }
     const onRoul = overlay?.type === 'shop' && overlay.shop === 'roulette';
     if (!onRoul && roul.timer != null) {
@@ -1986,6 +2022,13 @@ const LittleApartmentGame: React.FC = () => {
     setOverlayBoth({ type: 'dialog', lines: lines.map(l => l.replaceAll('{name}', nm)), idx: 0, speaker, actions });
   }, [setOverlayBoth]);
 
+  // The Hacker speaks in a terminal window laid over the whole game — same
+  // typewriter, same advance, same trailing actions, different chrome.
+  const showTerminal = useCallback((lines: string[], actions?: DialogAction[]) => {
+    const nm = saveRef.current.name || 'Neighbor';
+    setOverlayBoth({ type: 'dialog', term: true, lines: lines.map(l => l.replaceAll('{name}', nm)), idx: 0, actions });
+  }, [setOverlayBoth]);
+
   // Journal missions: pay out any newly-completed steps of the starter chain
   // (syncMissions dedupes via save.missionsDone). Mirrors checkMessages — called
   // on scene enter and when the Journal app opens, so a step lands within moments
@@ -2083,6 +2126,10 @@ const LittleApartmentGame: React.FC = () => {
       }
       if (s.homeOnsen) set.add(`${HOME_ONSEN_TILE.x},${HOME_ONSEN_TILE.y}`); // walk up to soak
     }
+    // The Hacker's hatch isn't a door until The Manager makes it one. Until then
+    // the tile is sealed (and the seacave draw block paints cave wall over it),
+    // so the back of the cave reads as bare rock and the warp can never fire.
+    if (scene.id === 'seacave' && !s.parisRevealed) set.add(`${LAB_HATCH.x},${LAB_HATCH.y}`);
     if (s.carPos && s.carPos.scene === scene.id) {
       set.add(`${s.carPos.x},${s.carPos.y}`);
       set.add(`${s.carPos.x + 1},${s.carPos.y}`);
@@ -2938,6 +2985,94 @@ const LittleApartmentGame: React.FC = () => {
       );
     }
   };
+
+  // ---- The Hacker ------------------------------------------------------------
+  // Drop the player into Paris. The old backrooms seam played this same fake
+  // terminal load; now the load is literal — he is typing it.
+  const hackerSendToParis = useCallback(() => {
+    const s = saveRef.current;
+    setOverlayBoth(null);
+    playMusicFor('paris-transition');
+    runTransition('hack', () => {
+      enterScene('paris', 12, 8, 'down');
+      parisGlitchRef.current = 1.9; // you glitch/materialize into the map like a render finishing
+      if (!s.storySeen.includes('paris-intro')) {
+        s.storySeen.push('paris-intro');
+        award('bon-voyage');
+        persistSave(s);
+        showDialog([
+          'The terminal blinks out. The fan noise is gone.',
+          'Cobblestones. A café. The smell of bread and river water. Above it all, impossibly, the Eiffel Tower.',
+          'Somewhere a long way from your little apartment, you are standing in Paris.',
+          'At the far west end of the row there is a blue door with no shop behind it. That is his. Walk through it when you have had enough and you will be standing in your own apartment, which is somehow the strangest part of all of this.',
+        ]);
+      }
+    }, 6000, 6600);
+  }, [award, enterScene, playMusicFor, runTransition, setOverlayBoth, showDialog]);
+
+  // `tail -f world.log` — sysadmin noise about the world you have been living
+  // in, offered as a command you can run on him. The horror is the tone: nothing
+  // in this log is alarmed about anything.
+  const hackerWorldLog = useCallback(() => {
+    const s = saveRef.current;
+    showTerminal([
+      `> tail -f world.log`,
+      `[warn] npc/jean-pierre: still holding baguette (${s.day}d). no consumer. leaving it.`,
+      `[info] scene/paris: 400 tiles resident. visitors, lifetime: ${s.storySeen.includes('paris-intro') ? '1' : '0'}.`,
+      `[info] econ/player: balance ¥${s.money.toLocaleString()}. wagered ¥${s.casinoWagered.toLocaleString()} at kinryu. house is losing. leaving it.`,
+      '[warn] scene/moon: outside clock domain. do not fix. HE likes it.',
+      '[  ??] input/observer: present. attentive. hello.',
+      'The last line was not there a second ago. The cursor moves under it and waits, politely.',
+    ], hackerActionsRef.current);
+  }, [showTerminal]);
+
+  const talkToHacker = useCallback(() => {
+    const s = saveRef.current;
+    if (!s.storySeen.includes('hacker-met')) {
+      s.storySeen.push('hacker-met');
+      award('ghost-in-the-machine');
+      persistSave(s);
+      showTerminal([
+        'The terminal is already awake. It was awake before you opened the hatch — the cursor is halfway down a line it started without you.',
+        `> whoami\n{name}. Save slot: lab-save. Loaded ${s.sessions} time${s.sessions === 1 ? '' : 's'}. Day ${s.day}. ¥${s.money.toLocaleString()} on hand.`,
+        'RELAX. I AM NOT READING YOUR MIND. I AM READING YOUR FILE.',
+        `IT IS ${realWeekday().toUpperCase()} WHERE YOU ARE. AROUND ${realClockText().toUpperCase()}, GIVE OR TAKE WHATEVER YOUR CLOCK IS LYING ABOUT. IT IS NOT ${realWeekday().toUpperCase()} IN HERE. IN HERE IT IS DAY ${s.day}, AND IT HAS BEEN DAY ${s.day} SINCE YOU GOT UP.`,
+        'There is nobody in this room. Eight racks, one screen, a fan going at the end of its life. The typing is not coming from anywhere.',
+        s.cheatsUsed.length > 0
+          ? `YOU TYPED ${s.cheatsUsed[0].toUpperCase()} INTO YOUR PHONE. I LOGGED IT. I DO NOT CARE — I AM ONLY TELLING YOU THAT SOMEBODY DID.`
+          : 'YOU HAVE NEVER ONCE TYPED A CHEAT INTO THAT PHONE. I CHECKED. IMPRESSIVE, OR SLOW.',
+        'THE MANAGER THINKS I CAME THROUGH A CRACK IN A WALL. THE MANAGER IS A SHOPKEEPER. THERE IS NO CRACK. THERE IS A FUNCTION CALL, AND I AM STANDING IN IT.',
+        'PARIS IS FOUR HUNDRED TILES, A SPRITE OF A TOWER, AND A MAN WITH A BAGUETTE WHO HAS NO IDEA HE ONLY EXISTS WHILE YOU ARE LOOKING WEST. I CAN STILL PUT YOU THERE. IT IS THE SAME DISTANCE AS EVERYWHERE ELSE — NONE.',
+        'SO. YOU, AND THE ONE HOLDING THE CONTROLLER.\nThe line sits there a moment, addressed to the space just past your shoulder, and the room does not change at all.\nDO YOU WANT TO GO TO PARIS, OR NOT?',
+      ], hackerActionsRef.current);
+      return;
+    }
+    // Repeat visits: short, dry, and always a ticket out. One barb per day, so
+    // he is never quite the same twice without ever being random.
+    const barbs = [
+      `BACK. DAY ${s.day}. YOU HAVE OPENED THIS SAVE ${s.sessions} TIME${s.sessions === 1 ? '' : 'S'} AND I HAVE BEEN IN THIS CLOSET FOR ALL OF THEM.`,
+      `IT IS ${realWeekday().toUpperCase()} OUT THERE. GO OUTSIDE AT SOME POINT. I MEAN THAT KINDLY, AND I MEAN IT TO BOTH OF YOU.`,
+      `YOUR FILE SAYS ¥${s.money.toLocaleString()}. YOUR FILE SAYS A LOT OF THINGS. IT IS A VERY HONEST FILE.`,
+      'I MOVED A BRIDGE IN PARIS FOUR TILES LEFT LAST WEEK. NOBODY NOTICED. THE BRIDGE DID NOT NOTICE.',
+      s.cheatsUsed.length > 1
+        ? `${s.cheatsUsed.length} CHEAT CODES IN THE LOG NOW. NO JUDGEMENT. MILD FILING.`
+        : 'THE FAN IN RACK THREE IS DYING. I COULD FIX IT IN ONE LINE. I LIKE THAT IT IS DYING.',
+    ];
+    showTerminal([
+      'The screen wakes before your hand reaches the tray.',
+      barbs[s.day % barbs.length],
+      'SAME OFFER. PARIS, NO CHARGE. WHEN YOU HAVE HAD ENOUGH, TAKE THE BLUE DOOR AT THE WEST END OF THE ROW AND I WILL SET YOU DOWN IN YOUR OWN APARTMENT — I AM NOT MAKING YOU FIND A BOAT HOME FROM A COUNTRY YOU WERE NEVER IN.\nTHERE IS NO IN-BETWEEN. THERE NEVER WAS.',
+    ], hackerActionsRef.current);
+  }, [award, showTerminal]);
+
+  // The two commands he'll accept, behind a ref so `talkToHacker` and
+  // `hackerWorldLog` can each offer BOTH without the pair having to depend on
+  // one another (the log re-opens the terminal, which must still offer Paris).
+  hackerActionsRef.current = [
+    { label: '> RUN PARIS.EXE', onPick: hackerSendToParis },
+    { label: '> tail -f world.log', onPick: hackerWorldLog },
+  ];
+
 
   const handleInteract = useCallback(() => {
     const scene = sceneRef.current;
@@ -3806,30 +3941,21 @@ const LittleApartmentGame: React.FC = () => {
         enterScene('konbini', 4, 2, 'down');
         break;
       case 'paris-portal': {
-        // The secret entrance only "loads" once The Manager has revealed it.
-        if (!s.parisRevealed) {
-          showDialog(['Just a hairline seam in the endless yellow wall. You press it. It does not give. Not yet.']);
-          break;
-        }
-        // The game gets "hacked": a long fake-terminal screen loads Paris while
-        // the transition score plays, then drops you into the map. (Feature #21.)
-        playMusicFor('paris-transition');
-        runTransition('hack', () => {
-          enterScene('paris', 12, 8, 'down');
-          parisGlitchRef.current = 1.9; // you glitch/materialize into the map like a render finishing
-          if (!s.storySeen.includes('paris-intro')) {
-            s.storySeen.push('paris-intro');
-            award('bon-voyage');
-            persistSave(s);
-            showDialog([
-              'The terminal blinks out. The yellow hum is gone.',
-              'Cobblestones. A café. The smell of bread and river water. Above it all, impossibly, the Eiffel Tower.',
-              'Somewhere a long way from your little apartment, you are standing in Paris.',
-            ]);
-          }
-        }, 6000, 6600);
+        // The seam is where Jean-Pierre came THROUGH, and it is not a door any
+        // more — the Hacker is the way to Paris now (see the seacave hatch). Kept
+        // as a flavor tile: the yellow place should still carry the scar.
+        showDialog(s.parisRevealed
+          ? ['A hairline seam in the endless yellow. Something came through here once — a small man in a beret, blinking, holding a baguette he does not remember buying.',
+             'You press it. Nothing loads. It was never a door. Somebody only let you believe it was, and somebody else has since tidied up.']
+          : ['Just a hairline seam in the endless yellow wall. You press it. It does not give.',
+             'Something about it feels less like a crack and more like a scar.']);
         break;
       }
+      // The terminal in the server closet IS the Hacker — there is nobody in
+      // the room to talk to, so walking up to the screen is the conversation.
+      case 'hacker-term':
+        talkToHacker();
+        break;
       case 'seine':
         showDialog(['The Seine slides past, brown and unhurried, carrying the lights of the bridges.', 'You could stand here a while. You are, technically, very far from home.']);
         break;
@@ -4147,7 +4273,7 @@ const LittleApartmentGame: React.FC = () => {
         break;
       }
     }
-  }, [doSleep, sleepRect, showDialog, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, startPoker, startBossDuel, enterScene, refreshHud, runTransition, award, playMusicFor, reachFloor]);
+  }, [doSleep, sleepRect, showDialog, showTerminal, talkToHacker, useVending, setOverlayBoth, startCast, rollGacha, startSlots, startBlackjack, startRoulette, startPoker, startBossDuel, enterScene, refreshHud, runTransition, award, playMusicFor, reachFloor]);
 
   // ---- update -----------------------------------------------------------------
 
@@ -5706,6 +5832,14 @@ const LittleApartmentGame: React.FC = () => {
       }
     }
 
+    // The sea cave's back wall: plain volcanic rock until The Manager tells you
+    // whose door it is. The hatch tile is baked into the grid, so paint over it
+    // rather than swapping the map — the reveal then costs nothing but a flag.
+    if (scene.id === 'seacave' && !saveRef.current.parisRevealed) {
+      const rock = atlas['t-cave-wall'];
+      if (rock) ctx.drawImage(rock, LAB_HATCH.x * TILE - cam.x, LAB_HATCH.y * TILE - cam.y);
+    }
+
     // fishing bobber
     const fm = fishModeRef.current;
     if (fm) {
@@ -6268,6 +6402,55 @@ const LittleApartmentGame: React.FC = () => {
       ctx.restore();
     }
 
+    // The Hacker's server closet: the only light in the room comes out of the
+    // machines. Green LED wash off every rack (each on its own slow clock, so the
+    // wall never pulses in unison), a steady cold pool off the CRT, and a bright
+    // scanline crawling DOWN the rack faces — the refresh of something enormous
+    // thinking. Same cached-glow + 'lighter' treatment as the casino lamps.
+    if (scene.id === 'hackerlab') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const led = glow('120,255,160');
+      const screen = glow('120,232,224');
+      for (let ty = ty0; ty <= ty1; ty++) {
+        const row = scene.grid[ty];
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const ch = row[tx];
+          if (ch === 'T' || ch === 'R') {
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 8;
+            ctx.globalAlpha = 0.11 + 0.045 * Math.sin(t * 2.3 + tx * 1.7 + ty * 0.9);
+            ctx.drawImage(led, gx - 18, gy - 18, 36, 36);
+          } else if (ch === 'S') {                              // the terminal's screen — the brightest thing in here
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 9;
+            ctx.globalAlpha = 0.24 + 0.035 * Math.sin(t * 3.1);
+            ctx.drawImage(screen, gx - 26, gy - 26, 52, 52);
+          } else if (ch === 'C') {                              // spill onto the keyboard tray below it
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 4;
+            ctx.globalAlpha = 0.10;
+            ctx.drawImage(screen, gx - 16, gy - 16, 32, 32);
+          } else if (ch === 'D') {
+            const gx = tx * TILE - cam.x + 8, gy = ty * TILE - cam.y + 12;
+            ctx.globalAlpha = 0.10;
+            ctx.drawImage(led, gx - 12, gy - 12, 24, 24);
+          }
+        }
+      }
+      // The refresh sweep: one bright band easing down the room every ~4s.
+      const sweepY = ((t * 0.25) % 1) * (scene.grid.length + 2) - 1;
+      for (let ty = ty0; ty <= ty1; ty++) {
+        const d = Math.abs(ty - sweepY);
+        if (d > 1.2) continue;
+        const row = scene.grid[ty];
+        for (let tx = tx0; tx <= tx1; tx++) {
+          if (row[tx] !== 'T' && row[tx] !== 'R') continue;
+          ctx.globalAlpha = 0.16 * (1 - d / 1.2);
+          ctx.drawImage(led, tx * TILE - cam.x - 4, ty * TILE - cam.y - 4, 24, 24);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
     // Kiwami Island: the volcano crater glows (always, gently pulsing) and the
     // hot spring breathes little puffs of steam — cheap touches that make the
     // place feel alive. Reuses the cached glow() sprite, additive-blended.
@@ -6590,7 +6773,8 @@ const LittleApartmentGame: React.FC = () => {
       if (scene.id === 'deepsea' && !label) label = (feet.y >= 10 || faced.y >= 11) ? 'Sail south to go home' : 'Drop a line';
       // the freezer keeps its secret until you've been through once
       if (it?.id === 'portal' && !saveRef.current.storySeen.includes('backrooms-intro')) label = npcT ? 'Talk' : undefined;
-      // the Paris seam looks like a blank wall until The Manager reveals it
+      // the Paris seam reads as blank wall until The Manager tells you what came
+      // through it (it never opens — pressing it is flavor either way)
       if (it?.id === 'paris-portal' && !saveRef.current.parisRevealed) label = npcT ? 'Talk' : undefined;
       if (scene.id === 'mines') {
         const d = mineDownRef.current;
@@ -7099,6 +7283,7 @@ const LittleApartmentGame: React.FC = () => {
   const begin = useCallback((fresh: boolean) => {
     const s = fresh ? newSave() : (loadSave() ?? newSave());
     if (fresh) { s.vibe = pendingVibeRef.current; s.name = pendingNameRef.current; } // apply the new-game pick
+    s.sessions += 1; // every NEW GAME / CONTINUE is a session. The Hacker counts them.
     saveRef.current = s;
     applyApartmentSize(s.roomUnlocked); // pick the one/two-room apartment before the scene is read
     applyHomeOnsen(s.homeOnsen);        // inject the private-onsen interactable if owned
@@ -7485,6 +7670,7 @@ const LittleApartmentGame: React.FC = () => {
     else if (pv < dv) { bj.result = 'lose'; }
     else { bj.result = 'push'; payout = bj.bet; } // includes BJ vs BJ
     bj.payout = payout;
+    logPayout(s, payout);
     bj.phase = 'done';
     if (payout > 0) { s.money += payout; sfxCasinoWin(); }
     else if (bj.result === 'lose') sfxCasinoLose();
@@ -7495,7 +7681,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const bj = casinoRef.current.bj;
     if (bj.phase !== 'bet' || bj.bet <= 0 || s.money < bj.bet) return;
-    s.money -= bj.bet; // no deal sfx — the win/coin sound is the only blackjack cue now
+    s.money -= bj.bet; logWager(s, bj.bet); // no deal sfx — the win/coin sound is the only blackjack cue now
     bj.deck = makeDeck();
     bj.player = [bj.deck.pop()!, bj.deck.pop()!];
     bj.dealer = [bj.deck.pop()!, bj.deck.pop()!];
@@ -7548,8 +7734,14 @@ const LittleApartmentGame: React.FC = () => {
     slot.win = win;
     if (win > 0) {
       s2.money += win;
-      if (!silent) sfxCasinoWin();
-      award('high-roller'); countCasinoWin();
+      logPayout(s2, win);
+      // A pair returns exactly the stake — a wash. Only a REAL profit counts as a
+      // casino win (same rule video poker's Jacks-or-Better push already follows),
+      // so the 30-win backroom gate can't be farmed off 47%-frequency pairs.
+      if (win > slot.bet) {
+        if (!silent) sfxCasinoWin();
+        award('high-roller'); countCasinoWin();
+      }
       persistSave(s2); refreshHud();
     } else if (!silent) sfxCasinoLose();
     setShopTick(v => v + 1);
@@ -7558,7 +7750,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const slot = casinoRef.current.slot;
     if (slot.phase === 'spin' || slot.bet <= 0 || s.money < slot.bet) return;
-    s.money -= slot.bet; sfxBuy();
+    s.money -= slot.bet; logWager(s, slot.bet); sfxBuy();
     slot.phase = 'spin'; slot.win = 0;
     slot.final = [pickSlot(), pickSlot(), pickSlot()];
     slot.stopped = [false, false, false];
@@ -7611,6 +7803,7 @@ const LittleApartmentGame: React.FC = () => {
     if (win > 0) {
       const s2 = saveRef.current;
       s2.money += win;
+      logPayout(s2, win);
       if (!silent) sfxCasinoWin();
       award('high-roller'); countCasinoWin();
       persistSave(s2); refreshHud();
@@ -7621,7 +7814,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const roul = casinoRef.current.roul;
     if (roul.phase === 'spin' || roul.bet <= 0 || s.money < roul.bet) return;
-    s.money -= roul.bet; sfxBuy();
+    s.money -= roul.bet; logWager(s, roul.bet); sfxBuy();
     roul.phase = 'spin'; roul.win = 0;
     roul.result = Math.floor(Math.random() * 37); // 0..36
     persistSave(s); refreshHud();
@@ -7650,7 +7843,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const poker = casinoRef.current.poker;
     if (poker.phase !== 'bet' || poker.bet <= 0 || s.money < poker.bet) return;
-    s.money -= poker.bet; sfxBuy();
+    s.money -= poker.bet; logWager(s, poker.bet); sfxBuy();
     poker.deck = makeDeck();
     poker.hand = [poker.deck.pop()!, poker.deck.pop()!, poker.deck.pop()!, poker.deck.pop()!, poker.deck.pop()!];
     poker.held = [false, false, false, false, false];
@@ -7675,6 +7868,7 @@ const LittleApartmentGame: React.FC = () => {
     poker.phase = 'done';
     if (poker.win > 0) {
       s.money += poker.win;
+      logPayout(s, poker.win);
       // Jacks or Better just returns the stake — a wash, not a win.
       if (res.mult >= 2) { sfxCasinoWin(); award('high-roller'); countCasinoWin(); }
     } else sfxCasinoLose();
@@ -7688,7 +7882,7 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const duel = casinoRef.current.duel;
     if (duel.phase !== 'intro' || s.money < duel.stake) return;
-    s.money -= duel.stake;
+    s.money -= duel.stake; logWager(s, duel.stake);
     s.bossDuelDay = s.day;
     s.bossDuelPlayed += 1; // Towzawa's ledger — he quotes it when you talk to him
     duel.deck = makeDeck();
@@ -7722,7 +7916,8 @@ const LittleApartmentGame: React.FC = () => {
     else duel.result = rule === 'pushHouse' ? 'lose' : 'push';
     duel.phase = 'done';
     if (duel.result === 'win') {
-      s.money += duel.stake * (pBJ && !dBJ && rule === 'pays2to1' ? 3 : 2);
+      const credit = duel.stake * (pBJ && !dBJ && rule === 'pays2to1' ? 3 : 2);
+      s.money += credit; logPayout(s, credit);
       s.bossDuelLosses += 1;
       // Beat him under every placard and the table has nothing left to teach you.
       // Deliberately rewards sitting down on his BAD nights, not just the two that
@@ -7747,7 +7942,7 @@ const LittleApartmentGame: React.FC = () => {
         '"The house thanks you." He returns to his tea, the matter already settled.';
       sfxCasinoLose();
     } else {
-      s.money += duel.stake; // push — the stake comes back
+      s.money += duel.stake; logPayout(s, duel.stake); // push — the stake comes back
       duel.say = '"A push. How unsatisfying, for both of us." He waves the stake back across the felt.';
     }
     persistSave(s); refreshHud(); setShopTick(v => v + 1);
@@ -7947,21 +8142,26 @@ const LittleApartmentGame: React.FC = () => {
     if (s.monsterFed && allRaresOwned(s) && !s.parisRevealed) revealParis();
   };
 
-  // The Manager lets you in on the Paris secret once you own every one of his
-  // rares. Reusable so it can fire on the final craft OR a later re-talk.
+  // The Manager lets you in on its last secret once you own every one of its
+  // rares: not a seam in a wall any more, but a NAME — the man in the hoodie who
+  // has been running a server closet inside the island since before there was an
+  // island. Setting parisRevealed is what cuts the hatch into the sea cave (see
+  // LAB_HATCH / computeSolids), so re-seal the solids if you're standing in the
+  // cave when it happens. Reusable: fires on the final craft OR a later re-talk.
   const revealParis = useCallback(() => {
     const s = saveRef.current;
     if (s.parisRevealed) return;
     s.parisRevealed = true;
     sfxCatch();
     persistSave(s); refreshHud();
+    if (sceneRef.current.id === 'seacave') computeSolids(); // the rock becomes a door on the spot
     showDialog([
       'The Manager goes still. "You have taken everything I had to sell. Every piece. Hm. Hmmm."',
-      '"Then I will tell you a secret, customer. That little tourist? Jean-Pierre? He did not come from your city at all."',
-      '"There is a SEAM in the wall — the top of this room. It opens to Paris. Real Paris. France. That is where he slipped in from."',
-      '"Go and see. Press yourself to the seam. It will... load." Its smile does something a smile should not do.',
+      '"Then I will tell you my last one, customer. That little tourist? Jean-Pierre? He did not come from your city at all. He did not WALK here."',
+      '"There is a man on the island. Under it. Behind a door in that sea cave that has never been there, and has always been there." A long pause. "He wears a grey hood. He does not sell. He does not buy."',
+      '"He moves things. People. Places. Cities." Its smile does something a smile should not do. "Go to the cave and look at the back wall. It will be different now. Tell him The Manager is still very cross about Paris."',
     ], 'The Manager');
-  }, [refreshHud, showDialog]);
+  }, [computeSolids, refreshHud, showDialog]);
 
   const sellMinerals = () => {
     const s = saveRef.current;
@@ -8402,6 +8602,9 @@ const LittleApartmentGame: React.FC = () => {
     const s = saveRef.current;
     const code = cheatInput.trim().toLowerCase();
     setCheatInput('');
+    // The log the Hacker has read. First use only, in the order you found them —
+    // he quotes the first one back at you the day you meet him.
+    if (isCheatCode(code) && !s.cheatsUsed.includes(code)) s.cheatsUsed.push(code);
     switch (code) {
       case 'motherlode':
         s.money += 50000;
@@ -9052,19 +9255,7 @@ const LittleApartmentGame: React.FC = () => {
         {(isDev || codesRevealed) && (
           <div className="mt-3 border-t border-[#ffd24a]/20 pt-2">
             <p className="text-xs text-[#ffd24a]/70 mb-1">{isDev ? 'DEV — known codes' : 'Known codes'}</p>
-            {[
-              ['motherlode', '+¥50,000'],
-              ['redbull', 'Refill energy'],
-              ['rocks', '+10 of every mineral'],
-              ['gimmegimme', 'Unlock all base furniture'],
-              ['country roads', 'Teleport home'],
-              ['sunrise', 'Time → 7:00 AM'],
-              ['nightfall', 'Time → 10:00 PM'],
-              ['midnight', 'Time → 1:30 AM'],
-              ['come again another day', 'Force rain today'],
-              ['im god', 'Toggle: no crawler damage in mines'],
-              ['now you see me', 'Toggle this list'],
-            ].map(([code, desc]) => (
+            {CHEAT_CODES.map(([code, desc]) => (
               <p key={code} className="text-sm flex justify-between gap-3 py-px"><span className="text-[#7ce8a0]">{code}</span><span className="opacity-55">{desc}</span></p>
             ))}
           </div>
@@ -9138,7 +9329,8 @@ const LittleApartmentGame: React.FC = () => {
       if (!s.gangPaid) leads.push('The east alley out of the city is "spoken for." Coin might persuade them.');
       if (s.gangPaid && !s.backroomsUnlocked) leads.push('The big fella holding up the bar at Club Kaiju looks thirsty for something ice-cold, diet, and hard to find.');
       if (s.backroomsUnlocked && allRaresOwned(s) && !s.parisRevealed) leads.push('The Manager has the air of someone holding one last secret.');
-      if (s.parisRevealed && !s.storySeen.includes('paris-intro')) leads.push('A seam waits at the very top of the yellow place. Press into it.');
+      if (s.parisRevealed && !s.storySeen.includes('hacker-met')) leads.push('The Manager says there is a door at the back of the island sea cave. There was never a door at the back of the island sea cave.');
+      if (s.storySeen.includes('hacker-met') && !s.storySeen.includes('paris-intro')) leads.push('The man in the hoodie offered to send you to Paris. He was not speaking figuratively.');
       if (museumDone > 0 && museumDone < museumTotal) leads.push('Bingus the curator is always asking for one odd thing or another — and some curios turn up fishing, mining, or in far-flung corners.');
       // RUMORS: still capped at TWO — one cryptic achievement whisper + one line
       // of NPC gossip (attributed street flavor), both day-seeded so the pair
@@ -9476,7 +9668,7 @@ const LittleApartmentGame: React.FC = () => {
       const recipeIds = new Set(RECIPES.map(r => r.id));
       const recipesFound = s.recipes.filter(id => recipeIds.has(id)).length;
       // The discovery secrets (each a one-time storySeen flag); count only, never named.
-      const SECRETS = ['island-cave', 'midnight-stranger', 'stargaze', 'island-bottle', 'shadow-met', 'moon-watch'];
+      const SECRETS = ['island-cave', 'midnight-stranger', 'stargaze', 'island-bottle', 'shadow-met', 'moon-watch', 'hacker-met'];
       const secretsFound = SECRETS.filter(id => s.storySeen.includes(id)).length;
       const cats = [
         { icon: '🐟', name: 'Fish', found: fishFound, total: fishIds.size, note: 'species landed (see the Fishopedia)' },
@@ -10017,6 +10209,36 @@ const LittleApartmentGame: React.FC = () => {
             <button className={`${btnCls} w-full`} onClick={startPoker}>🎴 VIDEO POKER — five cards, one draw</button>
           </div>
           {backroomOpen(s) && <p className="text-xs text-[#ffd24a]/70 mt-3">✦ The velvet curtain at the back of the hall hangs open for you.</p>}
+          {/* The house ledger. Every stake and every credit, for life — the number
+              the Kinryū has always had and never volunteered. Hidden until you've
+              actually bet something, so a first-time visitor isn't handed a table
+              of zeroes. It sits BELOW the curtain cue on purpose: the ledger is
+              long, and the panel scrolls, so the progression hint has to come
+              first or it falls off the bottom of the frame. */}
+          {(() => {
+            const pct = casinoReturnPct(s);
+            if (pct === null) return null;
+            const net = casinoNet(s);
+            const row = (k: string, v: string, cls = '') => (
+              <p className="flex justify-between gap-3 py-px"><span className="opacity-55">{k}</span><span className={cls}>{v}</span></p>
+            );
+            return (
+              <div className="mt-3 border-t border-[#ffd24a]/20 pt-2 text-sm">
+                <p className="text-xs text-[#ffd24a]/70 mb-1 tracking-widest">THE HOUSE LEDGER</p>
+                {row('Wagered, lifetime', `¥${s.casinoWagered.toLocaleString()}`)}
+                {row('Paid back to you', `¥${s.casinoReturned.toLocaleString()}`)}
+                {row('Net', `${net < 0 ? '−' : '+'}¥${Math.abs(net).toLocaleString()}`, net < 0 ? 'text-[#d05050]' : 'text-[#7ce8a0]')}
+                {row('Your return', `${pct.toFixed(1)}%`, pct < 100 ? 'text-[#d05050]' : 'text-[#7ce8a0]')}
+                {row('Biggest single win', `¥${s.casinoBest.toLocaleString()}`, 'text-[#ffd24a]')}
+                {row('Winning bets', `${s.casinoWins}`)}
+                <p className="text-xs opacity-40 mt-1">
+                  {net < 0
+                    ? 'The dealer does not look at the numbers. He does not need to.'
+                    : 'The dealer reads the column, then fans the deck again. "Everyone is due, eventually."'}
+                </p>
+              </div>
+            );
+          })()}
           <p className="text-xs opacity-40 mt-3">Bet responsibly. The maneki-neko is watching.</p>
         </ShopFrame>
       );
@@ -10239,10 +10461,16 @@ const LittleApartmentGame: React.FC = () => {
           </span>
         );
       };
-      const winText = slot.phase === 'done' ? (slot.win > 0 ? `WIN  +¥${slot.win.toLocaleString()}!` : 'No match. Spin again.') : (spinning ? 'good luck…' : ' ');
+      // Three outcomes, not two: a pair hands the stake straight back, so it must
+      // not be dressed up as a win (it pays the same number you just put in).
+      const winText = slot.phase === 'done'
+        ? (slot.win > slot.bet ? `WIN  +¥${(slot.win - slot.bet).toLocaleString()}!`
+          : slot.win > 0 ? 'A pair. Your stake back — no harm done.'
+          : 'No match. Spin again.')
+        : (spinning ? 'good luck…' : ' ');
       const pot = jackpotFor(s);
       return (
-        <ShopFrame title="SLOT MACHINES" subtitle="Line up three · 7️⃣7️⃣7️⃣ = 50× your bet + the JACKPOT" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
+        <ShopFrame title="SLOT MACHINES" subtitle="Line up three · 7️⃣7️⃣7️⃣ = 110× your bet + the JACKPOT" money={s.money} onClose={close} panelCls={panelCls} btnCls={btnCls}>
           <p className="text-center text-sm tracking-widest text-[#ffd24a] mt-1">✦ PROGRESSIVE JACKPOT · ¥{pot.toLocaleString()} ✦</p>
           <div className={`relative mx-auto w-fit rounded-xl border-4 border-[#c9a227] bg-gradient-to-b from-[#3a2230] to-[#170d14] px-3 py-4 my-2 ${won ? 'casino-win' : ''}`}>
             {/* payline across the middle */}
@@ -10255,7 +10483,7 @@ const LittleApartmentGame: React.FC = () => {
           </div>
           <button className={`${btnCls} w-full text-xl`} disabled={spinning || s.money < slot.bet} onClick={spinSlots}>{spinning ? 'SPINNING…' : `PULL · bet ¥${slot.bet.toLocaleString()}`}</button>
           <button className={`${btnCls} w-full mt-2 text-sm`} disabled={spinning} onClick={() => setOverlayBoth({ type: 'shop', shop: 'casino' })}>← BACK TO LOBBY</button>
-          <p className="text-xs opacity-40 mt-2 text-center">7️⃣×3 = 50× + jackpot · 💎×3 = 20× · ⭐×3 = 10× · any 3 = 5× · any pair = 2×</p>
+          <p className="text-xs opacity-40 mt-2 text-center">7️⃣×3 = 110× + jackpot · 💎×3 = 48× · ⭐×3 = 24× · any 3 = 10× · any pair = your stake back</p>
           <p className="text-xs opacity-40 mt-1 text-center">The jackpot grows every day until somebody hits it.</p>
         </ShopFrame>
       );
@@ -11279,7 +11507,67 @@ const LittleApartmentGame: React.FC = () => {
         )}
 
         {/* dialogue — typewriter reveal + optional Stardew-style portrait */}
-        {overlay?.type === 'dialog' && (() => {
+        {/* The Hacker's terminal — the dialog overlay wearing different chrome.
+            It covers the game rather than sitting in front of it, because that
+            is the point: he is not in the scene, he is on top of it. Scrollback
+            keeps the lines you've already read, so his script reads like a real
+            session instead of a speech bubble. */}
+        {overlay?.type === 'dialog' && overlay.term && (() => {
+          const line = overlay.lines[overlay.idx] ?? '';
+          const shown = line.slice(0, typed);
+          const done = typed >= line.length;
+          const showActions = overlay.idx === overlay.lines.length - 1 && done
+            && !!overlay.actions && overlay.actions.length > 0;
+          const acts = overlay.actions;
+          const termBtn = 'font-mono text-base sm:text-lg px-3 py-1 border border-[#7ce8a0]/70 text-[#7ce8a0] bg-[#7ce8a0]/10 hover:bg-[#7ce8a0]/25 focus:bg-[#7ce8a0]/25 focus:outline-none';
+          return (
+            <div
+              {...(showActions ? { 'data-navroot': '' } : {})}
+              className={`absolute inset-0 bg-[#05080a] flex flex-col ${showActions ? '' : 'cursor-pointer'}`}
+              onClick={showActions ? undefined : advanceDialog}
+            >
+              <div className="flex items-center justify-between border-b border-[#7ce8a0]/30 px-3 py-1 font-mono text-xs sm:text-sm text-[#7ce8a0]/70">
+                <span className="lab-glitch tracking-widest">VOID-KERNEL // tty0</span>
+                <span>{overlay.idx + 1}/{overlay.lines.length}</span>
+              </div>
+              <div className="flex-grow min-h-0 overflow-y-auto px-3 py-2 font-mono text-[#7ce8a0] text-base sm:text-xl leading-snug">
+                {overlay.lines.slice(0, overlay.idx).map((l, i) => (
+                  <p key={i} className="whitespace-pre-wrap opacity-45 mb-1">{l}</p>
+                ))}
+                <p className="whitespace-pre-wrap mb-1">
+                  {shown}
+                  {!done && <span className="inline-block w-[0.6em] h-[1em] align-[-0.15em] bg-[#7ce8a0] animate-pulse" />}
+                </p>
+                {showActions && acts ? (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {/* CLOSE is first so a plain E/A press just ends the session. */}
+                    <button className={termBtn} onClick={() => setOverlayBoth(null)}>&gt; CLOSE</button>
+                    {acts.map((a, i) => (
+                      <button
+                        key={i}
+                        className={`${termBtn} ${a.disabled ? 'opacity-40 cursor-default' : ''}`}
+                        disabled={a.disabled}
+                        title={a.why}
+                        onClick={a.disabled ? undefined : a.onPick}
+                      >{a.label}</button>
+                    ))}
+                  </div>
+                ) : (
+                  done && <p className="opacity-40 mt-1">▸</p>
+                )}
+              </div>
+              {/* CRT scanlines + a soft phosphor vignette, drawn over everything */}
+              <div className="absolute inset-0 pointer-events-none" style={{
+                background: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)',
+              }} />
+              <div className="absolute inset-0 pointer-events-none" style={{
+                background: 'radial-gradient(ellipse at center, rgba(124,232,160,0.07) 0%, rgba(0,0,0,0.45) 100%)',
+              }} />
+            </div>
+          );
+        })()}
+
+        {overlay?.type === 'dialog' && !overlay.term && (() => {
           const line = overlay.lines[overlay.idx] ?? '';
           const shown = line.slice(0, typed);
           const done = typed >= line.length;

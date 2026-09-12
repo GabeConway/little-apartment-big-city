@@ -13,9 +13,9 @@ const awarded = new Set(
 const tableIds = GAME_ACHIEVEMENTS.map(a => a.id);
 
 describe('GAME_ACHIEVEMENTS table', () => {
-  it('holds 49 achievements with unique ids', () => {
-    expect(tableIds.length).toBe(49);
-    expect(new Set(tableIds).size).toBe(49);
+  it('holds 50 achievements with unique ids', () => {
+    expect(tableIds.length).toBe(50);
+    expect(new Set(tableIds).size).toBe(50);
   });
 
   it('every row has a title, desc, and a locked hint', () => {
