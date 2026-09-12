@@ -1,11 +1,15 @@
 name: Release
 
-# Builds desktop installers for all OSes on every merge to main and
-# attaches them to a DRAFT GitHub Release tagged app-v<version> (version from
-# src-tauri/tauri.conf.json). The `prepare` job RESETS that draft each run
-# (delete + recreate) so re-running at an unchanged version starts from a clean
-# release — otherwise tauri-action's asset upload fails with
-# "ReleaseAsset already_exists". Bump `version` to keep a release permanently.
+# Builds desktop installers for all OSes on every merge to main and attaches
+# them to a PUBLISHED GitHub Release tagged app-v<version> (version from
+# src-tauri/tauri.conf.json). The release goes LIVE on merge — there is no
+# manual publish step, so whatever lands on main ships.
+#
+# The `prepare` job keeps an existing release AND its tag and clears only its
+# assets, so a re-run at an unchanged version re-uploads cleanly (that is all
+# that was needed to dodge tauri-action's "ReleaseAsset already_exists") without
+# breaking the public download links of a release that is already out. Bump
+# `version` for each new release.
 #
 # This is a build-only game (no web target). Artifacts per release:
 #   macOS  — .dmg (Apple Silicon)            [scripts/make-dmg.mjs]
@@ -23,16 +27,23 @@ on:
 permissions:
   contents: write
 
-# Serialize runs so two quick merges can't race to create duplicate draft
-# releases for the same tag. Queue (don't cancel) — a cancelled mid-release
-# run would leave a half-populated draft.
+# Serialize runs so two quick merges can't race on the same tag. Queue (don't
+# cancel) — a cancelled mid-release run would leave a published release with only
+# some of its installers attached.
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  # Reset the draft release once per run so the matrix uploads into a clean
-  # release (no stale same-named assets). Runs before the build matrix.
+  # Make sure a PUBLISHED release exists for this version before the matrix
+  # uploads into it.
+  #
+  # This used to delete + recreate the release every run, which was safe while
+  # everything was a draft. It is not safe now: a published release and its tag
+  # are public links, and deleting them on a re-run would break every existing
+  # download. So an existing release is KEPT (tag and all) and only its assets
+  # are cleared, which is all that was ever needed to avoid tauri-action's
+  # "ReleaseAsset already_exists" on a second run.
   prepare:
     runs-on: ubuntu-latest
     outputs:
@@ -41,16 +52,28 @@ jobs:
       - uses: actions/checkout@v7
       - id: meta
         run: echo "version=$(node -p "require('./src-tauri/tauri.conf.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Reset draft release
+      - name: Create or reset the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           tag="app-v${{ steps.meta.outputs.version }}"
-          gh release delete "$tag" --cleanup-tag --yes 2>/dev/null || true
-          gh release create "$tag" --draft \
-            --title "Little Apartment, Big City v${{ steps.meta.outputs.version }}" \
-            --notes "Automated build from main (commit ${GITHUB_SHA:0:7})." \
-            --target "$GITHUB_SHA"
+          title="Little Apartment, Big City v${{ steps.meta.outputs.version }}"
+          notes="Automated build from main (commit ${GITHUB_SHA:0:7})."
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists - clearing its assets and re-publishing."
+            for asset in $(gh release view "$tag" --json assets --jq '.assets[].name'); do
+              echo "  removing stale asset: $asset"
+              gh release delete-asset "$tag" "$asset" --yes
+            done
+            # --draft=false publishes it if a previous run left it as a draft.
+            gh release edit "$tag" --title "$title" --notes "$notes" --draft=false
+          else
+            gh release create "$tag" \
+              --title "$title" \
+              --notes "$notes" \
+              --target "$GITHUB_SHA"
+          fi
 
   build:
     needs: prepare
@@ -117,13 +140,13 @@ jobs:
           tagName: app-v__VERSION__         # __VERSION__ <- src-tauri/tauri.conf.json
           releaseName: "Little Apartment, Big City v__VERSION__"
           releaseBody: "Automated build from main."
-          releaseDraft: true
+          releaseDraft: false      # publish on merge to main, no manual step
           prerelease: false
           args: ${{ matrix.args }}
 
       # Build the macOS dmg deterministically (hdiutil, no AppleScript) and add
       # it to the exact release this job just populated. Upload by releaseId
-      # (not by tag) so a duplicate draft sharing the tag can't divert the asset.
+      # (not by tag) so another release sharing the tag can't divert the asset.
       - name: Build & upload macOS dmg
         if: matrix.platform == 'macos-latest'
         env:
