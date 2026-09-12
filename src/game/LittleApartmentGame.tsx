@@ -1566,17 +1566,25 @@ const LittleApartmentGame: React.FC = () => {
   // it, and that must never happen with no feedback at all.
   useEffect(() => {
     const { slot, roul } = casinoRef.current;
-    // award() inside a settle writes the SAME toast slot showToast does, so a win
-    // that unlocks 'high-roller'/'jackpot' would have its achievement popup
-    // overwritten by the payout line in the same tick. Compare the achievement
-    // count across the settle and let the rarer popup win.
-    const achBefore = saveRef.current.gameAch.length;
-    const quiet = () => saveRef.current.gameAch.length === achBefore;
+    // A settle can raise a banner of its own before we get to announce the money:
+    // award('high-roller'/'jackpot'), or countCasinoWin()'s backroom unlock, which
+    // fires no achievement at all but DOES move the doorman. They share one toast
+    // slot with us. Dropping our payout when that happens is not an option either
+    // - the walk-away 7-7-7 that drains and reseeds the pot is precisely the case
+    // this exists for. So the payout QUEUES behind whatever spoke, one toast
+    // lifetime later, and both are seen. toastSeqRef catches every banner source,
+    // not just achievements.
+    const announcePayout = (title: string, desc: string) => {
+      const spoke = toastSeqRef.current !== seqBefore;
+      if (!spoke) { showToast(title, desc); return; }
+      queuedToastsRef.current.push(window.setTimeout(() => showToast(title, desc), TOAST_MS));
+    };
+    const seqBefore = toastSeqRef.current;
     const onSlots = overlay?.type === 'shop' && overlay.shop === 'slots';
     if (!onSlots && slot.timer != null) {
       settleSlots(true);
       // slotPayout is gross, and the slots panel prints it gross too - match it.
-      if (slot.win > 0 && quiet()) showToast(`🎰 +¥${slot.win.toLocaleString()}`, 'The reels landed after you walked away — paid out in full.');
+      if (slot.win > 0) announcePayout(`🎰 +¥${slot.win.toLocaleString()}`, 'The reels landed after you walked away — paid out in full.');
     }
     const onRoul = overlay?.type === 'shop' && overlay.shop === 'roulette';
     if (!onRoul && roul.timer != null) {
@@ -1584,7 +1592,7 @@ const LittleApartmentGame: React.FC = () => {
       // roulettePayout is GROSS (an outside bet returns 2x the stake), but the
       // roulette panel prints net profit. Match the panel, not the raw credit.
       const profit = roul.win - roul.bet;
-      if (profit > 0 && quiet()) showToast(`🎲 +¥${profit.toLocaleString()}`, `The wheel landed on ${roul.result} after you walked away — paid out in full.`);
+      if (profit > 0) announcePayout(`🎲 +¥${profit.toLocaleString()}`, `The wheel landed on ${roul.result} after you walked away — paid out in full.`);
     }
     // deps stay [overlay]: showToast is a stable useCallback declared further down,
     // and naming it here would be a use-before-declaration in the deps array.
@@ -1597,9 +1605,12 @@ const LittleApartmentGame: React.FC = () => {
     const { slot, roul } = casinoRef.current;
     if (slot.timer != null) settleSlots(true);
     if (roul.timer != null) settleRoulette(true);
-    // settleSlots -> award() can arm the achievement-toast timer; don't let it
-    // outlive the component and setState into a torn-down tree.
+    // settleSlots -> award() can arm the achievement-toast timer, and a queued
+    // payout toast is a pending timeout too; neither may outlive the component
+    // and setState into a torn-down tree.
     if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
+    queuedToastsRef.current.forEach(window.clearTimeout);
+    queuedToastsRef.current = [];
   }, []);
   const [isCoarse] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
   const [isPortrait, setIsPortrait] = useState(() => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches);
@@ -1807,6 +1818,13 @@ const LittleApartmentGame: React.FC = () => {
 
   const [achToast, setAchToast] = useState<{ title: string; desc: string; icon?: string } | null>(null);
   const achTimerRef = useRef<number | null>(null);
+  // achToast is a SINGLE slot shared by award(), showToast() and everything that
+  // calls them, so whoever speaks last wins. This counter ticks on every banner
+  // raised; a caller can compare it across a call to find out whether something
+  // already claimed the slot, and queue behind it instead of clobbering it.
+  const TOAST_MS = 3500;
+  const toastSeqRef = useRef(0);
+  const queuedToastsRef = useRef<number[]>([]);
   const [geodePop, setGeodePop] = useState<{ text: string; color: string } | null>(null);
   const geodeTimerRef = useRef<number | null>(null);
 
@@ -1885,17 +1903,19 @@ const LittleApartmentGame: React.FC = () => {
     persistSave(s);
     sfxAchievement();
     const a = GAME_ACHIEVEMENTS.find(x => x.id === id)!;
+    toastSeqRef.current++;
     setAchToast({ title: a.title, desc: a.desc });
     if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
-    achTimerRef.current = window.setTimeout(() => setAchToast(null), 3500);
+    achTimerRef.current = window.setTimeout(() => setAchToast(null), TOAST_MS);
   }, []);
 
   // A transient banner that reuses the achievement-toast UI (food buffs, perks, etc).
   // Pass an icon to override the default 🏆 (e.g. 💛 for a new contact).
   const showToast = useCallback((title: string, desc = '', icon?: string) => {
+    toastSeqRef.current++;
     setAchToast({ title, desc, icon });
     if (achTimerRef.current) window.clearTimeout(achTimerRef.current);
-    achTimerRef.current = window.setTimeout(() => setAchToast(null), 3500);
+    achTimerRef.current = window.setTimeout(() => setAchToast(null), TOAST_MS);
   }, []);
 
   // First time you meet a befriendable NPC → drop them into the Friends app and
@@ -2562,7 +2582,14 @@ const LittleApartmentGame: React.FC = () => {
     computeSolids();
     sfxBuy(); persistSave(s); refreshHud();
     setOverlayBoth(null);
-    const names = inTheWay.map(id => furnitureById(id).name);
+    // furnitureById ends in a non-null assertion, so an id that has been dropped
+    // from the data tables would throw here - AFTER the money is spent and the
+    // item already unplaced (the removed bicycle is precedent for ids outliving
+    // their table entry). Look the name up defensively; an unknown id just goes
+    // unmentioned rather than taking the whole purchase down with it.
+    const names = inTheWay
+      .map(id => (FURNITURE.find(f => f.id === id) ?? RARE_FURNITURE.find(f => f.id === id))?.name)
+      .filter((n): n is string => Boolean(n));
     showDialog([
       'The landlord sends a single thumbs-up, then a flurry of activity: a plumber, a delivery of hinoki planking, the smell of cedar and hot mineral water.',
       'By evening there is a steaming little hot-tub tucked into the corner of your apartment, all your own.',

@@ -100,6 +100,25 @@ Dependabot's five PRs reviewed and landed, and the "Known bugs" list cleared.
   **phase** newly exposed on the `?debug` snapshot — money cannot tell a settled
   bail from an eaten one, since the stake is debited either way. Tests **268**,
   `smoke` 22/22, `checkup` 28 → **30**.
+- **The curios counter is gone from the toolbar.** The museum-curio HUD chip is
+  removed, and `Hud.curios` with it — the chip was its only reader, so the type
+  member, the initialiser and the per-frame `heldCollectibleCount()` call in
+  `refreshHud` were all dead weight. The count still badges on the phone's
+  **Collection** app, which is where the donation flow lives.
+- **Three review passes ran**, each finding something real in the previous pass's
+  fixes. Worth knowing what they caught, because the pattern repeats:
+  - The onsen fix was incomplete — moving the tile did not stop furniture being
+    *arranged* onto it before the onsen was bought (`apartmentOccupied` only
+    reserves the tile once `homeOnsen` is true). Hence `clearHomeOnsenTile`.
+  - The bail-out payout toast reported roulette's **gross** return while the
+    roulette panel reports net profit (`roulettePayout` pays `bet * 2` on an
+    outside bet), so a winning ¥500 on red announced +¥1,000.
+  - **`achToast` is a single slot.** `award()`, `showToast()` and
+    `countCasinoWin()`'s backroom-unlock banner all write it, so whoever speaks
+    last wins. A payout announced in the same tick as an achievement clobbered
+    it; suppressing the payout instead hid the walk-away 7-7-7. The payout now
+    **queues** one toast-lifetime behind anything that already spoke, tracked by
+    `toastSeqRef`, which ticks on *every* banner rather than just achievements.
 - **Also**: `scripts/record-demo.mjs` (gameplay showcase video recorder, with the
   fishing runtime exposed on the snapshot so it can time the strike).
 
@@ -151,7 +170,7 @@ Playtest-report batch. Five reported problems plus one found while fixing them.
 - **Town-event attendance** 🎣🏮 — the derby crowd used `npc-granny`/`npc-charlie`/`npc-collector` sprites while those NPCs were *still running their `ROUTINES`* elsewhere, so you could stand next to Granny in the city and watch a second Granny fish the shore. **The same bug existed at festivals** (`npc-charlie` goer in the city, `npc-miko` at the shrine) and is fixed by the same code. New pure state helpers **`TOWN_EVENT_ATTENDEES`/`TOWN_EVENT_END_MIN`/`townEventNow`/`atTownEventNow`** (+ `TownEvent` type): attendees are hidden from their venue (`npcHiddenNow` + `makeWanderers`, which now takes the save) and staged at the event as **real, talkable people** — quests, gifts and hangouts all intact, so Granny's greenhouse key and Charlie's film never go dark for a day. Windows are per-event and **must match how long the staging is drawn**, or the duplicate returns at the seam: derby ends 8 PM (its crowd draw is gated on `townEventNow`, not the calendar day), festivals run to the 2 AM collapse. Wanderers rebuild on the flip so folk walk home without a scene change. Derby attendees = granny/charlie/collector/mechanic (+2 anonymous beachgoers; `npc-stranger` dropped — that's the midnight stranger's sprite); festival = charlie/miko. **`townEventIntro`** gives each attendee an opening line that reads your **live derby tally** (no fish / on the board / leading). Also: the daily shore forage scatter can seed *under* an attendee, and the forage check runs first — it used to win, making that townsperson unreachable all derby; occupied spots are now skipped (indices untouched, so `foragedSpots` stays valid).
 - **Prestige purchases are relationship payoffs, not storefronts** ⛩️🎬 — the ¥80k shrine restoration and ¥40k film sponsorship rendered their buy button from first contact. Now two-stage: at **`PRESTIGE_ASK_HEARTS`** (4 ♥) the friend raises it once in conversation (`storySeen` `shrine-restore-ask` / `charlie-film-ask`, via `prestigeAskReady`), and only then does the button stick (`prestigeOffered`). Yoshi gets a bespoke talk branch; Charlie's pitch precedes his ordinary chatter. No new save fields — `storySeen` is already a `string[]`, so veteran saves just see the ask on their next 4 ♥ talk (the 4 ♥ hangout still plays first).
 - **Towzawa paid twice** 🀄 — the first audience handed over a flat **+¥10,000** seconds after the duel table had already paid out. The envelope is now the **Kinryū House Chip** (new `KEEPSAKES` entry, `i-kinryu-chip` sprite, `effect: 'display'`, no value) — recognition, not cash. Duel stake band and payouts **unchanged** (owner's call). *Known, deliberately unfixed:* the placard shows before the bet with a free WALK AWAY, so the two player-favourable nights (`pays2to1`, and `peek`, which deals his hole card face up) can be cherry-picked.
-- **Museum clarity** 🖼️ — `s.collectibles` had **no UI anywhere**: a found curio sat invisible in the save with nothing to say which display it wanted. New **Collection phone app** (`PhoneApp` tab `'collection'`, home icon gated on having met the museum, badge = curios carried) listing all 12 slots as **✓ donated / 🎒 in your bag / ❓ unfound** (an unfound piece stays `???` — progress without spoilers) plus the curator's live ask. New pure helpers **`museumSlotStatus`/`museumProgress`/`heldCollectibleCount`**. A **HUD curio chip** rides alongside the weather/event chips, and all five pickup sites (shore find, fishing snag, gacha, mine node, geode) route through one **`pocketCurio`** helper so they finally signal identically — the mine used to flash a 1.6s floating word and nothing else.
+- **Museum clarity** 🖼️ — `s.collectibles` had **no UI anywhere**: a found curio sat invisible in the save with nothing to say which display it wanted. New **Collection phone app** (`PhoneApp` tab `'collection'`, home icon gated on having met the museum, badge = curios carried) listing all 12 slots as **✓ donated / 🎒 in your bag / ❓ unfound** (an unfound piece stays `???` — progress without spoilers) plus the curator's live ask. New pure helpers **`museumSlotStatus`/`museumProgress`/`heldCollectibleCount`**. A **HUD curio chip** rode alongside the weather/event chips (**removed 2026-09-12** — the Collection app's badge covers it), and all five pickup sites (shore find, fishing snag, gacha, mine node, geode) route through one **`pocketCurio`** helper so they finally signal identically — the mine used to flash a 1.6s floating word and nothing else.
 - **Gift clarity** 🎁 — the picker now tags **every** row with what that person thinks of it (`❤ LOVES / 👍 likes / fine / 👎 no`, off the pure `giftTier`), sorted best-first, and the **2 ♥ reveal gate is gone** (it was circular — gifting is how you reach 2 ♥). Already-gifted shows the tagged list greyed instead of an empty panel. `DialogAction` gains **`disabled`/`why`**, so the gift button no longer silently vanishes when you're empty-handed or already gave today — it greys out and says which. Friends app: icon badge counts who's still giftable today, each row names the best thing you're carrying for them.
 - **"Read the Placard"** 🏆 — achievements **48 → 49**. Beat the boss duel under all five house rules; new default-safe **`duelRulesWon: string[]`** save field. Deliberately rewards sitting down on his *bad* nights.
 - **Post-review fixes** (from the `/code-review high` pass on this branch):
@@ -356,7 +375,7 @@ Five reported problems + one found while fixing them. Full as-built detail in th
 - [x] **Shore forage no longer blocks an attendee** — an occupied spot is skipped instead of winning the interact.
 - [x] **Shrine restoration + film sponsorship gated at 4 ♥** behind a one-time in-conversation ask (`shrine-restore-ask` / `charlie-film-ask`). No new save fields.
 - [x] **Towzawa's ¥10,000 first-audience envelope → Kinryū House Chip** keepsake. Duel economics untouched (owner's call).
-- [x] **Collection phone app** — 12 museum slots as ✓ / 🎒 / ❓ + the curator's ask; HUD curio chip; all five curio pickups routed through one `pocketCurio` toast. `s.collectibles` had no UI at all before this.
+- [x] **Collection phone app** — 12 museum slots as ✓ / 🎒 / ❓ + the curator's ask; HUD curio chip (since removed, 2026-09-12); all five curio pickups routed through one `pocketCurio` toast. `s.collectibles` had no UI at all before this.
 - [x] **Gift picker tags every item** (loves/likes/fine/no, sorted best-first), 2 ♥ reveal gate removed, gift button greys with a reason instead of vanishing; Friends app badge + "what you're carrying" hint.
 - [x] **"Read the Placard"** achievement (48 → 49) + default-safe `duelRulesWon` save field.
 - [x] **Tests 242 → 255**; smoke 22/22, checkup 19/19.
