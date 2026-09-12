@@ -1,6 +1,6 @@
 [package]
 name = "little-apartment"
-version = "1.3.0"
+version = "1.4.0"
 description = "Little Apartment, Big City"
 authors = ["Gabe Conway"]
 edition = "2021"
