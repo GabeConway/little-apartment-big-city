@@ -5,8 +5,14 @@ version: 2
 # else does, and `main` stays a promotion of a branch that already passed CI.
 #
 # Tuned for low noise: monthly, grouped into one PR per ecosystem, small open-PR
-# caps. Security advisories still arrive immediately and separately (Dependabot
-# alerts / security updates are repo settings, not configured here).
+# caps.
+#
+# NOTE: Dependabot ALERTS are currently DISABLED on this repository (the API
+# returns 403 "Dependabot alerts are disabled"), and alerts/security updates are
+# a repo setting, not something this file controls. So security advisories do
+# NOT arrive on their own - the scheduled version bumps below are the only thing
+# Dependabot does here, and `npm audit` is the only advisory signal. See
+# kb/conventions.md "Outstanding advisories".
 
 updates:
   - package-ecosystem: npm

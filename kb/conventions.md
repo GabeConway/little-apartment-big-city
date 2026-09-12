@@ -61,5 +61,12 @@ nested `vite` 5.4.21 / `esbuild` those pull in. **Nothing here ships**: the top-
 runner is never bundled. Clearing them needs the **vitest 2 → 5 major**, which is
 held back above. Re-check with `npm audit` before assuming this note is current.
 
+**Dependabot alerts are disabled on this repo**, so nothing flags these
+automatically — `npm audit` is the only signal, and the scheduled bumps in
+`.github/dependabot.yml` are all Dependabot does here. Staying on vitest 2 is a
+deliberate call (2026-09-12): the advisories are dev-only and unshipped, and
+nothing is asking for the major. Revisit if the alerts get switched on, or if an
+advisory ever lands on a dependency that actually ships.
+
 ### Validate after any dep change
 `npx tsc --noEmit` clean, then `npm run build` clean. For native: `npm run desktop:build`.
